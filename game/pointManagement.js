@@ -31,12 +31,13 @@ function moveToNextPoint() {
 
     logEvent("New point started");
 
-    // Enter panel UI in between-points state
+    // Enter panel UI in between-points state — a point transition, not a
+    // launch, so the tab stays where it is (the rule below decides).
     // late-bound back-edge (gameScreenSync/gameScreenEvents live "above" this
     // layer); see ARCHITECTURE.md § ES modules — the window shim at the owner
     // is kept deliberately.
     if (typeof window.enterGameScreen === 'function') {
-        window.enterGameScreen();
+        window.enterGameScreen({ launch: false });
     }
     if (typeof window.transitionToBetweenPoints === 'function') {
         window.transitionToBetweenPoints();
@@ -45,15 +46,22 @@ function moveToNextPoint() {
     // Start the countdown timer
     startCountdown();
 
-    // Auto-switch to the Line tab for the Line Coach so they immediately
-    // see the lineup-selection UI for the next point. This applies whether
-    // the score came from Simple mode (We Score / They Score / Key Play),
-    // Full mode (score throw / Callahan), or narration. We only switch if
-    // the current user actually holds the Line Coach role — other coaches
-    // and viewers stay on whatever tab they were already on. Also skip if
-    // they're already on the All tab, which shows the Select Line panel
-    // alongside PBP — switching would be a regression for that workflow.
-    if (typeof window.isLineCoach === 'function' && window.isLineCoach()
+    // Auto-switch to the Line tab for whoever picks the next line, so they
+    // immediately see the lineup-selection UI. This applies whether the
+    // score came from Simple mode (We Score / They Score / Key Play), Full
+    // mode (score throw / Callahan), or narration. That is the Line Coach —
+    // or a solo coach: with no second coach seen this session there is no
+    // role enforcement (canEditPlayByPlay has the same rule), and the roles
+    // may not even have landed yet (the first sync still queued, or
+    // offline). Other coaches and viewers stay on whatever tab they were
+    // already on. Also skip if they're already on the All tab, which shows
+    // the Select Line panel alongside PBP — switching would be a regression
+    // for that workflow.
+    const isViewer = typeof window.isViewer === 'function' && window.isViewer();
+    const multiCoach = typeof window.isMultiCoachDetected === 'function' && window.isMultiCoachDetected();
+    const picksTheLine = (typeof window.isLineCoach === 'function' && window.isLineCoach())
+        || (!isViewer && !multiCoach);
+    if (picksTheLine
         && typeof window.switchTab === 'function'
         && typeof window.getActiveTab === 'function'
         && window.getActiveTab() !== 'line'
@@ -169,26 +177,26 @@ function startNextPoint() {
         point.startTimestamp = new Date();
     }
 
-    // Enter the panel-based game screen
+    // Enter the panel-based game screen — a point transition, not a launch,
+    // so the tab stays where it is (the switch below decides).
     // late-bound back-edge (gameScreenSync lives "above" this layer); see
     // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
     if (typeof window.enterGameScreen === 'function') {
-        window.enterGameScreen();
+        window.enterGameScreen({ launch: false });
     }
 
     // If the user started this point from the Line tab (e.g. they're a
     // solo coach who just finished setting the lineup, or were auto-switched
     // to Line when the previous point scored), switch back to their preferred
-    // play-by-play surface so they can immediately enter events. Do this
-    // BEFORE capturing the pull below, so the pull decision sees the surface
-    // we're actually returning to (e.g. Field). lastPbpTab is maintained by
-    // panelSystem.js (and snapshotted in moveToNextPoint before the Line jump).
-    if (typeof window.getActiveTab === 'function'
-        && typeof window.switchTab === 'function'
-        && window.getActiveTab() === 'line') {
-        const target = (typeof window.getLastPbpTab === 'function')
-            ? window.getLastPbpTab() : 'simple';
-        window.switchTab(target);
+    // play-by-play surface so they can immediately enter events — the
+    // tracking tab they used last time, or Simple (with a hint about Full
+    // and Field) on a coach's first point ever. Do this BEFORE capturing the
+    // pull below, so the pull decision sees the surface we're actually
+    // returning to (e.g. Field). The preference is maintained by
+    // panelSystem.js (and snapshotted in moveToNextPoint before the Line
+    // jump); switchToTrackingTab is a no-op off the Line tab.
+    if (typeof window.switchToTrackingTab === 'function') {
+        window.switchToTrackingTab();
     }
 
     // For defense points, capture the pull. The Field tab records the pull

@@ -366,8 +366,13 @@ function selectLineAutoHeight(container, slPanel) {
 /**
  * Enter the new game screen UI
  * Called when starting a point or entering a game
+ *
+ * @param {object} [options] - passed through to showGameScreen: the point
+ *   transitions and the returns from a sub-screen pass { launch: false } to
+ *   keep the current tab; opening a game (the default) lands on the tab a
+ *   game opens on (utils/gameTabPolicy.js launchTab).
  */
-function enterGameScreen() {
+function enterGameScreen(options = {}) {
     // Tell the power manager we're in a game: this gates the in-game polling
     // loops and is what makes the screen wake lock acquire.
     powerManager.setGameActive(true);
@@ -421,8 +426,8 @@ function enterGameScreen() {
     ensureDialogVisible('keyPlayDialog');
     
     // Show the game screen
-    showGameScreen();
-    
+    showGameScreen(options);
+
     // Reset the "no roles" warning toast reference so it can show again for this game session
     noRolesWarningToast = null;
     gameScreenEnteredAt = Date.now();

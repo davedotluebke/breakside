@@ -94,9 +94,18 @@ export async function startGame(page: Page, side: 'offense' | 'defense', opponen
 
 // ─── Player Selection & Points ──────────────────────────────────────────────
 
-/** Check all player checkboxes in the panel table. */
+/**
+ * Check all player checkboxes in the panel table.
+ *
+ * A game opens on the Line tab and comes back to it after each score, so
+ * the table is normally on screen. When it is not (a spec that switched to
+ * a tracking tab), go to the Line tab first, as a coach would.
+ */
 export async function selectAllPlayers(page: Page) {
   const playerTable = page.locator('#panelActivePlayersTable');
+  if (!(await playerTable.isVisible())) {
+    await page.click('#headerSegControl button[data-tab="line"]');
+  }
   await expect(playerTable).toBeVisible({ timeout: 8_000 });
   const rows = playerTable.locator('tbody tr');
   const count = await rows.count();
@@ -108,9 +117,16 @@ export async function selectAllPlayers(page: Page) {
   }
 }
 
-/** Click the Start Point button. */
+/**
+ * Click the Start Point button of whichever tab is showing: the Line tab's
+ * own (#lineTabStartPointBtn — where a game opens, and where the app comes
+ * back after each score), else the Simple/All panel's (#pbpStartPointBtn).
+ * The app then leaves the Line tab for the tracking tab used last time —
+ * Simple, with a hint, in a fresh browser context.
+ */
 export async function startPoint(page: Page) {
-  const btn = page.locator('#pbpStartPointBtn');
+  const lineTabBtn = page.locator('#lineTabStartPointBtn');
+  const btn = (await lineTabBtn.isVisible()) ? lineTabBtn : page.locator('#pbpStartPointBtn');
   await expect(btn).toBeVisible({ timeout: 5_000 });
   await btn.click();
 }

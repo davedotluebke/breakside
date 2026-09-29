@@ -73,6 +73,6 @@ const hints = (function() {
 // --- ES-module export ---
 export { hints };
 // window survivor: late-bound back-edge hook (read window-qualified by
-// settings/advancedSettings.js — evaluates before this file — and
-// playByPlay/fieldPbp.js)
+// settings/advancedSettings.js and ui/panelSystem.js — both evaluate before
+// this file — and playByPlay/fieldPbp.js)
 window.hints = hints;

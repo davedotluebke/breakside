@@ -166,7 +166,8 @@ function returnToGameFromRoster() {
     // is kept deliberately.
     if (typeof window.enterGameScreen === 'function' && currentTeam &&
         currentTeam.games && currentTeam.games.length > 0) {
-        window.enterGameScreen();
+        // A return, not a launch: come back to the tab the game was left on.
+        window.enterGameScreen({ launch: false });
         if (typeof isPointInProgress === 'function' && isPointInProgress() === false &&
             typeof window.transitionToBetweenPoints === 'function') {
             window.transitionToBetweenPoints();

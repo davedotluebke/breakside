@@ -50,9 +50,10 @@ test.describe('standby screen', () => {
     await expect(sun(page)).toBeVisible();
     await expect(overlay(page)).toBeHidden();
 
-    // A line is picked so Start Point is a live control under the overlay.
+    // A line is picked so Start Point is a live control under the overlay
+    // (the Line tab's own button: that is the tab a game opens on).
     await selectAllPlayers(page);
-    await expect(page.locator('#pbpStartPointBtn')).toBeEnabled();
+    await expect(page.locator('#lineTabStartPointBtn')).toBeEnabled();
     const pointsBefore = await pointCount(page);
 
     // Before the first pull: score and labels, no countdown (none is running).
@@ -70,9 +71,9 @@ test.describe('standby screen', () => {
     await expect(page.locator('#panelActivePlayersTable')).toBeAttached();
 
     // Waking tap over Start Point must not start a point.
-    await tapOverlayOver(page, '#pbpStartPointBtn');
+    await tapOverlayOver(page, '#lineTabStartPointBtn');
     await expect(overlay(page)).toBeHidden();
-    await expect(page.locator('#pbpStartPointBtn')).toBeVisible();
+    await expect(page.locator('#lineTabStartPointBtn')).toBeVisible();
     expect(await pointCount(page)).toBe(pointsBefore);
     await expectScore(page, 0, 0);
 

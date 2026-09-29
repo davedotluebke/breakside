@@ -10,6 +10,12 @@
  */
 import { showScreen } from '../screens/navigation.js';
 import { log } from '../utils/logger.js';
+import { isPointInProgress } from '../utils/helpers.js';
+import {
+    isTrackingTab, normalizeGameTab, normalizeTrackingTab,
+    launchTab, trackingTabAtPointStart, DEFAULT_TRACKING_TAB,
+    FIRST_POINT_HINT_ID, FIRST_POINT_HINT,
+} from '../utils/gameTabPolicy.js';
 
 // =============================================================================
 // Panel State Management
@@ -871,8 +877,15 @@ function createPanel(options) {
 /**
  * Show the game screen container
  * Hides all legacy screens to prevent them from showing through
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.launch=true] - opening the game (the team list,
+ *   Start Game, Continue Game, a scrimmage): pick the tab per
+ *   utils/gameTabPolicy.js launchTab — the Line tab between points. The
+ *   point transitions (game/pointManagement.js) and the returns from a
+ *   sub-screen (Team Settings, the roster) pass false and keep the tab.
  */
-function showGameScreen() {
+function showGameScreen({ launch = true } = {}) {
     const container = document.getElementById('gameScreenContainer');
     if (container) {
         // Hide all legacy screens to prevent them from showing through
@@ -884,6 +897,7 @@ function showGameScreen() {
         container.classList.add('active');
         loadPanelStates();
         loadActiveTab();
+        if (launch) openOnLaunchTab();
         applyAllPanelStates();
         applyTabState();
         // Position slider after DOM is rendered
@@ -1106,17 +1120,19 @@ function resetAllPanelStates() {
 
 const TAB_STATE_KEY = 'breakside_active_tab';
 
-// Current active tab: 'simple' | 'full' | 'line' | 'all' | 'log'
-// (Legacy 'play' is migrated to 'simple' on load.)
-let activeTab = 'all';
+// Current active tab: 'simple' | 'full' | 'field' | 'line' | 'all' | 'log'
+// (Legacy 'play' is migrated to 'simple' on load.) A game opens on the
+// Line tab (openOnLaunchTab); the value here only stands until then.
+let activeTab = 'line';
 
-// Track which "play" tab the user last visited (Simple, Full, or All).
-// Used by Start Point flows to auto-navigate to whatever surface the coach
-// was last working from. We include 'all' because that view shows both
-// PBP and Line panels at once, and a coach who came from there expects to
-// land back there — not on a single-tab PBP view they didn't pick.
+// The tracking-tab preference: the last tab the coach tracked events from
+// (Simple, Full, Field or All), or null until they have ever picked one.
+// Start Point leaves the Line tab for it (switchToTrackingTab). We include
+// 'all' because that view shows both PBP and Line panels at once, and a
+// coach who came from there expects to land back there — not on a
+// single-tab PBP view they didn't pick. Rules: utils/gameTabPolicy.js.
 const LAST_PBP_TAB_KEY = 'breakside_last_pbp_tab';
-let lastPbpTab = 'simple';
+let lastPbpTab = null;
 
 // Which panels belong to each tab. The Full tab uses its own dedicated
 // panel (playByPlayFull); the All tab leaves it hidden and keeps Simple
@@ -1132,29 +1148,22 @@ const TAB_PANELS = {
 };
 
 /**
- * Load active tab from localStorage. Migrates legacy 'play' value to
- * 'simple' (the new name for the simple-mode PBP tab).
+ * Load the active tab and the tracking-tab preference from localStorage.
+ * Migrates the legacy 'play' value to 'simple' (the new name for the
+ * simple-mode PBP tab).
  */
 function loadActiveTab() {
     try {
-        const saved = localStorage.getItem(TAB_STATE_KEY);
-        if (saved === 'play') {
-            activeTab = 'simple';
-        } else if (saved && TAB_PANELS.hasOwnProperty(saved)) {
-            activeTab = saved;
-        }
-        const savedLast = localStorage.getItem(LAST_PBP_TAB_KEY);
-        if (savedLast === 'simple' || savedLast === 'full' || savedLast === 'field' || savedLast === 'all') {
-            lastPbpTab = savedLast;
-        }
+        activeTab = normalizeGameTab(localStorage.getItem(TAB_STATE_KEY)) || activeTab;
+        lastPbpTab = normalizeTrackingTab(localStorage.getItem(LAST_PBP_TAB_KEY));
         // If we restored onto a PBP surface, treat that as the last PBP tab so
         // Start Point returns here even if the user never tapped the tab this
         // session (avoids a stale lastPbpTab pointing at a different surface).
-        if (activeTab === 'simple' || activeTab === 'full' || activeTab === 'field' || activeTab === 'all') {
+        if (isTrackingTab(activeTab)) {
             lastPbpTab = activeTab;
         }
     } catch (e) {
-        activeTab = 'all';
+        // Storage unavailable: keep what is in memory.
     }
 }
 
@@ -1170,8 +1179,27 @@ function saveActiveTab() {
 }
 
 /**
+ * Put the game on the tab it opens on (utils/gameTabPolicy.js launchTab):
+ * the Line tab between points, the tab it was left on mid-point. Saved like
+ * a tap would be, so the point transitions that re-read the saved tab
+ * (loadActiveTab) find it. Called from showGameScreen on a launch, before
+ * applyTabState. The preference is not touched: opening a game is not a
+ * pick of a tracking tab.
+ */
+function openOnLaunchTab() {
+    const viewer = typeof window.isViewer === 'function' && window.isViewer();
+    activeTab = launchTab({
+        pointInProgress: isPointInProgress(),
+        viewer,
+        lastTab: activeTab,
+        preferredTab: lastPbpTab,
+    });
+    saveActiveTab();
+}
+
+/**
  * Switch to a tab
- * @param {string} tabName - 'play' | 'line' | 'all' | 'log'
+ * @param {string} tabName - 'simple' | 'full' | 'field' | 'line' | 'all' | 'log'
  */
 function switchTab(tabName) {
     if (!TAB_PANELS.hasOwnProperty(tabName)) return;
@@ -1180,17 +1208,37 @@ function switchTab(tabName) {
     activeTab = tabName;
     saveActiveTab();
 
-    // Remember which "play" tab was last used so the Line tab's Start
+    // Remember which tracking tab was used last so the Line tab's Start
     // Point button can auto-navigate back to it. 'all' counts: a coach
     // who works from the All view expects to return there after a Line
     // detour, not be dropped into Simple/Full alone.
-    if (tabName === 'simple' || tabName === 'full' || tabName === 'field' || tabName === 'all') {
+    if (isTrackingTab(tabName)) {
         lastPbpTab = tabName;
         try { localStorage.setItem(LAST_PBP_TAB_KEY, tabName); } catch (e) { /* ignore */ }
     }
 
     applyTabState();
     updateSegmentedSlider();
+}
+
+/**
+ * Leave the Line tab for the coach's tracking surface at Start Point
+ * (utils/gameTabPolicy.js trackingTabAtPointStart): the tracking-tab
+ * preference, or — a coach's first point ever on this device, nothing
+ * picked yet — Simple, with a hint pointing at the Full and Field tabs.
+ * The switch records Simple as the preference like any other pick, so the
+ * hint shows once. The hint goes through ui/hints.js, so "Hide all hints"
+ * suppresses it. No-op off the Line tab (a point started from the All
+ * tab's own button stays on All).
+ */
+function switchToTrackingTab() {
+    if (activeTab !== 'line') return;
+    const { tab, firstEver } = trackingTabAtPointStart(lastPbpTab);
+    switchTab(tab);
+    if (firstEver) {
+        // window survivor: late-bound (ui/hints.js evaluates after this file).
+        window.hints?.maybeShow?.(FIRST_POINT_HINT_ID, FIRST_POINT_HINT, { duration: 8000 });
+    }
 }
 
 /**
@@ -1334,19 +1382,10 @@ function getActiveTab() {
  */
 function getCurrentMode() {
     let tab = activeTab;
-    if (tab === 'line' || tab === 'log') tab = lastPbpTab;
+    if (tab === 'line' || tab === 'log') tab = lastPbpTab || DEFAULT_TRACKING_TAB;
     if (tab === 'full') return 'full';
     if (tab === 'field') return 'field';
     return 'simple'; // 'simple', 'all', or any unexpected value
-}
-
-/**
- * Get the most recently visited PBP tab ('simple' or 'full').
- * Used by the Line-tab Start Point button (phase 6) to auto-navigate
- * back to the user's preferred play-by-play surface.
- */
-function getLastPbpTab() {
-    return lastPbpTab;
 }
 
 /**
@@ -1357,7 +1396,7 @@ function getLastPbpTab() {
  * restored state rather than an explicit tab tap (which would have set it).
  */
 function rememberCurrentPbpTab() {
-    if (activeTab === 'simple' || activeTab === 'full' || activeTab === 'field' || activeTab === 'all') {
+    if (isTrackingTab(activeTab)) {
         lastPbpTab = activeTab;
         try { localStorage.setItem(LAST_PBP_TAB_KEY, activeTab); } catch (e) { /* ignore */ }
     }
@@ -1409,7 +1448,7 @@ export {
     // Role and state updates
     updatePanelsForRole, updatePanelsForGameState,
     // Tab system
-    switchTab, getActiveTab, getCurrentMode, getLastPbpTab,
+    switchTab, switchToTrackingTab, getActiveTab, getCurrentMode,
     rememberCurrentPbpTab, updateSegmentedSlider,
 };
 
@@ -1423,7 +1462,7 @@ window.setFullyPhysicalPanelDragging = setFullyPhysicalPanelDragging;
 window.getFullyPhysicalPanelDragging = getFullyPhysicalPanelDragging;
 // window survivor: late-bound back-edge hook (called window-qualified by game/gameScreenEvents.js)
 window.forceMultiCoachDetected = forceMultiCoachDetected;
-// window survivor: late-bound back-edge hook (called window-qualified by game/selectLine.js, game/controllerState.js)
+// window survivor: late-bound back-edge hook (called window-qualified by game/selectLine.js, game/controllerState.js, game/pointManagement.js)
 window.isMultiCoachDetected = isMultiCoachDetected;
 // window survivor: late-bound back-edge hook (called window-qualified by game/pointManagement.js)
 window.switchTab = switchTab;
@@ -1433,7 +1472,7 @@ window.getActiveTab = getActiveTab;
 // captureCurrentMode — models evaluates before this file and cannot import from it)
 window.getCurrentMode = getCurrentMode;
 // window survivor: late-bound back-edge hook (called window-qualified by game/pointManagement.js)
-window.getLastPbpTab = getLastPbpTab;
+window.switchToTrackingTab = switchToTrackingTab;
 // window survivor: late-bound back-edge hook (called window-qualified by game/pointManagement.js)
 window.rememberCurrentPbpTab = rememberCurrentPbpTab;
 

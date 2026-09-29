@@ -95,6 +95,7 @@ import './settings/advancedSettings.js';
 // so the resolved theme is in place before anything measures or paints.
 import './utils/theme.js';
 import './utils/powerPolicy.js';
+import './utils/gameTabPolicy.js';
 import './utils/powerManager.js';
 import './utils/powerLog.js';
 import './utils/wakeLockManager.js';

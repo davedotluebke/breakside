@@ -85,6 +85,8 @@ breakside/
 │   ├── statsColumns.js     # The stats columns — one definition, every table
 │   │                       # and every export
 │   ├── tableSort.js        # Click-to-sort controller for on-screen stats tables
+│   ├── gameTabPolicy.js    # Which in-game tab when: launch tab, tracking-tab
+│   │                       # preference, first-point hint (pure)
 │   ├── exportWorkbook.js   # Format-neutral export workbooks (pure)
 │   ├── xlsxExport.js       # Excel (.xlsx) writer (SheetJS-backed)
 │   └── sheetsExport.js     # Google Sheets writer (GIS token + Sheets API)
@@ -477,15 +479,23 @@ Three layers, in order from least to most invasive:
 
 ### In-Game Tab System
 
-The in-game UI is organized into five tabs, switched via a segmented control in the orange header:
+The in-game UI is organized into six tabs, switched via a segmented control in the orange header:
 
 - **Simple** — The legacy Key Play–driven Play-by-Play panel only, full-screen. Streamlined buttons (We Score / They Score / Key Play / Undo / Sub / Events / More) plus the Key Play modal for granular event entry.
 - **Full** — The new every-event-entry panel (`playByPlay/fullPbp.js`), full-screen. Player rows + per-row contextual action buttons (drop / score / throwaway / break / block / interception / …, and Drops Pull / Catches Pull / Picks Up while an offensive point's pull is unreceived — see *Point clock and the first touch* below), a horizontal modifier-flag chip strip below, a bottom-row "They turnover / Events / They score" action set in D-mode, and a flex-sized mini event log at the bottom. See **docs/full-pbp-requirements.md** for the full design and **Full PBP integration** below for the runtime architecture.
 - **Line** — Select Next Line panel only, full-screen (the O/D toggle switches the single panel between combined, O, D, and On Deck views).
 - **Log** — Game Log (Follow) panel only, full-screen.
-- **All** — The full vertical panel stack with drag-to-resize (see next section). Default tab. Uses Simple PBP — the Full PBP layout is excluded from All-view because its custom-shaped panel doesn't compose well with the drag-to-resize stack.
+- **All** — The full vertical panel stack with drag-to-resize (see next section). The advanced layout. Uses Simple PBP — the Full PBP layout is excluded from All-view because its custom-shaped panel doesn't compose well with the drag-to-resize stack.
 
-The segmented control DOM lives in `createHeaderPanel()` (`game/gameScreen.js`); switching logic and persistence live in `panelSystem.js` (`switchTab()`, `applyTabState()`, `updateSegmentedSlider()`). Active tab is persisted in `localStorage` under `breakside_active_tab`. The most-recent PBP tab choice (`simple` or `full`) is separately tracked under `breakside_last_pbp_tab` so post-score auto-navigation (Line tab → user's preferred PBP tab) routes back to whichever the user was last using.
+The segmented control DOM lives in `createHeaderPanel()` (`game/gameScreenPanels.js`); switching logic and persistence live in `panelSystem.js` (`switchTab()`, `applyTabState()`, `updateSegmentedSlider()`); the rules for which tab to show when are pure, in `utils/gameTabPolicy.js` (unit-tested in `tests/unit/gameTabPolicy.test.mjs`). Two facts persist per device in `localStorage`:
+
+- `breakside_active_tab` — the tab the coach is on. Every game entry re-reads it (`loadActiveTab()`), so a reload mid-point comes back to it.
+- `breakside_last_pbp_tab` — the **tracking-tab preference**: the last tab events were tracked from, one of `simple` / `full` / `field` / `all` (All counts because it shows the PBP and Line panels together). Written on every pick of a tracking tab, and absent until the coach has ever picked one.
+
+**Which tab, when** (`gameTabPolicy.launchTab` / `trackingTabAtPointStart`):
+
+- **A game opens on the Line tab** — from the team list, Start Game, Continue Game or a scrimmage (`enterGameScreen()` → `showGameScreen({ launch: true })`, the default) — whatever tab was active last: the first thing a coach does is pick the line. A game re-opened mid-point (a reload during a point) comes back on the tab it was left on. A viewer keeps their last tab, defaulting to All, which for a viewer is the log-only layout. The point transitions (`startNextPoint`, `moveToNextPoint`) and the returns from Team Settings and the roster pass `{ launch: false }` and keep the tab.
+- **Start Point leaves the Line tab for the tracking preference** (`switchToTrackingTab()`). With no preference yet — a coach's first point ever on this device — it goes to **Simple** and shows the `first-tracking-tab` hint (`ui/hints.js`, so *Hide all hints* suppresses it) pointing at the Full and Field tabs. The switch records Simple as the preference like any other pick, so the hint shows once and a coach who stays on Simple keeps starting there; a coach who then picks Full starts every later point on Full.
 
 **Single-tab mode** sets the visible panel's class to `tab-fullscreen`, which hides its title bar and applies `flex: 1 1 auto` so it fills the viewport. All other content panels get `hidden`. **All mode** removes the class and re-applies saved panel states via `applyAllPanelStates()`, restoring drag heights.
 
@@ -540,7 +550,7 @@ Key runtime properties:
 - **Inferred events.** A boolean `inferred_flag` on the base `Event` class (default `false`) is set on synthetic events created by the Full panel's O/D pill toggle (Turnover / Defense{unforcedError}). Surfaces as `(inferred)` prefix in `summarize()` output. Tap the pill twice in a row with no events between → second tap retracts the inferred event rather than stacking another one.
 - **Bus integration.** Full PBP publishes `eventAdded` (source `'manual'`), `eventAmended` (modifier-chip toggles), and `eventRetracted` (Undo, pill-toggle retraction) so other subscribers (transcript display, future ultra-compact log) see all manual edits the same way they see narration events.
 - **Layout.** Player rows fill the panel's full width; modifier chips live in a horizontal strip below the rows; a bottom action row holds `[They turnover] [⚙ Events] [They score]` in D-mode and just `[⚙ Events]` centered in O-mode; a mini event log fills whatever vertical slack remains. Density is governed by a small set of CSS knobs flipped between "roomy" (default, build-207 values) and "compact" (build-206 values) by an inline icon button in the Full PBP header; the choice is persisted per-device in localStorage (`breakside_full_pbp_density`, see `playByPlay/fullPbp.js`) and applied as a `density-compact` class on `.panel-playByPlayFull`.
-- **Score auto-tab-switch.** `moveToNextPoint()` (in `game/pointManagement.js`) auto-switches to the **Line** tab if the current user holds the Line Coach role, regardless of which PBP mode (Simple, Full, narration) triggered the score. Conversely, `startNextPoint()` auto-switches from the Line tab back to the user's last-used PBP tab — so a solo coach round-trips Simple/Full → Line → Simple/Full automatically.
+- **Score auto-tab-switch.** `moveToNextPoint()` (in `game/pointManagement.js`) auto-switches to the **Line** tab for whoever picks the next line — the Line Coach, or a solo coach (no second coach seen this session, the same "no role enforcement" rule as `canEditPlayByPlay`, so the switch does not wait on the roles landing from the server or on being online) — regardless of which PBP mode (Simple, Full, narration) triggered the score, and never for a viewer or from the All tab. Conversely, `startNextPoint()` auto-switches from the Line tab back to the user's tracking-tab preference (Simple with a hint on the first point ever; see *In-Game Tab System*) — so a solo coach round-trips Simple/Full → Line → Simple/Full automatically.
 
 Full design + decision history: **docs/full-pbp-requirements.md**.
 

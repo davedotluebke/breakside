@@ -113,9 +113,10 @@ test.describe('standby timer', () => {
     await selectAllPlayers(page);
     await setIdleSeconds(page, IDLE_SECONDS);
 
-    // Where Start Point sits, measured now: the fade-in lasts 700 ms and the
-    // tap has to land inside it.
-    const box = await page.locator('#pbpStartPointBtn').boundingBox();
+    // Where Start Point sits (the Line tab's own button: the tab a game
+    // opens on), measured now: the fade-in lasts 700 ms and the tap has to
+    // land inside it.
+    const box = await page.locator('#lineTabStartPointBtn').boundingBox();
     expect(box).not.toBeNull();
 
     // Wait for the fade-in to begin. Not an expect(): Playwright's expect

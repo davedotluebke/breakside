@@ -87,7 +87,8 @@ function initializeTeamSettings() {
         backFromSettingsBtn.addEventListener('click', () => {
             if (_settingsReturnScreen === 'gameScreen') {
                 if (typeof showGameScreen === 'function') {
-                    showGameScreen();
+                    // A return, not a launch: back to the tab the game was left on.
+                    showGameScreen({ launch: false });
                 }
             } else if (_settingsReturnScreen === 'selectTeamScreen') {
                 if (typeof showSelectTeamScreen === 'function') {
