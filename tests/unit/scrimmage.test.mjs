@@ -18,6 +18,8 @@ import {
     generateScrimmageId, formatShortDate, squadGameFields, buildSquadSnapshot,
     squadRoster, splitSquads, groupScrimmages, scrimmageSquadNames,
     scrimmageScores, scrimmageLabel, isScrimmageOver,
+    squadStamp, squadDefinition, newerSquadDefinition, applySquadDefinition,
+    squadAssignments, squadPatch, describeSquadChange, pruneLinesToSquad,
 } from '../../store/scrimmage.js';
 
 // ── fixtures ────────────────────────────────────────────────────────────
@@ -333,4 +335,192 @@ test('isScrimmageOver once every present half has ended', () => {
     assert.equal(isScrimmageOver({ games: [ended, LIGHT] }), false);
     assert.equal(isScrimmageOver({ games: [ended, { ...LIGHT, game_end_timestamp: '2026-09-27T19:01:00Z' }] }), true);
     assert.equal(isScrimmageOver({ games: [{ gameEndTimestamp: new Date() }] }), true);
+});
+
+// ── editing squads after creation ───────────────────────────────────────
+
+const T0 = '2026-09-29T18:00:00.000Z';
+const T1 = '2026-09-29T18:10:00.000Z';
+
+/** A squad-game (Game shape) for squad X with the named players. */
+function half(names, capturedAt = T0, overrides = {}) {
+    return {
+        id: 'g-x', scrimmageId: 'Scrimmage-2026-09-29-ab12', scrimmageSquad: 'X',
+        scrimmageName: null, team: 'Dark', opponent: 'Light',
+        rosterSnapshot: { players: names.map(n => byId[`${n}-${n.length}a1b`]), capturedAt },
+        ...overrides,
+    };
+}
+
+test('squadStamp reads the snapshot stamp; unstamped is 0', () => {
+    assert.equal(squadStamp(half(['Alice'])), Date.parse(T0));
+    assert.equal(squadStamp({ rosterSnapshot: { players: [] } }), 0);
+    assert.equal(squadStamp({ rosterSnapshot: { players: [], capturedAt: 'garbage' } }), 0);
+    assert.equal(squadStamp(null), 0);
+});
+
+test('newerSquadDefinition: only a strictly newer server copy of a squad-game is adopted', () => {
+    const local = half(['Alice', 'Bob']);
+    const server = half(['Alice', 'Eve'], T1, { team: 'Red', opponent: 'Blue', scrimmageName: 'Tuesday' });
+    const adopted = newerSquadDefinition(local, server);
+    assert.deepEqual(adopted.rosterSnapshot.players.map(p => p.name), ['Alice', 'Eve']);
+    assert.equal(adopted.rosterSnapshot.capturedAt, T1);
+    assert.equal(adopted.team, 'Red');
+    assert.equal(adopted.opponent, 'Blue');
+    assert.equal(adopted.scrimmageName, 'Tuesday');
+    assert.notEqual(adopted.rosterSnapshot, server.rosterSnapshot, 'a copy, not the server object');
+
+    // Same stamp: this device's own copy coming back.
+    assert.equal(newerSquadDefinition(local, half(['Alice', 'Eve'])), null);
+    // Older: a stale copy.
+    assert.equal(newerSquadDefinition(server, local), null);
+    // Unstamped on either side: no version to compare.
+    assert.equal(newerSquadDefinition(half(['Alice'], null), server), null);
+    assert.equal(newerSquadDefinition(local, half(['Alice'], null)), null);
+    // Not a scrimmage: never.
+    assert.equal(newerSquadDefinition({ ...local, scrimmageId: null }, { ...server, scrimmageId: null }), null);
+});
+
+test('applySquadDefinition writes only the fields the definition carries', () => {
+    const game = half(['Alice']);
+    game.points = [{ i: 0 }];
+    applySquadDefinition(game, { rosterSnapshot: { players: [], capturedAt: T1 }, team: 'Red' });
+    assert.equal(game.team, 'Red');
+    assert.equal(game.opponent, 'Light');
+    assert.equal(game.rosterSnapshot.capturedAt, T1);
+    assert.deepEqual(game.points, [{ i: 0 }]);
+    assert.equal(applySquadDefinition(null, {}), null);
+});
+
+test('squadAssignments reads who is on which squad from the two snapshots', () => {
+    const games = {
+        X: half(['Alice', 'Bob']),
+        Y: half(['Charlie'], T0, { scrimmageSquad: 'Y', team: 'Light', opponent: 'Dark' }),
+    };
+    const a = squadAssignments(games);
+    assert.equal(a.get('Alice-5a1b'), 'X');
+    assert.equal(a.get('Bob-3a1b'), 'X');
+    assert.equal(a.get('Charlie-7a1b'), 'Y');
+    assert.equal(a.get('Dana-4a1b'), undefined);
+    assert.equal(squadAssignments({ Y: games.Y }).get('Charlie-7a1b'), 'Y', 'a missing half is fine');
+    assert.equal(squadAssignments({}).size, 0);
+});
+
+test('squadPatch: null when nothing about the half changes, whatever the player order', () => {
+    const game = half(['Alice', 'Bob']);
+    const proposal = {
+        players: [byId['Bob-3a1b'], byId['Alice-5a1b']],
+        squadNames: { X: 'Dark', Y: 'Light' }, label: null,
+    };
+    assert.equal(squadPatch(game, proposal), null);
+    assert.equal(squadPatch(game, { ...proposal, label: '  ' }), null, 'a blank label is no label');
+});
+
+test('squadPatch: a changed squad is the whole definition, freshly stamped', () => {
+    const game = half(['Alice', 'Bob']);
+    const now = new Date('2026-09-29T18:20:00.000Z');
+    const patch = squadPatch(game, {
+        players: [byId['Alice-5a1b'], byId['Eve-3a1b']],
+        squadNames: { X: 'Dark', Y: 'Light' }, label: null, now,
+    });
+    assert.deepEqual(patch.rosterSnapshot.players.map(p => p.name), ['Alice', 'Eve']);
+    assert.equal(patch.rosterSnapshot.capturedAt, now.toISOString());
+    assert.equal(patch.rosterSnapshot.players[1].gender, 'FMP', 'the snapshot shape createRosterSnapshot writes');
+    assert.equal(patch.team, 'Dark');
+    assert.equal(patch.opponent, 'Light');
+    assert.equal(patch.scrimmageName, null);
+});
+
+test('squadPatch: a rename or relabel alone re-stamps the snapshot too', () => {
+    const game = half(['Alice', 'Bob']);
+    const now = new Date('2026-09-29T18:20:00.000Z');
+    const renamed = squadPatch(game, {
+        players: [byId['Alice-5a1b'], byId['Bob-3a1b']],
+        squadNames: { X: 'Red', Y: 'Blue' }, label: 'Tuesday practice', now,
+    });
+    assert.equal(renamed.team, 'Red');
+    assert.equal(renamed.opponent, 'Blue');
+    assert.equal(renamed.scrimmageName, 'Tuesday practice');
+    assert.equal(renamed.rosterSnapshot.capturedAt, now.toISOString());
+    assert.deepEqual(renamed.rosterSnapshot.players.map(p => p.name), ['Alice', 'Bob']);
+
+    // The other half sees the same rename from its side.
+    const other = half(['Charlie'], T0, { scrimmageSquad: 'Y', team: 'Light', opponent: 'Dark' });
+    const otherPatch = squadPatch(other, {
+        players: [byId['Charlie-7a1b']], squadNames: { X: 'Red', Y: 'Blue' }, label: null, now,
+    });
+    assert.equal(otherPatch.team, 'Blue');
+    assert.equal(otherPatch.opponent, 'Red');
+});
+
+test('squadPatch refuses to empty a squad', () => {
+    assert.equal(squadPatch(half(['Alice']), {
+        players: [], squadNames: { X: 'Dark', Y: 'Light' }, label: null,
+    }), null);
+});
+
+test('describeSquadChange names who joined and left, and the renames', () => {
+    const before = half(['Alice', 'Bob', 'Charlie']);
+    const after = half(['Alice', 'Eve', 'Mia'], T1);
+    assert.equal(describeSquadChange(before, after),
+        'Squads updated: Eve and Mia joined Dark; Bob and Charlie left.');
+    assert.equal(describeSquadChange(before, half(['Alice', 'Bob', 'Charlie', 'Eve'], T1)),
+        'Squads updated: Eve joined Dark.');
+    assert.equal(describeSquadChange(before, half(['Alice'], T1)),
+        'Squads updated: Bob and Charlie left.');
+    assert.equal(describeSquadChange(before, half(['Alice', 'Dana', 'Eve', 'Mia'], T1)),
+        'Squads updated: Dana, Eve and Mia joined Dark; Bob and Charlie left.');
+    assert.equal(describeSquadChange(before, half(['Alice', 'Bob', 'Charlie'], T1,
+        { team: 'Red', opponent: 'Blue', scrimmageName: 'Tuesday' })),
+        'Squads updated: Dark is now Red; Light is now Blue; labelled “Tuesday”.');
+    assert.equal(describeSquadChange(half(['Alice'], T0, { scrimmageName: 'Tuesday' }), half(['Alice'], T1)),
+        'Squads updated: label removed.');
+});
+
+test('describeSquadChange: nothing visible changed → null; a live point is mentioned', () => {
+    const before = half(['Alice', 'Bob']);
+    assert.equal(describeSquadChange(before, half(['Bob', 'Alice'], T1)), null, 'same squad, re-stamped');
+    assert.equal(describeSquadChange(before, half(['Alice'], T1), { pointInProgress: true }),
+        'Squads updated: Bob left. The point on the field keeps its line; the new squad plays from the next point.');
+    // A rename during a point changes nothing on the field: no next-point note.
+    assert.equal(describeSquadChange(before, half(['Alice', 'Bob'], T1, { team: 'Red' }), { pointInProgress: true }),
+        'Squads updated: Dark is now Red.');
+    // Nicknames are what the app displays.
+    const nick = { ...byId['Eve-3a1b'], nickname: 'Evie' };
+    assert.equal(describeSquadChange(before, { ...half(['Alice', 'Bob'], T1), rosterSnapshot: {
+        players: [byId['Alice-5a1b'], byId['Bob-3a1b'], nick], capturedAt: T1,
+    } }), 'Squads updated: Evie joined Dark.');
+});
+
+test('pruneLinesToSquad drops departed players from every planned line and stamps the changed ones', () => {
+    const now = new Date('2026-09-29T18:20:00.000Z');
+    const pending = {
+        oLine: ['Alice', 'Bob', 'Charlie'], oLineModifiedAt: T0,
+        dLine: ['Alice'], dLineModifiedAt: T0,
+        odLine: ['Bob', 'Alice-5a1b'], odLineModifiedAt: null,
+        odOnDeckLine: [], odOnDeckLineModifiedAt: null,
+        activeType: 'od',
+    };
+    const snapshot = { players: [byId['Alice-5a1b'], byId['Charlie-7a1b']], capturedAt: T1 };
+    const removed = pruneLinesToSquad(pending, snapshot, now);
+    assert.deepEqual(removed, ['Bob']);
+    assert.deepEqual(pending.oLine, ['Alice', 'Charlie']);
+    assert.equal(pending.oLineModifiedAt, now.toISOString());
+    assert.deepEqual(pending.dLine, ['Alice']);
+    assert.equal(pending.dLineModifiedAt, T0, 'an untouched line keeps its stamp');
+    assert.deepEqual(pending.odLine, ['Alice-5a1b'], 'ids count as on the squad too');
+    assert.equal(pending.odLineModifiedAt, now.toISOString());
+    assert.equal(pending.odOnDeckLineModifiedAt, null);
+    assert.equal(pending.activeType, 'od');
+
+    assert.deepEqual(pruneLinesToSquad(pending, snapshot, now), [], 'idempotent');
+    assert.deepEqual(pruneLinesToSquad(null, snapshot), []);
+    assert.deepEqual(pruneLinesToSquad(pending, null), []);
+});
+
+test('squadDefinition copies the four fields', () => {
+    const def = squadDefinition(half(['Alice'], T0, { scrimmageName: '' }));
+    assert.deepEqual(Object.keys(def).sort(), ['opponent', 'rosterSnapshot', 'scrimmageName', 'team']);
+    assert.equal(def.scrimmageName, null);
+    assert.equal(squadDefinition({ team: 'Dark' }).rosterSnapshot, null);
 });

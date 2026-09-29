@@ -683,6 +683,102 @@ class TestGameAPI:
         assert stored["scrimmageId"] == "Scrimmage-2026-09-27-ab12"
         assert stored["scrimmageSquad"] == "X"
 
+    # ── PATCH /api/games/{id}/scrimmage — editing a squad after creation ──
+
+    def _sync_squad_game(self, client, game_id, **fields):
+        body = {
+            "team": "Dark", "teamId": "ScrimTeam-0001", "opponent": "Light",
+            "scrimmageId": "Scrimmage-2026-09-29-cd34", "scrimmageSquad": "X",
+            "scrimmageName": None,
+            "scores": {"team": 2, "opponent": 1}, "points": [{"i": 0}, {"i": 1}, {"i": 2}],
+            "rosterSnapshot": {
+                "players": [{"id": "Alice-0001", "name": "Alice"}, {"id": "Bob-0002", "name": "Bob"}],
+                "capturedAt": "2026-09-29T18:00:00.000Z",
+            },
+        }
+        body.update(fields)
+        resp = client.post(f"/api/games/{game_id}/sync", json=body)
+        assert resp.status_code == 200
+
+    def test_patch_scrimmage_updates_the_squad_definition(self, client):
+        """Squad, squad names and label change; play data does not; the list
+        and the stored document both show the new names."""
+        gid = "scrim-patch-1"
+        self._sync_squad_game(client, gid)
+
+        response = client.patch(f"/api/games/{gid}/scrimmage", json={
+            "rosterSnapshot": {
+                "players": [{"id": "Alice-0001", "name": "Alice"}, {"id": "Eve-0005", "name": "Eve"}],
+                "capturedAt": "2026-09-29T18:05:00.000Z",
+            },
+            "team": " Red ", "opponent": "Blue", "scrimmageName": "Tuesday practice",
+        })
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "updated"
+        assert [p["name"] for p in data["rosterSnapshot"]["players"]] == ["Alice", "Eve"]
+        assert data["rosterSnapshot"]["capturedAt"] == "2026-09-29T18:05:00.000Z"
+        assert (data["team"], data["opponent"], data["scrimmageName"]) == ("Red", "Blue", "Tuesday practice")
+
+        stored = client.get(f"/api/games/{gid}").json()
+        assert [p["name"] for p in stored["rosterSnapshot"]["players"]] == ["Alice", "Eve"]
+        assert (stored["team"], stored["opponent"], stored["scrimmageName"]) == ("Red", "Blue", "Tuesday practice")
+        assert stored["scores"] == {"team": 2, "opponent": 1}
+        assert len(stored["points"]) == 3
+        listed = next(g for g in client.get("/api/games").json()["games"] if g["game_id"] == gid)
+        assert (listed["team"], listed["opponent"], listed["scrimmageName"]) == ("Red", "Blue", "Tuesday practice")
+
+    def test_patch_scrimmage_squad_survives_the_active_coachs_next_sync(self, client):
+        """The whole point: a full sync carrying the pre-edit snapshot (the
+        copy the tracking coach's phone held) does not revert the edit."""
+        gid = "scrim-patch-2"
+        self._sync_squad_game(client, gid)
+        client.patch(f"/api/games/{gid}/scrimmage", json={
+            "rosterSnapshot": {
+                "players": [{"id": "Alice-0001", "name": "Alice"}, {"id": "Eve-0005", "name": "Eve"}],
+                "capturedAt": "2026-09-29T18:05:00.000Z",
+            },
+        })
+        # Same body as at creation (old snapshot), one more point.
+        self._sync_squad_game(client, gid, scores={"team": 3, "opponent": 1},
+                              points=[{"i": i} for i in range(4)])
+
+        stored = client.get(f"/api/games/{gid}").json()
+        assert [p["name"] for p in stored["rosterSnapshot"]["players"]] == ["Alice", "Eve"]
+        assert len(stored["points"]) == 4
+
+    def test_patch_scrimmage_label_alone_and_clearing_it(self, client):
+        gid = "scrim-patch-3"
+        self._sync_squad_game(client, gid)
+        assert client.patch(f"/api/games/{gid}/scrimmage", json={"scrimmageName": "Tryouts"}).json()["scrimmageName"] == "Tryouts"
+        assert client.patch(f"/api/games/{gid}/scrimmage", json={"scrimmageName": "  "}).json()["scrimmageName"] is None
+        assert client.patch(f"/api/games/{gid}/scrimmage", json={"scrimmageName": None}).json()["scrimmageName"] is None
+
+    def test_patch_scrimmage_rejects_bad_bodies(self, client):
+        gid = "scrim-patch-4"
+        self._sync_squad_game(client, gid)
+        bad = [
+            {},
+            {"rosterSnapshot": "Alice"},
+            {"rosterSnapshot": {"players": [], "capturedAt": "2026-09-29T18:05:00.000Z"}},
+            {"rosterSnapshot": {"players": [{"name": "Alice"}], "capturedAt": "2026-09-29T18:05:00.000Z"}},
+            {"rosterSnapshot": {"players": [{"id": "Alice-0001", "name": "Alice"}]}},
+            {"team": ""},
+            {"opponent": 7},
+            {"scrimmageName": 3},
+        ]
+        for body in bad:
+            assert client.patch(f"/api/games/{gid}/scrimmage", json=body).status_code == 400, body
+
+    def test_patch_scrimmage_only_for_scrimmage_halves(self, client):
+        client.post("/api/games/scrim-patch-5/sync", json={
+            "team": "RealTeam", "teamId": "RealTeam-0001", "opponent": "Rivals", "points": [],
+        })
+        response = client.patch("/api/games/scrim-patch-5/scrimmage", json={"scrimmageName": "x"})
+        assert response.status_code == 400
+        assert client.patch("/api/games/no-such-game/scrimmage", json={"scrimmageName": "x"}).status_code == 404
+
     def test_delete_game(self, client):
         """Test DELETE /api/games/{game_id} removes game."""
         client.post("/api/games/delete-test-game/sync", json={

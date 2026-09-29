@@ -20,6 +20,7 @@ import { currentGame } from '../utils/helpers.js';
 // call time, and neither top level calls into the other at eval time.
 import { showControllerToast } from '../game/controllerState.js';
 import { mergePendingNextLine } from './pendingLineLogic.js';
+import { newerSquadDefinition, applySquadDefinition, squadDefinition } from './scrimmage.js';
 import { makeAuthFetch } from './authFetchLogic.js';
 import { log } from '../utils/logger.js';
 import { isAllowedApiBase } from '../utils/apiOrigin.js';
@@ -294,7 +295,7 @@ function addToSyncQueue(type, action, id, data) {
  * Get pending sync count by type
  */
 function getPendingSyncCount() {
-    const counts = { player: 0, team: 0, event: 0, game: 0 };
+    const counts = { player: 0, team: 0, event: 0, game: 0, squad: 0 };
     syncQueue.forEach(item => {
         if (counts[item.type] !== undefined) {
             counts[item.type]++;
@@ -522,6 +523,15 @@ async function syncQueueItem(item) {
                 url = `${API_BASE_URL}/api/games/${id}`;
                 method = 'DELETE';
             }
+            break;
+
+        case 'squad':
+            // A squad edit on one half of an intrasquad scrimmage: a metadata
+            // PATCH, never a full sync (see patchScrimmageGame). Its own type
+            // so it never displaces a queued full sync of the same game.
+            url = `${API_BASE_URL}/api/games/${id}/scrimmage`;
+            method = 'PATCH';
+            body = JSON.stringify(cleanData);
             break;
 
         default:
@@ -1372,16 +1382,20 @@ async function refreshPendingLineFromCloud(gameId) {
 
         const gameData = await response.json();
 
-        if (!gameData.pendingNextLine) {
-            return null;
-        }
-
         // Get the current game
         const game = typeof currentGame === 'function' ? currentGame() : null;
         if (!game || game.id !== gameId) {
             return null;
         }
-        
+
+        // Before the pending-line check: a squad edit can land on a game
+        // with no planned line at all.
+        adoptServerSquadDefinition(game, gameData);
+
+        if (!gameData.pendingNextLine) {
+            return null;
+        }
+
         // Merge pendingNextLine - use server data if it's newer
         const localPending = mergePendingNextLine(
             gameData.pendingNextLine, game.pendingNextLine || {});
@@ -1476,7 +1490,10 @@ async function refreshGameStateFromCloud(gameId) {
             game.pendingNextLine = mergePendingNextLine(
                 gameData.pendingNextLine, game.pendingNextLine || {});
         }
-        
+
+        // A squad edit by another coach (intrasquad scrimmages).
+        const squadChanged = adoptServerSquadDefinition(game, gameData);
+
         // Detect what changed
         const newScores = game.scores || {};
         const newPointCount = game.points ? game.points.length : 0;
@@ -1491,12 +1508,90 @@ async function refreshGameStateFromCloud(gameId) {
         }
 
         // Return change details so callers can react (e.g. show a toast)
-        return { refreshed: true, scoreChanged, pointCountChanged, gameJustEnded, stamp };
+        return { refreshed: true, scoreChanged, pointCountChanged, gameJustEnded, squadChanged, stamp };
 
     } catch (error) {
         console.error('Error refreshing game state:', error);
         return notRefreshed;
     }
+}
+
+// =============================================================================
+// Intrasquad scrimmage squads (store/scrimmage.js)
+// =============================================================================
+
+/**
+ * Adopt the server's squad definition (rosterSnapshot, squad names, label)
+ * when it is newer than the one this device holds — another coach edited the
+ * squads — and tell the game screen (`breakside:squad-changed`). Called on
+ * every in-game pull, the Active Coach's included: the AC's own syncs carry
+ * the squad their phone holds, the server merge keeps the newer one, and an
+ * AC who never pulled it would keep fielding the old squad from a Line tab
+ * that no longer matches the server.
+ * @param {object} game - the Game this device holds
+ * @param {object} gameData - the server's document for it
+ * @returns {boolean} whether anything was adopted
+ */
+function adoptServerSquadDefinition(game, gameData) {
+    const newer = newerSquadDefinition(game, gameData);
+    if (!newer) return false;
+    const previous = squadDefinition(game);
+    applySquadDefinition(game, newer);
+    log('📥 Squad definition updated from the server', {
+        gameId: game.id, capturedAt: newer.rosterSnapshot?.capturedAt,
+    });
+    document.dispatchEvent(new CustomEvent('breakside:squad-changed', {
+        detail: { gameId: game.id, previous, current: newer, source: 'server' },
+    }));
+    return true;
+}
+
+/**
+ * Send one half's new squad definition to the server. A metadata PATCH
+ * (/api/games/{id}/scrimmage), never a full sync: the editing coach is
+ * usually not in this game, so their copy of its play data is stale, and a
+ * full sync would either roll the game back or be ignored (see
+ * breakside_server/routers/games.py). Tried directly first so the caller
+ * gets the stored definition back (the server may re-stamp the snapshot);
+ * when the request cannot reach the server it goes on the sync queue under
+ * its own type, so an edit made at a field with no signal lands when the
+ * signal returns. The local game cache is updated either way, so a half
+ * loaded before its first sync landed shows the new squad too.
+ * @param {string} gameId
+ * @param {{rosterSnapshot: object, team: string, opponent: string, scrimmageName: string|null}} definition
+ * @returns {Promise<object|null>} the stored definition, or null when queued
+ * @throws when the server rejects the edit (a 4xx): the caller reports it
+ */
+async function patchScrimmageGame(gameId, definition) {
+    if (!gameId || !definition) return null;
+
+    if (localGames[gameId]) {
+        Object.assign(localGames[gameId], definition);
+        saveLocalGames();
+    }
+
+    if (isOnline) {
+        try {
+            const response = await authFetch(`${API_BASE_URL}/api/games/${gameId}/scrimmage`, {
+                method: 'PATCH',
+                body: JSON.stringify(definition),
+            });
+            if (response.ok) {
+                log(`📤 Squads updated on the server for ${gameId}`);
+                return await response.json();
+            }
+            if (response.status >= 400 && response.status < 500) {
+                throw new Error(`Server returned ${response.status}: ${await response.text()}`);
+            }
+            // 5xx: the server is there but unwell — queue and retry below.
+        } catch (error) {
+            if (!isOfflineError(error)) throw error;
+        }
+    }
+
+    addToSyncQueue('squad', 'patch', gameId, definition);
+    if (isOnline) processSyncQueue();
+    return null;
 }
 
 /**
@@ -2168,6 +2263,7 @@ export {
     listServerGames, loadGameFromCloud,
     fetchGameStamp,
     refreshPendingLineFromCloud, refreshGameStateFromCloud, deleteGameFromCloud,
+    patchScrimmageGame,
     syncUserTeams, checkForUpdates, startAutoSync, stopAutoSync,
     syncAllData, pullFromCloud, getSyncStatus, checkIsOnline, clearSyncData,
     getSyncQueueItems, clearSyncQueue, getDeadLetterCount, DEAD_LETTER_KEY,

@@ -109,7 +109,7 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
-### 🥏 Intrasquad scrimmages (merged 2026-09-27; field test 2026-09-28)
+### 🥏 Intrasquad scrimmages (merged 2026-09-27; field-tested 2026-09-28)
 
 **New Scrimmage** on a team card deals the roster onto two squads and starts
 two linked games at once, one per squad; two coaches each track one squad
@@ -120,24 +120,25 @@ ARCHITECTURE.md § Intrasquad Scrimmages. The backend half (the three
 `list_all_games` fields) went to production first as `67aacfa`; the frontend
 was checked on staging (`scrimmage v1`) before the merge. Verified: unit
 (`tests/unit/scrimmage.test.mjs`), backend, and the e2e loop
-`tests/scenarios/18-intrasquad-scrimmage.spec.ts`. Follow-ups, none blocking:
+`tests/scenarios/18-intrasquad-scrimmage.spec.ts`.
 
-- [ ] **Field test, practice of 2026-09-28: four real coaches, two per
-      squad** (play-by-play + lines on each). Both Track the same squad; the
-      role buttons should appear on both phones once the second connects.
-      The multi-coach machinery is per game id and has no scrimmage-specific
-      code, so no surprise is expected, but this is its first outing on a
-      squad-game. Watch for: the role buttons appearing (a coach solo until
-      the second arrives is normal); the line coach's Next Line table showing
-      only the squad; a coach switching squads (leave one game, Track the
-      other — the old role releases on leave, or on the stale-claim timeout);
-      the card's score readout when the two halves disagree (both scores
-      shown, flagged — a missed point on one side is the honest state, not a
-      bug); and the Scrimmage Stats screen afterwards with all four halves'
-      data. Then delete this item or turn what broke into items below.
-- [ ] **Edit a scrimmage's label / squad names after creation.** Both are
-      stored on the two games; a settings dialog would PATCH each (a metadata
-      patch like `/phase`, not a full sync).
+The 2026-09-28 practice found the two gaps that mattered: squads could not be
+changed once created, and a late arrival could not be added without leaving
+the dialog and losing the assignments. Both are on branch
+`claude/brave-wright-jpnjy2` (unmerged): **Edit Squads** from the card or the
+in-game menu, propagated to every coach's phone with a toast that says what
+changed, a player-add row in the dialog, and squad names / label editable
+the same way. Backend: `PATCH /api/games/{id}/scrimmage` plus the
+newer-squad rule in `save_game_version` — deploy the backend before the
+frontend, or a squad edit's PATCH 404s (the client queues it and retries).
+Follow-ups, none blocking:
+
+- [ ] **Field test the squad edits** at the next practice: change a squad
+      from the card while both squads are being tracked (both phones should
+      toast within a few seconds and their Line tabs follow); change one
+      mid-point (the point keeps its line; the new squad shows from the next
+      point); add a late arrival from the dialog. Then delete this item or
+      turn what broke into items below.
 - [ ] **Score reconciliation.** When both halves have points and disagree,
       the card shows both scores and nothing more. A "copy the other squad's
       score" or per-point comparison would need the two games side by side.

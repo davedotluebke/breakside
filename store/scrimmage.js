@@ -147,6 +147,207 @@ function squadRoster(game, teamRoster) {
     });
 }
 
+// ── editing squads after creation ───────────────────────────────────────
+//
+// A half's squad definition is four fields — rosterSnapshot (who is on the
+// squad), team / opponent (this squad's name and the other's), scrimmageName
+// (the label) — versioned together by the snapshot's capturedAt: every edit
+// rewrites the whole snapshot with a fresh stamp, and the newer definition
+// wins wherever two copies meet (the server's sync merge, and the in-game
+// refresh below). Edits reach the server by PATCH (store/sync.js
+// patchScrimmageGame), because the editing coach usually is not in the game
+// they are editing and a full sync would carry their stale copy of its play
+// data. See ARCHITECTURE.md § Intrasquad Scrimmages.
+
+const SQUAD_DEFINITION_KEYS = ['rosterSnapshot', 'team', 'opponent', 'scrimmageName'];
+
+/** Epoch ms of a squad-game's squad version (its snapshot's capturedAt); 0 when unstamped. */
+function squadStamp(game) {
+    const raw = game?.rosterSnapshot?.capturedAt;
+    if (!raw) return 0;
+    const ms = new Date(raw).getTime();
+    return isNaN(ms) ? 0 : ms;
+}
+
+/** The four squad-definition fields of a game (or server document), copied. */
+function squadDefinition(game) {
+    return {
+        rosterSnapshot: game?.rosterSnapshot ? JSON.parse(JSON.stringify(game.rosterSnapshot)) : null,
+        team: game?.team ?? null,
+        opponent: game?.opponent ?? null,
+        scrimmageName: game?.scrimmageName || null,
+    };
+}
+
+/**
+ * The squad definition to adopt from a server copy of a squad-game — when the
+ * server's is strictly newer than the local one; null otherwise (equal stamps
+ * are this device's own copy coming back; an unstamped side has no version).
+ * The in-game refresh calls this on every pull, for the Active Coach too.
+ * @param {object} local - the Game this device holds
+ * @param {object} server - the server's document for the same game
+ * @returns {{rosterSnapshot: object, team: string, opponent: string, scrimmageName: string|null}|null}
+ */
+function newerSquadDefinition(local, server) {
+    if (!isScrimmageGame(local) && !isScrimmageGame(server)) return null;
+    const theirs = squadStamp(server);
+    const ours = squadStamp(local);
+    if (!theirs || !ours || theirs <= ours) return null;
+    return squadDefinition(server);
+}
+
+/** Write a squad definition onto a Game (only the fields the definition carries). */
+function applySquadDefinition(game, definition) {
+    if (!game || !definition) return game;
+    SQUAD_DEFINITION_KEYS.forEach(key => {
+        if (key in definition && definition[key] !== undefined) game[key] = definition[key];
+    });
+    return game;
+}
+
+/** id → name for everyone on a game's (or definition's) roster snapshot. */
+function snapshotNames(game) {
+    const out = new Map();
+    (game?.rosterSnapshot?.players || []).forEach(p => {
+        if (p && p.id) out.set(p.id, p.nickname || p.name || p.id);
+    });
+    return out;
+}
+
+/**
+ * Who is on which squad, read from the two halves' snapshots — the edit
+ * dialog's starting point. A player somehow on both (never written by this
+ * client) counts for X.
+ * @param {{X?: object, Y?: object}} games - the two squad-games
+ * @returns {Map<string, 'X'|'Y'>} playerId → squad
+ */
+function squadAssignments(games) {
+    const assignment = new Map();
+    SQUADS.forEach(squad => {
+        (games?.[squad]?.rosterSnapshot?.players || []).forEach(p => {
+            if (p && p.id && !assignment.has(p.id)) assignment.set(p.id, squad);
+        });
+    });
+    return assignment;
+}
+
+/**
+ * The PATCH body that turns one half's squad definition into the proposed
+ * one, or null when nothing about it changes. Always the whole definition,
+ * freshly stamped: the names are versioned by the snapshot's stamp, so a
+ * rename re-stamps the snapshot too. Player order is not a change (both
+ * sides are in roster order; a rename can reorder).
+ * @param {object} game - the half as it stands
+ * @param {{players: Array<object>, squadNames: {X: string, Y: string},
+ *          label: string|null, now?: Date}} proposal - players: this squad's
+ *          Player objects, in the order to store
+ * @returns {{rosterSnapshot: object, team: string, opponent: string, scrimmageName: string|null}|null}
+ */
+function squadPatch(game, { players, squadNames, label, now = new Date() }) {
+    const squad = SQUADS.includes(game?.scrimmageSquad) ? game.scrimmageSquad : 'X';
+    const fields = squadGameFields({
+        scrimmageId: game?.scrimmageId, squad, squadNames, name: label,
+    });
+    const before = new Set((game?.rosterSnapshot?.players || []).map(p => p && p.id).filter(Boolean));
+    const after = new Set((players || []).map(p => p && p.id).filter(Boolean));
+    const samePlayers = before.size === after.size && [...after].every(id => before.has(id));
+    const sameNames = fields.team === (game?.team ?? null)
+        && fields.opponent === (game?.opponent ?? null)
+        && fields.scrimmageName === (game?.scrimmageName || null);
+    if (samePlayers && sameNames) return null;
+    const rosterSnapshot = buildSquadSnapshot(players, [...after], now);
+    if (!rosterSnapshot) return null;   // an empty squad is not a valid edit; callers refuse it first
+    return {
+        rosterSnapshot,
+        team: fields.team,
+        opponent: fields.opponent,
+        scrimmageName: fields.scrimmageName,
+    };
+}
+
+/** "Bob", "Bob and Eve", "Bob, Eve and Mia". */
+function listNames(names) {
+    if (names.length <= 1) return names.join('');
+    return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * What a coach tracking this half should be told when its squad definition
+ * changes under them — the body of the toast. null when nothing they would
+ * notice changed (a re-stamp of the same squad: this device's own edit
+ * coming back with the server's stamp, say).
+ * @param {object} before - the half (or its squad definition) before
+ * @param {object} after - and after
+ * @param {{pointInProgress?: boolean}} [opts] - a live point keeps its line;
+ *        the squad takes effect from the next one, and the toast says so
+ * @returns {string|null}
+ */
+function describeSquadChange(before, after, { pointInProgress = false } = {}) {
+    const was = snapshotNames(before);
+    const now = snapshotNames(after);
+    const squadName = after?.team || before?.team || 'this squad';
+    const joined = [...now].filter(([id]) => !was.has(id)).map(([, name]) => name);
+    const left = [...was].filter(([id]) => !now.has(id)).map(([, name]) => name);
+    const parts = [];
+    if (joined.length) parts.push(`${listNames(joined)} joined ${squadName}`);
+    if (left.length) parts.push(`${listNames(left)} left`);
+    if (before?.team && after?.team && before.team !== after.team) {
+        parts.push(`${before.team} is now ${after.team}`);
+    }
+    if (before?.opponent && after?.opponent && before.opponent !== after.opponent) {
+        parts.push(`${before.opponent} is now ${after.opponent}`);
+    }
+    const oldLabel = before?.scrimmageName || null;
+    const newLabel = after?.scrimmageName || null;
+    if (oldLabel !== newLabel) {
+        parts.push(newLabel ? `labelled “${newLabel}”` : 'label removed');
+    }
+    if (!parts.length) return null;
+    let text = `Squads updated: ${parts.join('; ')}.`;
+    if (pointInProgress && (joined.length || left.length)) {
+        text += ' The point on the field keeps its line; the new squad plays from the next point.';
+    }
+    return text;
+}
+
+// The planned lines (game/selectLine.js) and their per-line stamps.
+const PLANNED_LINE_KEYS = ['oLine', 'dLine', 'odLine', 'odOnDeckLine'];
+
+/**
+ * Drop players who are no longer on the squad from the planned lines, so a
+ * departed player is not silently fielded on the next point from a line that
+ * no longer shows them. Each changed line gets a fresh stamp, so the prune
+ * wins the per-line merge against copies that still list them. Line entries
+ * are player names (and ids, in some data eras), so both are matched.
+ * @param {object} pendingNextLine - mutated in place
+ * @param {object} snapshot - the squad's new rosterSnapshot
+ * @param {Date} [now]
+ * @returns {string[]} the entries removed, in first-seen order; [] when nothing changed
+ */
+function pruneLinesToSquad(pendingNextLine, snapshot, now = new Date()) {
+    if (!pendingNextLine || !snapshot) return [];
+    const keep = new Set();
+    (snapshot.players || []).forEach(p => {
+        if (!p) return;
+        if (p.id) keep.add(p.id);
+        if (p.name) keep.add(p.name);
+        if (p.nickname) keep.add(p.nickname);
+    });
+    const removed = [];
+    PLANNED_LINE_KEYS.forEach(key => {
+        const line = pendingNextLine[key];
+        if (!Array.isArray(line)) return;
+        const kept = line.filter(entry => keep.has(entry));
+        if (kept.length === line.length) return;
+        line.filter(entry => !keep.has(entry)).forEach(entry => {
+            if (!removed.includes(entry)) removed.push(entry);
+        });
+        pendingNextLine[key] = kept;
+        pendingNextLine[`${key}ModifiedAt`] = now.toISOString();
+    });
+    return removed;
+}
+
 // ── dealing players onto squads ─────────────────────────────────────────
 
 function positionRank(player) {
@@ -317,4 +518,7 @@ export {
     squadGameFields, buildSquadSnapshot, squadRoster, splitSquads,
     gameStartMs, groupScrimmages, scrimmageSquadNames, scrimmageScores,
     scrimmageLabel, isScrimmageOver,
+    SQUAD_DEFINITION_KEYS, squadStamp, squadDefinition, newerSquadDefinition,
+    applySquadDefinition, squadAssignments, squadPatch, describeSquadChange,
+    pruneLinesToSquad,
 };

@@ -9,8 +9,9 @@
 import { Role } from '../store/models.js';
 import {
     currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
+    saveAllTeamsData,
 } from '../store/storage.js';
-import { isScrimmageGame } from '../store/scrimmage.js';
+import { isScrimmageGame, describeSquadChange, pruneLinesToSquad } from '../store/scrimmage.js';
 import { currentGame, isPointInProgress } from '../utils/helpers.js';
 import { normalizeStamp, stampSaysChanged } from '../utils/changeStamp.js';
 import {
@@ -951,11 +952,52 @@ document.addEventListener('breakside:controller-ui-updated', (e) => {
         
         // Update Select Line panel permissions when roles change
         updateSelectLinePanelState();
-        
+
         // Always keep game state refresh running (for viewers to see updates)
         startGameStateRefresh();
     }
 });
+
+// The squad of this scrimmage half changed under us: another coach edited
+// the squads and the refresh loop adopted the server's newer definition
+// (store/sync.js adoptServerSquadDefinition, source 'server'), or this coach
+// saved the Edit Squads dialog (teams/scrimmageDialogs.js, source 'local').
+// The policy for a point already on the field is deliberately simple: it
+// keeps its line — those players were on the field for this squad — and the
+// new squad plays from the next point. So the planned lines are pruned of
+// anyone who left (the Line tab would otherwise start a point with a player
+// it no longer shows), the panels redraw from the new roster, and the toast
+// says what happened. See ARCHITECTURE.md § Intrasquad Scrimmages.
+document.addEventListener('breakside:squad-changed', (e) => {
+    const { gameId, previous, current, source } = e.detail || {};
+    const game = currentGameFn();
+    if (!game || !gameId || game.id !== gameId) return;   // a half this device holds but is not in
+
+    const pointInProgress = isPointInProgress();
+    const isViewerUser = typeof window.isViewer === 'function' && window.isViewer();
+    if (!isViewerUser && current?.rosterSnapshot) {
+        const removed = pruneLinesToSquad(game.pendingNextLine, current.rosterSnapshot);
+        if (removed.length) {
+            log('📋 Planned lines pruned of players who left the squad:', removed);
+            // Persists and syncs the pruned lines, so the other coach in this
+            // game merges them (fresh per-line stamps win).
+            saveAllTeamsData();
+        }
+    }
+
+    if (isGameScreenVisible()) {
+        updateHeaderTeamIdentities();
+        updateGameLogPanel();
+        updateSelectLinePanel();
+        updatePlayByPlayPanelState();
+    }
+
+    if (source === 'server') {
+        const text = describeSquadChange(previous, current, { pointInProgress });
+        if (text) showControllerToast(text, 'info', 8000);
+    }
+});
+
 // --- ES-module exports ---
 export {
     enterGameScreen, exitGameScreen,

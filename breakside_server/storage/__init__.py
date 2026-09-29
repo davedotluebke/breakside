@@ -11,6 +11,7 @@ from .game_storage import (
     delete_game,
     list_all_games,
     update_game_metadata,
+    update_squad_definition,
 )
 
 from .player_storage import (
@@ -193,6 +194,7 @@ __all__ = [
     "delete_game",
     "list_all_games",
     "update_game_metadata",
+    "update_squad_definition",
     # Player storage
     "generate_player_id",
     "save_player",

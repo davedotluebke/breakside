@@ -22,6 +22,7 @@
 import { currentTeam } from '../store/storage.js';
 import { isScrimmageGame } from '../store/scrimmage.js';
 import { currentGame } from '../utils/helpers.js';
+import { escapeHtml } from '../utils/gameLogRenderer.js';
 import { createPanelTitleBar } from '../ui/panelSystem.js';
 import { isLineCoach, showControllerToast } from './controllerState.js';
 import { wireGameScreenEvents } from './gameScreenEvents.js';
@@ -80,6 +81,9 @@ function createHeaderContent() {
                 <div class="menu-divider"></div>
                 <button class="menu-item" id="menuRoster">
                     <i class="fas fa-users"></i> Roster + Stats
+                </button>
+                <button class="menu-item" id="menuEditSquads" style="display: none;">
+                    <i class="fas fa-people-arrows"></i> Edit Squads
                 </button>
                 <button class="menu-item" id="menuGameSettings">
                     <i class="fas fa-sliders-h"></i> Game Settings
@@ -218,6 +222,23 @@ function getOpponentIdentityDisplay(opponentName) {
         return { html: `<span class="team-identity-symbol-large">${opponentName}</span>` };
     }
     return { html: `<span class="team-identity-text team-identity-fallback">Them</span>` };
+}
+
+/**
+ * A squad's identity in an intrasquad scrimmage (store/scrimmage.js), for
+ * either side of the score: both squads are this team, so "Us" / "Them" say
+ * nothing, and the squad NAME is the identity — large when it fits the
+ * symbol slot, otherwise in the small text style (clipped by CSS) rather
+ * than falling back to a label. Names are the coach's, up to 20 characters.
+ * @param {string} squadName
+ * @returns {Object} { html: string }
+ */
+function getSquadIdentityDisplay(squadName) {
+    const name = escapeHtml(squadName || '');
+    if (name && squadName.length <= MAX_TEAM_NAME_LENGTH) {
+        return { html: `<span class="team-identity-symbol-large">${name}</span>` };
+    }
+    return { html: `<span class="team-identity-text team-identity-squad" title="${name}">${name || 'Squad'}</span>` };
 }
 
 /**
@@ -737,13 +758,15 @@ function updateHeaderTeamIdentities() {
     
     // Update our team identity. In a scrimmage both squads are this team, so
     // the team icon or symbol says nothing about which squad this is: show
-    // the squad's name the way an opponent's is shown instead.
-    const usDisplay = isScrimmageGame(game)
-        ? { ...getOpponentIdentityDisplay(game.team), canToggle: false }
+    // the squad's name instead (both sides, since the other squad is not a
+    // "Them" either).
+    const scrimmage = isScrimmageGame(game);
+    const usDisplay = scrimmage
+        ? { ...getSquadIdentityDisplay(game.team), canToggle: false }
         : getTeamIdentityDisplay(team, 'Us');
     usContainer.innerHTML = usDisplay.html;
     usContainer.classList.toggle('can-toggle', usDisplay.canToggle);
-    
+
     // Add click handler for toggling if we can toggle
     if (usDisplay.canToggle) {
         usContainer.onclick = toggleTeamIdentityDisplay;
@@ -752,10 +775,12 @@ function updateHeaderTeamIdentities() {
         usContainer.onclick = null;
         usContainer.style.cursor = 'default';
     }
-    
+
     // Update opponent identity
     const opponentName = game ? game.opponent : null;
-    const themDisplay = getOpponentIdentityDisplay(opponentName);
+    const themDisplay = scrimmage
+        ? getSquadIdentityDisplay(opponentName)
+        : getOpponentIdentityDisplay(opponentName);
     themContainer.innerHTML = themDisplay.html;
 }
 

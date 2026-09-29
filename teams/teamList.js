@@ -36,7 +36,7 @@ import {
     groupScrimmages, withoutScrimmages, scrimmageSquadNames, scrimmageScores,
     scrimmageLabel, formatShortDate, isScrimmageOver, SQUADS,
 } from '../store/scrimmage.js';
-import { showNewScrimmageDialog } from './scrimmageDialogs.js';
+import { showNewScrimmageDialog, showEditSquadsDialog } from './scrimmageDialogs.js';
 import { showScrimmageStatsScreen } from './scrimmageStats.js';
 import { updateTeamRosterDisplay } from './rosterManagement.js';
 import { showTeamSettingsScreen } from './teamSettings.js';
@@ -1738,6 +1738,20 @@ function renderScrimmageContainer(scrimmage, team, role, teamGames) {
     headerBtns.appendChild(statsBtn);
 
     if (role === 'coach') {
+        // Squads, their names and the label can change after creation — a
+        // late arrival, a lopsided first half. Both halves are updated at
+        // once, and coaches tracking either squad see it on their phones.
+        const editBtn = document.createElement('button');
+        editBtn.innerHTML = '<i class="fas fa-user-edit"></i><span class="ev-btn-label">Squads</span>';
+        editBtn.classList.add('icon-button', 'event-header-btn', 'scrimmage-edit-btn');
+        editBtn.title = 'Edit the squads, their names or the label';
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            setCurrentTeamRole(role);
+            showEditSquadsDialog(team, scrimmage.id, { summaries: scrimmage.squads });
+        };
+        headerBtns.appendChild(editBtn);
+
         const deleteBtn = document.createElement('button');
         deleteBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
         deleteBtn.classList.add('icon-button', 'event-header-btn');

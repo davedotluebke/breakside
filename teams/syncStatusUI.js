@@ -429,6 +429,11 @@ function describeSyncItem(item) {
     if (item.type === 'player') {
         return `player: ${data.name || item.id}`;
     }
+    if (item.type === 'squad') {
+        // A squad edit on one half of an intrasquad scrimmage (store/sync.js
+        // patchScrimmageGame); data is the squad definition being sent.
+        return `squads: ${data.team || '?'} vs ${data.opponent || '?'}`;
+    }
     return `${item.type}: ${item.id}`;
 }
 

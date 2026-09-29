@@ -565,6 +565,13 @@ body.game-screen-active header {
     font-weight: 500;
 }
 
+/* A scrimmage squad's name when it is too long for the symbol slot
+   (game/gameScreenPanels.js getSquadIdentityDisplay): the small text style,
+   clipped with an ellipsis so a 20-character name cannot widen the header. */
+.team-identity-squad {
+    max-width: 6.5em;
+}
+
 /* Large team icon (main display) */
 .team-identity-icon-large {
     width: 34px;
