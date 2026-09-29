@@ -28,5 +28,6 @@ These notes were seeded on 2026-09-05 from an AI agent's per-project memory, ver
 | [preview-testing.md](preview-testing.md) | Driving game flows in an in-IDE browser preview |
 | [qr-codes.md](qr-codes.md) | Hand-rolled QR encoder: why not vendored, the capacity trap, how it was verified |
 | [share-links.md](share-links.md) | Same-origin viewer chain and its deploy corollaries |
+| [small-phone-layout.md](small-phone-layout.md) | The multi-phone viewport sweep, what it found on a 13 mini, what was fixed and what is a design call |
 | [standby-screen.md](standby-screen.md) | Black standby screen: the tap/hold split on ☀, why exit is on `click`, how to verify |
 | [team-list-order.md](team-list-order.md) | Teams screen order (most recently opened, pinned group on top): the decisions and how to verify |
