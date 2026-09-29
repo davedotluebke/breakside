@@ -364,6 +364,13 @@ body.game-screen-active header {
     top: auto;
     left: 12px;
     margin-top: 4px;
+    /* It opens just under the header (~60px down) and, being fixed, can't be
+       scrolled into view with the page; on a short phone (an SE in Safari is
+       548px tall) the last items fell off the bottom. Cap it and let it
+       scroll. Taller phones never reach the cap. */
+    max-height: calc(100vh - 72px);
+    max-height: calc(100svh - 72px);
+    overflow-y: auto;
     background: var(--surface-card);
     border-radius: 8px;
     box-shadow: var(--shadow-lg);
@@ -381,11 +388,16 @@ body.game-screen-active header {
     transform: translateY(0);
 }
 
+/* margin: the global button { margin: 10px } minus its sides. The vertical
+   10px is the menu's spacing; the horizontal 10px pushed each width: 100%
+   item 10px past the menu's right edge, which the scrolling menu
+   (overflow-y: auto turns x to auto too) would let a finger pan. */
 .header-menu-dropdown .menu-item {
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
+    margin: 10px 0;
     padding: 12px 16px;
     background: none;
     border: none;
@@ -1446,6 +1458,19 @@ body.game-screen-active header {
     cursor: pointer;
 }
 
+/* Narrow phones: Events and Undo drop to their icons (the Play-by-Play
+   action row does the same at this width; both keep a title), so Start
+   Point keeps its label on one line. "Point in progress" and "Start Point
+   (Offense)" wrapped at 390px and below, doubling the row's height. */
+@media (max-width: 400px) {
+    .line-tab-undo-btn span {
+        display: none;
+    }
+    .line-tab-undo-btn {
+        padding: 8px 12px;
+    }
+}
+
 /* Lineup Ready: blue idle, green when sent, desaturated blue when
  * disabled. The generic .pbp-start-point-btn.inactive rule above sets a
  * grey gradient, but the more specific blue rule for this variant wins
@@ -1605,6 +1630,7 @@ body.game-screen-active header {
 .correct-lineup-modal-content {
     max-width: 440px;
     max-height: 85vh;
+    max-height: 85svh;
     display: flex;
     flex-direction: column;
 }
@@ -2050,6 +2076,12 @@ body.game-screen-active header {
     border: 1px solid var(--border-soft);
     border-radius: 4px;
     background: var(--surface-card);
+}
+
+/* Line tab: the table runs to the bottom of the screen, under the mic FAB,
+   so give it room to scroll its last rows up past the button. */
+.panel-selectLine.tab-fullscreen .select-line-table-container {
+    padding-bottom: 80px;
 }
 
 /* Panel player table */
@@ -2840,6 +2872,11 @@ body.panel-dragging .panel-content {
     position: relative;
 }
 
+/* margin: 0 — the global button { margin: 10px } used to make up the
+   control's height, so a tab looked 44px tall while only the 24px label box
+   in the middle took the tap. The same height now comes from padding, so the
+   whole segment is the target (and the slider, sized from the button box,
+   fills it). */
 .header-seg-control button {
     flex: 1;
     background: none;
@@ -2847,7 +2884,9 @@ body.panel-dragging .panel-content {
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 600;
-    padding: 3px 0;
+    line-height: 18px;
+    margin: 0;
+    padding: 13px 0;
     cursor: pointer;
     position: relative;
     z-index: 1;
@@ -2873,6 +2912,14 @@ body.panel-dragging .panel-content {
     border-radius: 6px;
     transition: left 0.25s ease, width 0.25s ease;
     box-shadow: var(--shadow-xs);
+}
+
+/* Short screens (a 13 mini in Safari is 375x629): the header is a fixed cost
+   every tab pays, so the tab bar gives back 12px. Still a 32px target. */
+@media (max-height: 700px) {
+    .header-seg-control button {
+        padding: 7px 0;
+    }
 }
 
 /* =============================================================================

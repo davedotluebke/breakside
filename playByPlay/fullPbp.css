@@ -461,6 +461,16 @@
     overflow: hidden;
 }
 
+/* Short screens: the log sits at its minimum and every pixel of it comes
+ * out of the player rows, so give some back. Not below 88px: the mic FAB
+ * (64px, 16px up from the bottom) has to fit inside the log strip, or it
+ * lands on the They score button in the row above. */
+@media (max-height: 700px) {
+    .full-pbp-log-reserve {
+        min-height: 88px;
+    }
+}
+
 .full-pbp-log-list {
     width: 100%;
     height: 100%;

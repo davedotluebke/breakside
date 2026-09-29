@@ -1390,12 +1390,12 @@ if (document.readyState === 'loading') {
 // (loadPanelStates, savePanelStates, isPanelMinimized, minimizePanel,
 // maximizePanel, resetPanelHeights, updateExpandingPanel, createPanelStub,
 // createPanel, isPanelDraggable, getDragMinHeight, DRAGGABLE_PANELS,
-// RESIZABLE_PANELS, PBP_MIN_CONTENT_HEIGHT, FOLLOW_MIN_HEIGHT, applyTabState)
+// RESIZABLE_PANELS, PBP_MIN_CONTENT_HEIGHT, applyTabState)
 // are module-internal now. The physical-drag getter/setter pair is kept as a
 // console/debug seam (no in-app UI toggles it yet).
 export {
     // State management
-    getPanelState, setPanelState, MIN_PANEL_HEIGHT,
+    getPanelState, setPanelState, MIN_PANEL_HEIGHT, FOLLOW_MIN_HEIGHT,
     // Panel actions
     setPanelVisible, setPanelSubtitle, setPanelTitle, resetAllPanelStates,
     // Panel creation

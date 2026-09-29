@@ -56,6 +56,30 @@
     display: inline-flex;
 }
 
+/* Idle, the button waits under any open dialog (modals sit at z-index 1000,
+   the pickers at 999) instead of floating over its Score / Proceed / Done
+   buttons. While it is live (connecting, recording, finalizing) it stays on
+   top, so a recording can always be stopped. */
+#narrationMicBtn.mic-idle,
+#narrationMicBtn.mic-disabled {
+    z-index: 990;
+}
+
+/* Simple tab, full layout: its Undo / Sub / Events row runs along the
+   bottom, right where the button sits, and Events was under it on every
+   phone. The big buttons above that row are centred and leave the right
+   margin clear, so the button rises above the row instead, and the live
+   transcript keeps its place just above the button. The body class is
+   game/gameScreenEvents.js updatePlayByPlayLayout's; on a short phone the
+   Simple tab takes the expanded layout, whose row sits mid-screen, and the
+   button stays down. */
+body.pbp-actions-at-bottom #narrationMicBtn {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+}
+body.pbp-actions-at-bottom .narration-transcript-panel {
+    bottom: calc(164px + env(safe-area-inset-bottom, 0px));
+}
+
 #narrationMicBtn:active {
     transform: scale(0.94);
 }
@@ -128,6 +152,7 @@
 
     width: min(90vw, 520px);
     max-height: 28vh;
+    max-height: 28svh;
 
     background: var(--overlay-tooltip);
     color: var(--on-overlay);
@@ -164,6 +189,7 @@
 .narration-transcript-text {
     overflow-y: auto;
     max-height: calc(28vh - 30px);
+    max-height: calc(28svh - 30px);
     white-space: pre-wrap;
     word-break: break-word;
 }

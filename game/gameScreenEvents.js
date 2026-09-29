@@ -2454,6 +2454,13 @@ function updatePlayByPlayLayout() {
     } else {
         content.classList.add('layout-compact');
     }
+
+    // In the full layout of the full-screen (Simple tab) panel, the Undo /
+    // Sub / Events row runs along the bottom of the screen, where the mic FAB
+    // sits; the FAB rises above it then (narration/micButton.css). Any other
+    // layout leaves that corner clear.
+    document.body.classList.toggle('pbp-actions-at-bottom',
+        content.classList.contains('layout-full') && panel.classList.contains('tab-fullscreen'));
 }
 
 // ResizeObserver instance for Play-by-Play panel

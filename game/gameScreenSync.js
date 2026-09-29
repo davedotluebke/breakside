@@ -19,7 +19,7 @@ import {
 } from '../store/sync.js';
 import {
     isGameScreenVisible, showGameScreen, hideGameScreen, resetAllPanelStates,
-    getPanelState, setPanelState, MIN_PANEL_HEIGHT, updatePanelsForRole,
+    getPanelState, setPanelState, MIN_PANEL_HEIGHT, FOLLOW_MIN_HEIGHT, updatePanelsForRole,
     resetMultiCoachDetected,
 } from '../ui/panelSystem.js';
 import { startActiveGamePolling, stopActiveGamePolling } from '../teams/activeGamePolling.js';
@@ -329,6 +329,41 @@ function updateGameScreenRoleButtons(state) {
 // =============================================================================
 
 /**
+ * The height to pin the Next Line panel at on game entry.
+ *
+ * Tall phones: 45% of the game screen, which leaves the game log a generous
+ * share. On a short screen that same 45% shows only two or three player rows
+ * (a 13 mini in Safari is 375x629, and the header plus Play-by-Play already
+ * take a third of it) while the log keeps a quarter of the screen. So there
+ * the panel may grow until a whole line of players is visible, giving up
+ * only what the log needs to stay readable (FOLLOW_MIN_HEIGHT).
+ *
+ * Measured, not computed from row heights: at this point the panel still has
+ * its natural height, so every row sits where it will once pinned.
+ *
+ * @param {HTMLElement|null} container - #gameScreenContainer
+ * @param {HTMLElement} slPanel - #panel-selectLine at its natural height
+ * @returns {number}
+ */
+function selectLineAutoHeight(container, slPanel) {
+    if (!container) return 300;
+    const share = Math.floor(container.clientHeight * 0.45);
+
+    const rows = slPanel.querySelectorAll('#panelActivePlayersTable tbody tr');
+    const lineSize = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
+    const lastRow = rows[Math.min(rows.length, lineSize) - 1];
+    const tableBox = document.getElementById('panelTableContainer');
+    if (!lastRow || !tableBox) return share;
+
+    const panel = slPanel.getBoundingClientRect();
+    // Everything under the table: its bottom border plus the panel padding.
+    const below = panel.bottom - tableBox.getBoundingClientRect().bottom + tableBox.clientTop;
+    const wholeLine = Math.ceil(lastRow.getBoundingClientRect().bottom - panel.top + below);
+    const room = Math.floor(container.getBoundingClientRect().bottom - panel.top - FOLLOW_MIN_HEIGHT);
+    return Math.max(share, Math.min(wholeLine, room));
+}
+
+/**
  * Enter the new game screen UI
  * Called when starting a point or entering a game
  */
@@ -446,16 +481,14 @@ function enterGameScreen() {
 
     // Pin selectLine at a reasonable height so it doesn't start at ~0
     // (which causes the game log to overlap it before flex layout settles).
-    // Cap at 45% of container to ensure follow (game log) stays visible.
     requestAnimationFrame(() => {
         const slPanel = document.getElementById('panel-selectLine');
         const slState = typeof getPanelState === 'function' ? getPanelState('selectLine') : null;
         if (slPanel && slState && !slState.height) {
             const container = document.getElementById('gameScreenContainer');
-            const maxHeight = container ? Math.floor(container.clientHeight * 0.45) : 300;
             const measured = slPanel.getBoundingClientRect().height;
             if (measured > MIN_PANEL_HEIGHT) {
-                setPanelState('selectLine', { height: Math.min(measured, maxHeight) });
+                setPanelState('selectLine', { height: Math.min(measured, selectLineAutoHeight(container, slPanel)) });
             }
         }
     });
