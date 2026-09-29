@@ -442,13 +442,28 @@ ul {
     background-color: var(--surface-card);  /* opaque so sticky cells don't bleed-through */
 }
 
-/* Roster stats scope toggle (All-time / Event / Game) */
+/* Roster stats scope toggle (All Time / Event / Most Recent Game) */
 .roster-scope-toggle {
     display: flex;
     align-items: center;
     gap: 6px;
     margin: 6px 20px 10px;
     flex-wrap: wrap;
+    container: roster-scope-row / inline-size;
+}
+/* The game pill carries three labels and shows the longest that fits:
+   "Most Recent Game", then "Latest Game", then "Game". */
+.roster-scope-btn .scope-label-mid,
+.roster-scope-btn .scope-label-short {
+    display: none;
+}
+@container roster-scope-row (max-width: 560px) {
+    .roster-scope-btn .scope-label-long { display: none; }
+    .roster-scope-btn .scope-label-mid { display: inline; }
+}
+@container roster-scope-row (max-width: 325px) {
+    .roster-scope-btn .scope-label-mid { display: none; }
+    .roster-scope-btn .scope-label-short { display: inline; }
 }
 .roster-scope-label {
     font-size: 0.85em;
