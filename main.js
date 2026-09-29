@@ -197,6 +197,9 @@ import './narration/transcriptDisplay.js';
 // presses, so it evaluates first either way — list it in the real order.
 import './narration/lineupNarration.js';
 import './narration/micButton.js';
+// Opt-in, device-local clip capture; a leaf consumer of the session, the
+// bus and both narration surfaces, so it goes last in the narration block.
+import './narration/clipRecorder.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).
 // Its offline precache otherwise serves stale JS/CSS across edits, so source

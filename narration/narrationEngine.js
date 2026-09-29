@@ -509,11 +509,20 @@ Just listen. Transcription happens automatically.`;
             });
             if (!resp.ok) {
                 console.warn('[narrationEngine] Finalize failed:', resp.status);
+                narrationEventBus.publish('narrationFinalized', {
+                    transcript: accumulatedTranscript, roster: payload.roster,
+                    gameContext: payload.game_context, operations: [], error: `HTTP ${resp.status}`
+                });
                 toast(`Narration processing failed (${resp.status}) — no events added`, 'error');
                 // Leave provisionals as-is; user can undo if needed.
                 provisionalEvents.forEach(p => markProvisionalStatus(p.id, 'confirmed'));
             } else {
                 const data = await resp.json();
+                narrationEventBus.publish('narrationFinalized', {
+                    transcript: accumulatedTranscript, roster: payload.roster,
+                    gameContext: payload.game_context,
+                    operations: data.operations || [], error: data.error || null
+                });
                 if (data.error) {
                     // The server degraded gracefully (Claude call failed) and
                     // returned confirm-all — which in transcription-only mode

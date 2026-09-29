@@ -26,6 +26,7 @@
  */
 import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
+import { narrationEventBus } from './eventBus.js';
 import { resolveLineupPlayers, buildLineupToast, displayFirstName } from './lineupResolve.js';
 import { log } from '../utils/logger.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
@@ -356,6 +357,7 @@ const lineupNarration = (function() {
                 return;
             }
             data = await resp.json();
+            narrationEventBus.publish('lineupResolved', { transcript, request: payload, response: data });
         } catch (err) {
             console.error('[lineupNarration] request failed:', err);
             toast('Lineup processing failed (network) — selection unchanged', 'error');

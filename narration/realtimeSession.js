@@ -62,6 +62,9 @@ const narrationRealtimeSession = (function() {
     let onTranscriptCompleteCb = null;
     let onErrorCb = null;
     let accumulatedTranscript = '';
+    // Optional observer of the mic stream (narration/clipRecorder.js);
+    // registered through setAudioTap(). Never affects the session itself.
+    let audioTap = null;
 
     // Module-level mode flag, set by start() and read by stop() to decide
     // whether we need to commit + create a response (conversation) or just
@@ -288,11 +291,17 @@ const narrationRealtimeSession = (function() {
         // (permission denied, no device), close the socket we just opened —
         // otherwise it lingers listener-attached until OpenAI idle-times it
         // out, and a quick retry can find stale state.
+        // Tell the tap a session is about to go live, before the first
+        // chunk can flow; every path out of here below then closes it.
+        if (audioTap && audioTap.onSessionStart) {
+            audioTap.onSessionStart({ mode: currentMode, model, transcriptionModel, sampleRate: TARGET_SAMPLE_RATE });
+        }
         try {
             await startAudioCapture();
         } catch (err) {
             try { if (ws) ws.close(); } catch (_) {}
             ws = null;
+            if (audioTap && audioTap.onSessionStop) audioTap.onSessionStop({ transcript: '', aborted: true });
             throw err;
         }
         logPhase('audio capture started');
@@ -308,6 +317,7 @@ const narrationRealtimeSession = (function() {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
             stopAudioCapture();
             ws = null;
+            if (audioTap && audioTap.onSessionStop) audioTap.onSessionStop({ transcript: '', aborted: true });
             throw new Error('Connection closed during microphone setup');
         }
 
@@ -358,6 +368,9 @@ const narrationRealtimeSession = (function() {
         } catch (_) { /* ignore */ }
 
         ws = null;
+        if (audioTap && audioTap.onSessionStop) {
+            audioTap.onSessionStop({ transcript: accumulatedTranscript, aborted: false });
+        }
         return { transcript: accumulatedTranscript };
     }
 
@@ -560,6 +573,9 @@ const narrationRealtimeSession = (function() {
             // doesn't latch in "recording"/"finalizing":
             sessionActive = false;
             stopAudioCapture();
+            if (audioTap && audioTap.onSessionStop) {
+                audioTap.onSessionStop({ transcript: accumulatedTranscript, aborted: true });
+            }
             // Resolve any stop() that's waiting on an end-of-turn signal — the
             // socket is gone, so it would otherwise hang the full timeout.
             if (pendingResponseDone) {
@@ -606,6 +622,8 @@ const narrationRealtimeSession = (function() {
                 type: 'input_audio_buffer.append',
                 audio: base64
             });
+            // After the send, so the tap sees exactly what went to OpenAI.
+            if (audioTap && audioTap.onAudioChunk) audioTap.onAudioChunk(pcm16);
         };
 
         sourceNode.connect(processorNode);
@@ -656,11 +674,23 @@ const narrationRealtimeSession = (function() {
         return btoa(binary);
     }
 
+    /**
+     * Register an observer of the microphone stream (the clip recorder).
+     * onSessionStart({mode, model, transcriptionModel, sampleRate}) fires
+     * before the first chunk; onAudioChunk(Int16Array) once per chunk that
+     * was actually sent; onSessionStop({transcript, aborted}) exactly once
+     * per started session, however it ends. Pass null to detach.
+     */
+    function setAudioTap(tap) {
+        audioTap = tap || null;
+    }
+
     // Public API
     return {
         start,
         stop,
-        isActive
+        isActive,
+        setAudioTap
     };
 })();
 

@@ -417,3 +417,16 @@
     opacity: 0.3;
     pointer-events: none;
 }
+
+/* Action row button (type: 'button' schema fields, e.g. Manage clips…). */
+.adv-action-btn {
+    margin: 0;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}

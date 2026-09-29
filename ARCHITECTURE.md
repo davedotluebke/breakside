@@ -2090,6 +2090,16 @@ A second, independent narration layer lets a coach *speak the next line* instead
 - **No graceful no-LLM fallback**: unlike `/finalize`, `/lineup` 503s without `ANTHROPIC_API_KEY` — there is nothing sensible to return without a model. The model defaults to the finalize pass's (`NARRATION_LINEUP_MODEL` overrides, else `NARRATION_SLOW_MODEL`).
 - **Debug seam**: `window.lineupNarration._applyResult({...})` drives the apply path from the console/Playwright without mic hardware or an API key.
 
+### Narration clip recorder (opt-in, device-local)
+
+`narration/clipRecorder.js` keeps a copy of what a narration session heard and produced, so misheard clips can be replayed through the test harness (`breakside_server/tests/narration/`) instead of guessed at. It exists because the harness's scenarios are TTS-clean or synthetic and the real failures happen on sideline audio.
+
+- **Privacy contract** (mirrored in `privacy.html` § Voice narration): off by default; the Advanced Settings toggle (`narration.recordClips`) persists `true` only after the recorder's own disclosure is accepted (`confirmOptIn()`); clips live in this browser's IndexedDB (`narration/clipStore.js`, database `breakside-narration-clips`) and leave the device only through the coach's Export action (share sheet, else download). **There is no upload path** — that absence, not a deployment gate, is the guarantee; do not add one. Retention trims clips older than 30 days or beyond 200 MB total, after every save and at startup.
+- **Capture**: `realtimeSession.setAudioTap({onSessionStart, onAudioChunk, onSessionStop})` observes the outgoing PCM16 chunks *after* they are sent, so a clip is byte-identical to what OpenAI heard (the harness streams PCM16 at 24 kHz). `onSessionStop` fires exactly once per started session — normal stop, capture failure, or socket death (`aborted: true`). Which surface owns the session (`kind`: `events` | `lineup`) is inferred from `narrationEngine.getPhase()` / `lineupNarration.getPhase()`, both set to `connecting` before they call `start()`, so neither surface knows the recorder exists. Roster, on-field line and the slow-pass `game_context` are snapshotted at start; the transcript is the session's own accumulator at stop.
+- **Results**: two bus channels, `narrationFinalized` (engine, after `/finalize`) and `lineupResolved` (after `/lineup`), attach the model's answer to the clip just saved — chained on the save promise so an early result still lands on the right record.
+- **Export** (`narration/clipBundle.js`, pure, unit-tested): one store-only ZIP per clip in the harness's scenario layout — `audio.wav`, `transcript.txt`, `roster.json` (`{roster, game_context}`), `meta.json`, plus `expected.draft.json` (ADD events from the slow pass) or `lineup.draft.json` (request + response). `expected.json` is deliberately not written: ground truth is hand-checked, then the draft is corrected and renamed. "Export all" makes one archive with a folder per clip.
+- **Settings surface**: `advancedSettings.js` gained a `button` field type (`data-action="ns.fn"`, dispatched to a window namespace because the settings layer sits below the narration modules) for the "Manage clips…" modal, and the opt-in gate in `persist`.
+
 ---
 
 ## Users and Authentication
