@@ -54,7 +54,9 @@ function tx(mode, fn) {
             reject(err);
             return;
         }
-        t.oncomplete = () => resolve(result && typeof result.then === 'function' ? result : (result && 'result' in result ? result.result : result));
+        // The callback returns either an IDBRequest (read its result once the
+        // transaction commits) or a plain value to hand back as-is.
+        t.oncomplete = () => resolve(result instanceof IDBRequest ? result.result : result);
         t.onerror = () => reject(t.error || new Error('IndexedDB transaction failed'));
         t.onabort = () => reject(t.error || new Error('IndexedDB transaction aborted'));
     }));
