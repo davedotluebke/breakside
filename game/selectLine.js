@@ -120,6 +120,9 @@ function wireSelectLineEvents() {
             // Sort icons first: the time one sits inside the stats toggle cell.
             const sortBtn = e.target.closest('.select-line-sort-btn');
             if (sortBtn) { handlePanelSortTap(sortBtn.dataset.sortKey); return; }
+            // The whole Player cell sorts by name (the icon alone is a small
+            // target). The time cell can't do the same: it is the stats toggle.
+            if (e.target.closest('.select-line-th-name')) { handlePanelSortTap('name'); return; }
             if (e.target.closest('.select-line-th-stats')) { handlePanelStatsToggle(); return; }
             if (e.target.closest('.select-line-th-wholesale')) { clearLineSelection('main'); return; }
         });
@@ -1802,7 +1805,8 @@ function updateSelectLineTable() {
     controlsRow.appendChild(wholesaleTh);
 
     const playerTh = document.createElement('th');
-    playerTh.className = 'active-name-column';
+    playerTh.className = 'active-name-column select-line-th-name';
+    playerTh.title = 'Sort by name';
     playerTh.innerHTML = '<span class="select-line-th-label">Player</span>'
         + panelSortButtonHtml('name', 'Sort by name');
     controlsRow.appendChild(playerTh);

@@ -2141,7 +2141,8 @@ body.game-screen-active header {
 }
 
 /* Whole stats cell is the tap target (the small link text alone is hard to hit
-   on a phone). */
+   on a phone); likewise the whole Player cell for the name sort. */
+.panel-player-table .select-line-th-name,
 .panel-player-table .select-line-th-stats {
     cursor: pointer;
 }
