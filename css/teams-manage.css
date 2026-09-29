@@ -1086,6 +1086,7 @@
     max-width: 460px;
     text-align: left;
     max-height: 85vh;
+    max-height: 85svh;
     overflow-y: auto;
 }
 
@@ -1268,6 +1269,7 @@
     max-width: 420px;
     text-align: left;
     max-height: 85vh;
+    max-height: 85svh;
     overflow-y: auto;
 }
 
@@ -1406,6 +1408,7 @@
     max-width: 460px;
     text-align: left;
     max-height: 85vh;
+    max-height: 85svh;
     overflow-y: auto;
 }
 

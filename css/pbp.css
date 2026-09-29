@@ -161,6 +161,12 @@
 #scoreAttributionDialog .modal-content {
     margin: 2vh auto;
     max-height: 96vh;
+    /* svh: the height with the browser's toolbars showing. In iOS Safari a
+       plain vh is the height with them hidden, and the game screen never
+       scrolls, so they never hide: 96vh ran the Score button under Safari's
+       bottom toolbar. Browsers without svh keep the vh line above. */
+    margin: 2svh auto;
+    max-height: 96svh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -277,6 +283,8 @@
         max-width: 94vw;
         margin: 2vh auto;
         max-height: 96vh;
+        margin: 2svh auto;
+        max-height: 96svh;
     }
     /* Stack the two role groups vertically; each group is title-above-row. */
     #scoreAttributionDialog .score-attribution-container {
@@ -1046,6 +1054,107 @@
     
     .pull-checkboxes {
         gap: 0.5rem;
+    }
+}
+
+/* Narrow phones: the uppercase, letter-spaced title wrapped onto two lines
+   ("ADVANCED / SETTINGS") at 390px and below, doubling the header. */
+@media (max-width: 400px) {
+    .prominent-dialog-header h2 {
+        font-size: 1.3rem;
+        letter-spacing: 0.06em;
+    }
+}
+
+/* ==========================================================================
+   Short screens (portrait height 700px and under: a 13 mini in Safari is
+   375x629, an SE 375x548). The in-game dialogs list the players on the
+   field, and every pixel of header, margin and footer comes out of that
+   list. At these heights the prominent header shrinks to a label, the
+   modal hugs the top of the screen, and the score and pull dialogs take
+   their compact layouts. Below the phone-width rules above so it wins
+   where both apply. Taller phones are untouched.
+   ========================================================================== */
+@media (max-height: 700px) and (orientation: portrait) {
+    .modal-content {
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .prominent-dialog-header {
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.4rem;
+    }
+    .prominent-dialog-header h2 {
+        font-size: 1.25rem;
+    }
+
+    /* Score Attribution: the landscape economies (see the landscape block
+       above). Score shares the action row, the separator goes, and Callahan
+       is hidden when it cannot apply. */
+    #scoreAttributionDialog .callahan-separator {
+        display: none;
+    }
+    #scoreAttributionDialog .throw-flags-container {
+        margin: 0.35rem 0;
+        padding: 0.35rem 0.25rem;
+    }
+    #scoreAttributionDialog #scoreConfirmBtn {
+        flex: 1 1 auto;
+    }
+    #scoreAttributionDialog.callahan-inapplicable #callahanBtn {
+        display: none;
+    }
+    #scoreAttributionDialog .special-action-btn,
+    #scoreAttributionDialog .secondary-action-btn,
+    #scoreAttributionDialog .primary-action-btn {
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Pull: the right-hand column is empty below the four quality buttons,
+       so the throw checkboxes, the hang stopwatch and Proceed move up into
+       it instead of stacking under the player list. Grid placement over the
+       unchanged markup: .pull-container dissolves (display: contents) so its
+       two columns sit on the dialog's grid. The last row is 1fr so the
+       player column's extra height lands there, not between the right-hand
+       items. */
+    #pullDialog .modal-content {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: auto auto auto auto auto 1fr;
+        column-gap: 0.5rem;
+    }
+    #pullDialog .dialog-header,
+    #pullDialog #pullGenderSelection {
+        grid-column: 1 / -1;
+    }
+    #pullDialog .pull-container {
+        display: contents;
+    }
+    #pullDialog .pull-column:first-child {
+        grid-column: 1;
+        grid-row: 3 / span 4;
+    }
+    #pullDialog .pull-column:last-child {
+        grid-column: 2;
+        grid-row: 3;
+    }
+    #pullDialog .pull-checkboxes {
+        grid-column: 2;
+        grid-row: 4;
+        margin: 0.75rem 0 0.25rem;
+    }
+    #pullDialog .pull-hang-row {
+        grid-column: 2;
+        grid-row: 5;
+    }
+    #pullDialog .pull-hang-btn {
+        padding: 0.5rem 0.6rem;
+    }
+    #pullDialog .pull-dialog-buttons {
+        grid-column: 2;
+        grid-row: 6;
+        align-self: start;
+        margin-top: 0.5rem;
     }
 }
 

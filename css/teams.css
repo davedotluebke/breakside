@@ -504,6 +504,7 @@
    dialog so a 20-player roster still leaves the Start buttons reachable. */
 .scrimmage-picker-scroll {
     max-height: min(45vh, 420px);
+    max-height: min(45svh, 420px);
     overflow-y: auto;
     border: 1px solid var(--border-light);
     border-radius: 6px;
@@ -515,6 +516,7 @@
 @media (max-height: 760px) {
     .scrimmage-picker-scroll {
         max-height: 32vh;
+        max-height: 32svh;
     }
 }
 
