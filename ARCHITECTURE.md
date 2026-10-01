@@ -81,7 +81,9 @@ breakside/
 │   ├── eventStats.js       # Player + team stat aggregation (goals, assists,
 │   │                       # hockey assists, breaks/holds), event/phase filters
 │   ├── statsHelp.js        # Long-press column-header help modal for stats tables
-│   ├── statsLevel.js       # Basic/Advanced/Full stats menu (persisted setting)
+│   ├── statsLevel.js       # Fun/Basic/Advanced/Full stats menu (persisted setting)
+│   ├── funStats.js         # The Fun level's shout-outs (pure)
+│   ├── statsAudience.js    # Which level this user may see (viewer lock)
 │   ├── statsColumns.js     # The stats columns — one definition, every table
 │   │                       # and every export
 │   ├── tableSort.js        # Click-to-sort controller for on-screen stats tables
@@ -1545,6 +1547,44 @@ dropped pull is a turnover and a drop like any other, so it stays inside
 the ground counts nothing. Only the Full and Field tabs record who received
 the pull (§ Point clock and the first touch), so Simple-mode games show zeros.
 
+### Fun stats and the viewer restriction
+
+**Fun** is the fourth Stats level, for youth teams: shout-outs rather than a
+table. `utils/funStats.js` builds it from the same accumulated stats as every
+table:
+
+- **Goals & Assists**: every player with at least one, most goals first. Nobody
+  is listed with a zero.
+- **Shout-outs**: the top 5 (`TOP_N`) in Hockey assists, Ds, Completions,
+  Completion % and Hucks, with everyone tied with the 5th included. Completion %
+  needs 10 throws (`MIN_COMP_THROWS`). A category nobody scored in is left out.
+
+Nothing negative (TOs, drops, throwaways, +/-) and nothing a player can't
+control (points played, playing time) appears. Fun is not in the
+Basic < Advanced < Full rank, so `columnsForLevel` gives only identity columns
+for it. On screen (`ui/funStatsView.js`) the Review and Scrimmages tables hide
+and the card panel takes their place. The Event and Team roster tables, which
+double as attendance and roster lists, keep their names above no stats and lose
+the Team row. Connections names drops and throwaways per pair, so it hides at
+Fun on screen and is left out of a Fun export. The export writes a list sheet
+(`buildFunSheet`), not a filterable table. A single-player Fun export keeps
+that player's lines, ranked against the whole roster.
+
+**The viewer restriction.** Team Settings → Viewer Stats sets
+`Team.viewerStatsLevel = 'fun'` (null = no restriction). `utils/statsAudience.js`
+`activeStatsLevel()` then returns Fun for a viewer of that team (`isViewer()`)
+and for a share-link guest, who learns the team's level from the
+`viewerStatsLevel` field of `GET /api/share/{hash}` (beside `game`, outside the
+public-game allowlist; only known levels pass). The Stats menu and the Export
+dialog show Fun alone, disabled. The device's own menu choice is untouched, so
+it comes back on an unrestricted team. Coaches are never restricted. Every
+screen and export reads `activeStatsLevel()`, never `getStatsLevel()` directly.
+
+This governs what the app shows, not what a viewer can fetch. Stats are
+computed in the browser from the game's event log, which viewers and share
+guests receive whole because the replay and the game log need it. The Game Log
+itself still names drops and throwaways.
+
 ### Statistics Export
 
 Every Export button (Review, Event Roster + Stats, Team Roster + Stats) opens one dialog, `ui/exportDialog.js`. It asks for a **format**, then the options that format uses:
@@ -1554,7 +1594,7 @@ Every Export button (Review, Event Roster + Stats, Team Roster + Stats) opens on
 | Format | Excel (.xlsx) · Google Sheets · Game JSON · Game log (text) | the last format used on this device |
 | Scope | Team roster: All Time / Event / Most Recent Game (opens on All Time each visit). Event roster: All games / each phase / each game. Review: the game. | the scope the screen shows |
 | Breakdown | "Add a sheet per event" (all-time), "per phase and per game" (event), "per game" (phase) | off; remembered per device |
-| Stats | Basic / Advanced / Full | the screen's Stats menu |
+| Stats | Fun / Basic / Advanced / Full (Fun only, locked, for a restricted viewer) | the screen's Stats menu |
 | Players | All players, or one | All players |
 
 **Nothing writes back.** The Stats menu is one persisted setting shared by all three screens (`utils/statsLevel.js`); the dialog passes its level into the builders as an argument and never calls `setStatsLevel`, so exporting at Full leaves a table showing Basic alone. Game JSON and the game log need a single game, so their tiles are disabled for any wider scope; stats-only rows (level, players, breakdown) hide for those two formats. A share guest gets Excel, Google Sheets and the log, not the raw game JSON.
