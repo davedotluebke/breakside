@@ -96,10 +96,10 @@ client did.
 Drive it with the eval CLI:
 
 ```bash
-python -m ultistats_server.tests.narration.fastpass_eval                      # all scenarios
-python -m ultistats_server.tests.narration.fastpass_eval --baseline --runs 3 \
+python -m breakside_server.tests.narration.fastpass_eval                      # all scenarios
+python -m breakside_server.tests.narration.fastpass_eval --baseline --runs 3 \
     023_noise_only_wind 024_noise_only_sideline                               # confabulation probe
-python -m ultistats_server.tests.narration.fastpass_eval --model gpt-realtime-2.1-mini --no-strict
+python -m breakside_server.tests.narration.fastpass_eval --model gpt-realtime-2.1-mini --no-strict
 ```
 
 `--baseline` also runs the production transcription+slow-pass path on the same

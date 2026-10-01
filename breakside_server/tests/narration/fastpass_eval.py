@@ -11,9 +11,9 @@ then reports per-scenario and aggregate event precision / recall / F1,
 confabulation counts, and the strict-schema answer.
 
 Usage:
-  python -m ultistats_server.tests.narration.fastpass_eval                 # all scenarios
-  python -m ultistats_server.tests.narration.fastpass_eval 004b_name_correction_outdoor
-  python -m ultistats_server.tests.narration.fastpass_eval --baseline --runs 3 023_noise_only_wind
+  python -m breakside_server.tests.narration.fastpass_eval                 # all scenarios
+  python -m breakside_server.tests.narration.fastpass_eval 004b_name_correction_outdoor
+  python -m breakside_server.tests.narration.fastpass_eval --baseline --runs 3 023_noise_only_wind
 
 Options:
   --model            Realtime model (default gpt-realtime-2.1; try -mini too)

@@ -21,8 +21,8 @@ floor, so VAD sees quiet air rather than a dead digital channel). Writes the
 usual audio.flac + gitignored audio.wav.
 
 Usage:
-  python -m ultistats_server.tests.narration.tools.generate_gapped_audio \\
-      ultistats_server/tests/narration/scenarios/026_delayed_correction [--force]
+  python -m breakside_server.tests.narration.tools.generate_gapped_audio \\
+      breakside_server/tests/narration/scenarios/026_delayed_correction [--force]
 """
 from __future__ import annotations
 

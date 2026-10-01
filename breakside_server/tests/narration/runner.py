@@ -357,7 +357,7 @@ def build_fastpass_tools(strict: bool = False) -> List[Dict[str, Any]]:
     every call, and a retract_event tool for spoken corrections that arrive
     after the wrong event was already emitted. The event dicts these calls
     map to (see _fastpass_call_to_event) match the ADD-operation event shape
-    in ultistats_server/narration.py.
+    in breakside_server/narration.py.
 
     With strict=True the schemas are reshaped to OpenAI structured-output
     strict form: additionalProperties=false, every property required,

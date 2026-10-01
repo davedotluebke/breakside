@@ -23,7 +23,7 @@ voices. Committed output is the usual 24kHz mono audio.flac (+ gitignored
 audio.wav preview).
 
 Usage:
-  python -m ultistats_server.tests.narration.tools.generate_noise_audio [--force]
+  python -m breakside_server.tests.narration.tools.generate_noise_audio [--force]
 
 Skips scenarios whose audio.flac already exists unless --force (regenerating
 chatter re-spends TTS pennies; wind is free). Requires OPENAI_API_KEY for

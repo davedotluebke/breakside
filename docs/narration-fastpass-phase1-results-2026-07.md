@@ -5,7 +5,7 @@ the offline replay eval measuring whether `gpt-realtime-2.1` (conversation
 mode, function calling) is reliable enough to revive live fast-pass event
 extraction. Run 2026-07-21 on branch `fastpass-eval`.
 
-**Harness**: `ultistats_server/tests/narration/runner.py` gained
+**Harness**: `breakside_server/tests/narration/runner.py` gained
 `stream_audio_for_events()` (conversation-mode replay: semantic VAD
 `eagerness: low`, `far_field` noise reduction, parallel input transcription,
 no-call-default instructions, required `confidence` field, `retract_event`
