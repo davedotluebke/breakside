@@ -23,7 +23,9 @@ import {
 } from '../store/scrimmage.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
-import { getStatsLevel, wireStatsLevelSelect } from '../utils/statsLevel.js';
+import { StatsLevel } from '../utils/statsLevel.js';
+import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildScrimmageWorkbook } from '../utils/exportWorkbook.js';
 import { openExportDialog } from '../ui/exportDialog.js';
@@ -130,7 +132,7 @@ function scrimmageOptionLabel(scrimmage) {
 function renderFilterRow() {
     const select = document.getElementById('scrimmageScopeFilter');
     const levelSelect = document.getElementById('scrimmageStatsLevel');
-    wireStatsLevelSelect(levelSelect, () => renderTable());
+    wireActiveStatsLevelSelect(levelSelect, () => renderTable());
     if (!select) return;
 
     const scrimmages = groupScrimmages(summaries);
@@ -204,7 +206,8 @@ async function renderTable() {
     const playerStats = getGamesPlayerStats(games);
     const teamStats = getGamesTeamStats(games);
     const hasStats = Object.keys(playerStats).length > 0;
-    const statsColumns = screenStatsColumns();
+    const level = activeStatsLevel();
+    const statsColumns = screenStatsColumns(level);
     const players = scopedPlayers(games, playerStats);
 
     const header = document.getElementById('scrimmageStatsHeader');
@@ -233,10 +236,18 @@ async function renderTable() {
         }
     }
 
-    renderConnections(games);
+    // Fun: the shout-outs panel instead of the table, and no Connections
+    // (it names drops and throwaways per pair).
+    const fun = level === StatsLevel.FUN;
+    renderConnections(fun ? [] : games);
 
     tbody.innerHTML = '';
-    if (!players.length) return;
+    const funHost = document.getElementById('scrimmageFunStats');
+    const tableContainer = tbody.closest('.roster-table-container');
+    if (tableContainer) tableContainer.hidden = fun;
+    if (fun && hasStats) renderFunStats(funHost, players, playerStats);
+    else clearFunStats(funHost);
+    if (fun || !players.length) return;
 
     const headerRow = document.createElement('tr');
     ['Name', ...statsColumns.map(col => col.label)].forEach((text, i) => {
@@ -326,7 +337,8 @@ function openScrimmageStatsExport() {
         subject: `${team.name} — Scrimmages`,
         scopes,
         scope: filter.scrimmageId || '',
-        level: getStatsLevel(),
+        level: activeStatsLevel(),
+        lockedLevel: lockedStatsLevel(),
         players,
         buildWorkbook: async (choice) => buildScrimmageWorkbook(team, games, { scrimmageId: choice.scope || null }, {
             players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown,

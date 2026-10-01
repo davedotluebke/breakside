@@ -22,6 +22,7 @@
 import { API_BASE_URL } from '../store/sync.js';
 import { hydrateGame } from '../store/models.js';
 import { applyTheme, isDark } from '../utils/theme.js';
+import { setGuestStatsLevel } from '../utils/statsAudience.js';
 import { showScreen } from '../screens/navigation.js';
 import { showGameSummaryForShare, refreshGameSummaryForShare } from './gameSummary.js';
 
@@ -153,6 +154,8 @@ async function loadSharedGame() {
 
         const body = await response.json();
         lastShareStamp = body.version || null;
+        // The team may hold its viewers (share guests included) to Fun stats.
+        setGuestStatsLevel(body.viewerStatsLevel || null);
         renderSharedGame(body.game);
         shareGameRendered = true;
         setConnection('connected');

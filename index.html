@@ -444,6 +444,8 @@
                         <select id="rosterStatsLevel" class="event-dialog-select"></select>
                     </span>
                 </div>
+                <!-- Fun stats panel (ui/funStatsView.js), shown when the Stats level is Fun -->
+                <div id="rosterFunStats" class="fun-stats-host" hidden></div>
                 <div class="roster-table-container">
                     <table id="rosterTable">
                         <tbody id="rosterList">
@@ -601,6 +603,17 @@
                 </div>
             </div>
 
+            <!-- Viewer Stats: hold viewers + share guests to Fun stats (utils/statsAudience.js) -->
+            <div class="settings-section">
+                <h3>Viewer Stats</h3>
+                <p class="section-description">Fun stats are shout-outs: who scored and assisted, and the top 5 in hockey assists, Ds, completions, completion % and hucks. No playing time, points or turnovers. Turn this on and viewers, including anyone with a share link, see only Fun stats. Coaches still see everything.</p>
+                <div class="sets-form">
+                    <label class="sets-enable-row">
+                        <input type="checkbox" id="viewerFunStatsToggle"> Viewers see Fun stats only
+                    </label>
+                </div>
+            </div>
+
             <!-- Email Lists (team mailing lists) entry point -->
             <div class="settings-section">
                 <h3>Email Lists</h3>
@@ -681,6 +694,7 @@
                 <select id="eventRosterStatsLevel" class="event-dialog-select"></select>
             </span>
         </div>
+        <div id="eventRosterFunStats" class="fun-stats-host" hidden></div>
         <div class="roster-table-container">
             <table id="eventRosterTable">
                 <tbody id="eventRosterList"></tbody>
@@ -732,6 +746,7 @@
             </span>
         </div>
         <p id="scrimmageStatsNote" class="text-hint scrimmage-stats-note"></p>
+        <div id="scrimmageFunStats" class="fun-stats-host" hidden></div>
         <div class="roster-table-container">
             <table id="scrimmageStatsTable">
                 <tbody id="scrimmageStatsList"></tbody>
@@ -1213,6 +1228,7 @@
                         <select id="gameSummaryStatsLevel" class="event-dialog-select"></select>
                     </span>
                 </div>
+                <div id="gameSummaryFunStats" class="fun-stats-host" hidden></div>
                 <div class="roster-table-container">
                     <table id="gameSummaryTable">
                         <tbody id="gameSummaryRosterList">

@@ -135,6 +135,96 @@ th {
     white-space: pre-line;
 }
 
+/* Fun stats panel (ui/funStatsView.js): Goals & Assists, then a card per
+   shout-out category. Cards wrap two-up on a phone, more on a wide screen. */
+.fun-stats-host {
+    margin: 10px;
+}
+.fun-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+.fun-card {
+    min-width: 0;
+    padding: 8px 10px;
+    background-color: var(--surface-card);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    box-shadow: var(--shadow-xs);
+}
+.fun-card-scorers,
+.fun-shoutouts-heading {
+    grid-column: 1 / -1;
+}
+.fun-card h4,
+.fun-shoutouts-heading {
+    margin: 0 0 4px;
+    font-size: 0.95em;
+    color: var(--text-strong);
+}
+.fun-shoutouts-heading {
+    margin: 6px 0 0;
+}
+.fun-card h4 i,
+.fun-shoutouts-heading i {
+    color: var(--brand-orange);
+    margin-right: 4px;
+}
+.fun-hint {
+    margin: 0 0 4px;
+    font-size: 0.8em;
+    font-weight: normal;
+    color: var(--text-muted);
+}
+.fun-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.fun-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+}
+.fun-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.fun-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+.fun-scorers {
+    width: 100%;
+    max-width: 420px;
+    border-collapse: collapse;
+}
+.fun-scorers th {
+    font-size: 0.8em;
+    font-weight: normal;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    padding: 0 0 2px;
+}
+.fun-scorers td {
+    border: none;
+    padding: 2px 0;
+}
+.fun-scorers .fun-num {
+    width: 4.5em;
+}
+.fun-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Filter row above a stats table: the event roster's scope + Stats menus, and
    the Review screen's Stats menu. */
 .stats-filter-row {

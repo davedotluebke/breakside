@@ -2,7 +2,8 @@
  * Team Settings Screen
  * Manages team members, invites, and joining teams
  */
-import { currentTeam, saveAllTeamsData } from '../store/storage.js';
+import { currentTeam, saveAllTeamsData, isViewer } from '../store/storage.js';
+import { StatsLevel } from '../utils/statsLevel.js';
 import { authFetch, syncTeamToCloud, syncUserTeams, API_BASE_URL } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
 import { showGameScreen } from '../ui/panelSystem.js';
@@ -60,6 +61,9 @@ function showTeamSettingsScreen(returnScreen) {
 
     // Load set-tracking fields
     loadTeamSets();
+
+    // Viewer stats restriction
+    loadViewerStatsSetting();
 
     // Load data
     loadTeamMembers();
@@ -823,6 +827,29 @@ function saveTeamSets() {
     }
 }
 
+/**
+ * Viewer Stats: whether the team holds its viewers and share-link guests to
+ * Fun stats (Team.viewerStatsLevel; utils/statsAudience.js). Saved on change.
+ * Only a coach may change it (the server's team PUT is coach-only).
+ */
+function loadViewerStatsSetting() {
+    const toggle = document.getElementById('viewerFunStatsToggle');
+    if (!toggle || !currentTeam) return;
+    toggle.checked = currentTeam.viewerStatsLevel === StatsLevel.FUN;
+    toggle.disabled = isViewer();
+}
+
+function saveViewerStatsSetting() {
+    const toggle = document.getElementById('viewerFunStatsToggle');
+    if (!toggle || !currentTeam || isViewer()) return;
+    currentTeam.viewerStatsLevel = toggle.checked ? StatsLevel.FUN : null;
+    currentTeam.updatedAt = new Date().toISOString();
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+        syncTeamToCloud(currentTeam);
+    }
+}
+
 function loadTeamIdentity() {
     const symbolInput = document.getElementById('teamSymbolInput');
     const iconUrlInput = document.getElementById('teamIconUrlInput');
@@ -1118,6 +1145,8 @@ function initializeTeamIdentityHandlers() {
     if (saveSetsBtn) {
         saveSetsBtn.addEventListener('click', saveTeamSets);
     }
+
+    document.getElementById('viewerFunStatsToggle')?.addEventListener('change', saveViewerStatsSetting);
     
     // Auto-uppercase symbol input
     const symbolInput = document.getElementById('teamSymbolInput');

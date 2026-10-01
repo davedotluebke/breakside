@@ -14,7 +14,9 @@ import {
 } from '../utils/eventStats.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
-import { getStatsLevel, wireStatsLevelSelect } from '../utils/statsLevel.js';
+import { StatsLevel } from '../utils/statsLevel.js';
+import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildEventWorkbook, buildGameWorkbook } from '../utils/exportWorkbook.js';
 import { openExportDialog } from '../ui/exportDialog.js';
@@ -46,10 +48,11 @@ let eventRosterFilter = {};
 /**
  * The stats columns the active Stats level shows. The column set itself lives
  * in utils/statsColumns.js, shared with the Review screen (teams/gameSummary.js)
- * so the two tables always show the same stats in the same order.
+ * so the two tables always show the same stats in the same order. None at the
+ * Fun level: the table is then the attendance list, under the Fun panel.
  */
 function activeEventRosterColumns() {
-    return screenStatsColumns();
+    return screenStatsColumns(activeStatsLevel());
 }
 
 /**
@@ -132,7 +135,7 @@ function renderEventRosterFilterRow() {
     if (!row) return;
 
     row.style.display = '';
-    wireStatsLevelSelect(levelSelect, () => renderEventRosterTable());
+    wireActiveStatsLevelSelect(levelSelect, () => renderEventRosterTable());
 
     if (!scopeWrap || !select) return;
     const phases = currentEventRosterEvent?.phases || [];
@@ -272,7 +275,15 @@ async function renderEventRosterTable() {
     // Connections (ui/gameFlowChart.js): who threw to whom across the games
     // in scope. Follows the scope menu like the stats do; hidden when no
     // game in scope recorded a pass with both ends.
-    renderEventConnections(scopedGames);
+    const fun = activeStatsLevel() === StatsLevel.FUN;
+    renderEventConnections(fun ? [] : scopedGames);
+
+    const funHost = document.getElementById('eventRosterFunStats');
+    if (fun && hasStats) {
+        renderFunStats(funHost, [...(currentTeam ? currentTeam.teamRoster : []), ...eventRosterPickups], eventPlayerStats);
+    } else {
+        clearFunStats(funHost);
+    }
 
     // Header row
     const headerRow = document.createElement('tr');
@@ -325,7 +336,7 @@ async function renderEventRosterTable() {
     });
 
     // Team aggregate row
-    if (hasStats) {
+    if (hasStats && statsColumns.length) {
         const totals = sumPlayerStats(rowStats);
         const aggRow = buildRosterRow([
             { value: '', className: 'team-total-cell' },
@@ -611,7 +622,8 @@ function openEventRosterExport() {
         subject: event.name,
         scopes,
         scope: filterToValue(eventRosterFilter),
-        level: getStatsLevel(),
+        level: activeStatsLevel(),
+        lockedLevel: lockedStatsLevel(),
         players,
         buildWorkbook: async (choice) => {
             const filter = valueToFilter(choice.scope);

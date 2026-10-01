@@ -311,6 +311,10 @@ function Team(name = "My Team", initialRoster = [], id = null) {
     // in Team Settings (e.g. defensive: Zone, Match; offensive: Vert, Ho).
     this.setsEnabled = false;
     this.sets = { offensive: [], defensive: [] };
+
+    // The one stats level the team's viewers (and share-link guests) may see:
+    // 'fun' or null for no restriction. See utils/statsAudience.js.
+    this.viewerStatsLevel = null;
     
     // New model: array of player IDs (references to Player entities)
     this.playerIds = [];

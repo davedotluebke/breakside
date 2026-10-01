@@ -6,7 +6,9 @@
  * The stats table is the same one the Event Roster + Stats screen renders:
  * both build their columns from utils/statsColumns.js and both honour the
  * Basic / Advanced / Full Stats menu, so reviewing one game and reviewing a
- * whole event show the same stats in the same order.
+ * whole event show the same stats in the same order. At the Fun level the
+ * table hides and the shout-outs panel (ui/funStatsView.js) takes its place;
+ * a team can hold its viewers and share guests to Fun (utils/statsAudience.js).
  */
 import { Gender, Role } from '../store/models.js';
 import { currentTeam, isViewer } from '../store/storage.js';
@@ -23,7 +25,9 @@ import { mountGameFlow, mountConnections } from '../ui/gameFlowChart.js';
 import { initSummarySections } from '../ui/summarySections.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
-import { getStatsLevel, wireStatsLevelSelect } from '../utils/statsLevel.js';
+import { StatsLevel } from '../utils/statsLevel.js';
+import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
 import { buildGameWorkbook } from '../utils/exportWorkbook.js';
@@ -173,17 +177,31 @@ function renderGameSummaryStatsTable(game) {
     }
     tbody.innerHTML = '';
 
-    wireStatsLevelSelect(
+    // Connections names drops and throwaways per pair, so it follows the
+    // level too: re-render the flow section along with the table.
+    wireActiveStatsLevelSelect(
         document.getElementById('gameSummaryStatsLevel'),
-        () => renderGameSummaryStatsTable(game)
+        () => { renderGameSummaryStatsTable(game); renderGameSummaryFlow(game); }
     );
 
     const playerStats = typeof getGamePlayerStats === 'function'
         ? getGamePlayerStats(game) : {};
     const hasStats = Object.keys(playerStats).length > 0;
-    const statsColumns = screenStatsColumns();
+    const level = activeStatsLevel();
+    const statsColumns = screenStatsColumns(level);
 
     const players = resolveSummaryPlayers(game, playerStats);
+
+    // Fun: the shout-outs panel instead of the table.
+    const funHost = document.getElementById('gameSummaryFunStats');
+    const tableContainer = tbody.closest('.roster-table-container');
+    if (level === StatsLevel.FUN) {
+        if (tableContainer) tableContainer.hidden = true;
+        renderFunStats(funHost, players, playerStats);
+        return;
+    }
+    if (tableContainer) tableContainer.hidden = false;
+    clearFunStats(funHost);
 
     // Header row
     const headerRow = document.createElement('tr');
@@ -333,7 +351,8 @@ function renderGameSummaryFlow(game) {
         resolvePlayerName: entry => (_summaryLookup ? _summaryLookup(entry).name : entry),
         onPointTap: pointIdx => scrollSummaryLogToPoint(pointIdx),
     });
-    summaryConnView = mountConnections(connHost, game, { view: connView });
+    summaryConnView = activeStatsLevel() === StatsLevel.FUN
+        ? null : mountConnections(connHost, game, { view: connView });
     if (connHeading) connHeading.style.display = summaryConnView ? '' : 'none';
     connHost.style.display = summaryConnView ? '' : 'none';
     section.style.display = (summaryFlowView || summaryConnView) ? '' : 'none';
@@ -478,7 +497,8 @@ function openGameSummaryExport() {
         subject: `${game.team || 'Team'} vs ${game.opponent || 'Opponent'}`,
         scopes: [{ value: 'game', label: 'This game', singleGame: true }],
         scope: 'game',
-        level: getStatsLevel(),
+        level: activeStatsLevel(),
+        lockedLevel: lockedStatsLevel(),
         players,
         formats: guest ? ['xlsx', 'sheets', 'text'] : undefined,
         buildWorkbook: async (choice) => buildGameWorkbook(game, {

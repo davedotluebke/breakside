@@ -212,6 +212,9 @@ function serializeTeam(team) {
         // Per-possession set tagging opt-in + label lists
         setsEnabled: !!team.setsEnabled,
         sets: team.sets || { offensive: [], defensive: [] },
+
+        // Viewer stats restriction (utils/statsAudience.js)
+        viewerStatsLevel: team.viewerStatsLevel || null,
         
         // Existing fields
         name: team.name,
@@ -648,6 +651,7 @@ function deserializeTeams(serializedData) {
             offensive: teamData.sets?.offensive || [],
             defensive: teamData.sets?.defensive || [],
         };
+        team.viewerStatsLevel = teamData.viewerStatsLevel || null;
         
         // Deserialize the roster
         team.teamRoster = teamData.teamRoster.map(playerData => deserializePlayer(playerData));

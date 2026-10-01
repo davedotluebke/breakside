@@ -8,7 +8,8 @@
  *   Scope     the same choices as the screen's scope control (all-time / event
  *             / game, or all games / a phase / a game), plus an optional
  *             "a sheet per …" breakdown
- *   Stats     Basic · Advanced · Full
+ *   Stats     Fun · Basic · Advanced · Full (only the team's level when the
+ *             user is held to one — utils/statsAudience.js)
  *   Players   All players, or one (the privacy handout — see
  *             utils/exportWorkbook.js exportSelection)
  *
@@ -23,7 +24,7 @@
  */
 
 import { serializeGame } from '../store/storage.js';
-import { StatsLevel } from '../utils/statsLevel.js';
+import { StatsLevel, LEVEL_OPTIONS } from '../utils/statsLevel.js';
 import { downloadXlsx } from '../utils/xlsxExport.js';
 import { safeFilename } from '../utils/exportWorkbook.js';
 import {
@@ -86,6 +87,7 @@ function downloadBlob(text, type, filename) {
  *   break down. `singleGame` scopes also offer JSON and text.
  * @param {string} opts.scope - the scope the screen is showing
  * @param {string} opts.level - the stats level the screen is showing
+ * @param {string} [opts.lockedLevel] - the only level this user may export
  * @param {Array<object>} opts.players - who a stats export can cover
  * @param {Array<string>} [opts.formats] - allowed formats (default: all)
  * @param {Function} opts.buildWorkbook - async (choice, progress) → workbook
@@ -107,7 +109,7 @@ function openExportDialog(opts) {
     const state = {
         format: allowed.includes(readPref(FORMAT_KEY, 'xlsx')) ? readPref(FORMAT_KEY, 'xlsx') : allowed[0],
         scope: startScope ? startScope.value : '',
-        level: opts.level || StatsLevel.ADVANCED,
+        level: opts.lockedLevel || opts.level || StatsLevel.ADVANCED,
         playerId: '',
         breakdown: readPref(BREAKDOWN_KEY, '0') === '1',
         busy: false,
@@ -165,10 +167,9 @@ function openExportDialog(opts) {
                     </label>
                     <label class="export-option" data-row="level">
                         <span>Stats</span>
-                        <select id="exportLevelSelect">
-                            <option value="${StatsLevel.BASIC}">Basic</option>
-                            <option value="${StatsLevel.ADVANCED}">Advanced</option>
-                            <option value="${StatsLevel.FULL}">Full</option>
+                        <select id="exportLevelSelect"${opts.lockedLevel ? ' disabled' : ''}>
+                            ${LEVEL_OPTIONS.filter(o => !opts.lockedLevel || o.value === opts.lockedLevel)
+                                .map(o => `<option value="${o.value}">${esc(o.label)}</option>`).join('')}
                         </select>
                     </label>
                     <label class="export-option" data-row="players">

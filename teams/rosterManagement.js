@@ -40,9 +40,9 @@ import {
     getGamePlayerStats, getEventPlayerStats, getTeamPlayerStats,
     sumPlayerStats, loadEventGames, formatGameLabel,
 } from '../utils/eventStats.js';
-import {
-    StatsLevel, columnsForLevel, getStatsLevel, wireStatsLevelSelect,
-} from '../utils/statsLevel.js';
+import { StatsLevel, columnsForLevel } from '../utils/statsLevel.js';
+import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import {
     createPlayerOffline, syncPlayerToCloud, syncTeamToCloud, syncEventToCloud,
     checkForUpdates, syncUserTeams, listServerGames, listTeamEvents,
@@ -364,7 +364,7 @@ function updateTeamRosterDisplay() {
 
     const scope = effectiveRosterScope();
     updateRosterScopeToggleUI(scope);
-    wireStatsLevelSelect(document.getElementById('rosterStatsLevel'), () => updateTeamRosterDisplay());
+    wireActiveStatsLevelSelect(document.getElementById('rosterStatsLevel'), () => updateTeamRosterDisplay());
 
     if (scope === 'game') {
         // Sync: the current game is in memory.
@@ -414,7 +414,14 @@ function renderRosterTable(scope, statsById, loading) {
     rosterElement.innerHTML = '';
 
     const roster = currentTeam ? currentTeam.teamRoster.slice() : [];
-    const visibleColumns = columnsForLevel(ROSTER_COLUMNS);
+    const level = activeStatsLevel();
+    const visibleColumns = columnsForLevel(ROSTER_COLUMNS, level);
+
+    // Fun: the shout-outs panel above a names-only roster (no Team row).
+    const fun = level === StatsLevel.FUN;
+    const funHost = document.getElementById('rosterFunStats');
+    if (fun && !loading) renderFunStats(funHost, roster, statsById);
+    else clearFunStats(funHost);
     // Narrowing the stats level can hide the column being sorted on; fall
     // back to Name rather than sorting by an invisible column.
     if (!visibleColumns.some(col => col.key === rosterSortKey)) {
@@ -530,6 +537,11 @@ function renderRosterTable(scope, statsById, loading) {
 
         rosterElement.appendChild(buildRosterRow(cells));
     });
+
+    if (fun) {
+        requestAnimationFrame(() => makeRosterColumnsSticky());
+        return;
+    }
 
     // --- Team aggregate row ---
     // detailAvailable distinguishes "no event data tracked" (legacy all-time
@@ -961,7 +973,8 @@ function openTeamRosterExport() {
               singleGame: true },
         ],
         scope: effectiveRosterScope(),
-        level: getStatsLevel(),
+        level: activeStatsLevel(),
+        lockedLevel: lockedStatsLevel(),
         players,
         buildWorkbook: async (choice, progress) => {
             const opts = { players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown };

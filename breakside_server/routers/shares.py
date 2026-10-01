@@ -19,6 +19,7 @@ from ._shared import (
     get_game_current_mtime_ns,
     get_share,
     get_share_by_hash,
+    get_team,
     get_user_team_role,
     is_admin,
     is_share_valid,
@@ -287,6 +288,24 @@ def _public_game_view(game: dict) -> dict:
     return view
 
 
+# Stats levels a team may hold its viewers to (Team Settings → Viewer Stats).
+# A share guest is a viewer too, so the level travels with the share payload
+# and the PWA applies it (utils/statsAudience.js). Team policy, not game data:
+# it sits beside ``game`` rather than inside the allowlisted projection.
+_RESTRICTABLE_STATS_LEVELS = ("fun",)
+
+
+def _viewer_stats_level(team_id):
+    """The team's viewer stats restriction, or None (no team, no setting)."""
+    if not team_id:
+        return None
+    try:
+        level = get_team(team_id).get("viewerStatsLevel")
+    except FileNotFoundError:
+        return None
+    return level if level in _RESTRICTABLE_STATS_LEVELS else None
+
+
 @router.get("/api/share/{hash}")
 async def get_game_by_share(hash: str):
     """
@@ -308,6 +327,7 @@ async def get_game_by_share(hash: str):
         # Change stamp matching /api/share/{hash}/poll, so a viewer can seed
         # its poll loop from the initial fetch without an extra request.
         "version": str(stamp) if stamp is not None else None,
+        "viewerStatsLevel": _viewer_stats_level(game.get("teamId")),
         "shareInfo": {
             "expiresAt": share["expiresAt"],
             "createdAt": share["createdAt"]

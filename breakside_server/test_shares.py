@@ -193,6 +193,22 @@ class TestPublicShareFetch:
         assert body["shareInfo"]["expiresAt"] == share["expiresAt"]
         assert body["version"]  # change stamp seeds the poll loop
 
+    def test_viewer_stats_level_follows_the_team_setting(self, client, seeded):
+        from storage import team_storage
+        team_id = seeded["team_id"]
+        share = _mint()
+        _anon()
+        assert client.get(f"/api/share/{share['hash']}").json()["viewerStatsLevel"] is None
+        team = team_storage.get_team(team_id)
+        try:
+            team_storage.update_team(team_id, {**team, "viewerStatsLevel": "fun"})
+            assert client.get(f"/api/share/{share['hash']}").json()["viewerStatsLevel"] == "fun"
+            # Only known levels pass through.
+            team_storage.update_team(team_id, {**team, "viewerStatsLevel": "<script>"})
+            assert client.get(f"/api/share/{share['hash']}").json()["viewerStatsLevel"] is None
+        finally:
+            team_storage.update_team(team_id, team)
+
     def test_unknown_hash_404(self, client, seeded):
         _anon()
         assert client.get("/api/share/deadbeef0000").status_code == 404

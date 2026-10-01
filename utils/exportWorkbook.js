@@ -28,6 +28,8 @@ import {
     getGamesPlayerStats, getGamesTeamStats, formatGameLabel,
 } from './statAccumulator.js';
 import { sheetStatsColumns } from './statsColumns.js';
+import { StatsLevel } from './statsLevel.js';
+import { buildFunStats, funStatsEmpty, TOP_N } from './funStats.js';
 import { buildGameFlow, describeGameFlow } from './gameFlow.js';
 import { buildConnections } from './connections.js';
 import { formatPlayerName } from './helpers.js';
@@ -105,7 +107,7 @@ function exportStem(player, baseStem) {
  * @param {object} playerStats - playerId → accumulated stats
  * @param {object} [teamStats] - drives the footer
  * @param {object} opts
- * @param {string} opts.level - 'basic' | 'advanced' | 'full'
+ * @param {string} opts.level - 'basic' | 'advanced' | 'full' ('fun' goes to buildFunSheet)
  * @param {string} [opts.titleRow]
  * @param {Array<object>} [opts.totalsPlayers] - the roster the Team row sums,
  *   when it differs from the rows written (a single-player export)
@@ -142,6 +144,54 @@ function buildStatsSheet(players, playerStats, teamStats, opts) {
         frozenRows: headerRow + 1,
         frozenCols: 1,
     };
+}
+
+/**
+ * The Fun sheet (StatsLevel.FUN, utils/funStats.js): not a table but two
+ * lists, the way the screen shows them. Goals & Assists for every player with
+ * one, then each shout-out category with its top few. Ranks run over the whole
+ * roster; a single-player export keeps only that player's lines. Completion %
+ * is written as text ("92%"): it shares a column with whole-number counts, and
+ * a column carries one number format.
+ *
+ * @param {object} playerStats - playerId → accumulated stats
+ * @param {object} [teamStats] - drives the breaks/holds footer
+ * @param {object} opts
+ * @param {Array<object>} opts.totalsPlayers - the roster the ranks run over
+ * @param {object|null} [opts.player] - narrow to this player's lines
+ * @param {string} [opts.titleRow]
+ * @returns {object} a sheet (see file header), without `name`
+ */
+function buildFunSheet(playerStats, teamStats, opts) {
+    const fun = buildFunStats(opts.totalsPlayers, playerStats, { onlyPlayerId: opts.player ? opts.player.id : '' });
+    const rows = [];
+    if (opts.titleRow) rows.push([opts.titleRow]);
+    const frozenRows = rows.length;
+
+    if (funStatsEmpty(fun)) {
+        rows.push([opts.player ? 'No goals or shout-outs in this stretch — next time!' : 'No goals or shout-outs yet.']);
+    }
+    if (fun.scorers.length) {
+        if (rows.length) rows.push([]);
+        rows.push(['Goals & Assists']);
+        rows.push(['Name', 'Goals', 'Assists']);
+        fun.scorers.forEach(sc => rows.push([sc.name, sc.goals || '', sc.assists || '']));
+    }
+    if (fun.shoutouts.length) {
+        if (rows.length) rows.push([]);
+        rows.push([`Shout-outs (top ${TOP_N})`]);
+        fun.shoutouts.forEach(cat => {
+            rows.push([]);
+            rows.push([cat.label, cat.hint]);
+            cat.entries.forEach(e => rows.push([e.name, cat.key === 'compPct' ? e.text : e.value]));
+        });
+    }
+
+    if (teamStats && teamStats.total > 0) {
+        rows.push([]);
+        formatTeamStatsLine(teamStats).split('\n').forEach(line => rows.push([line]));
+    }
+    return { rows, widths: [22, 24, 9], formats: {}, filter: null, frozenRows, frozenCols: 0 };
 }
 
 /**
@@ -231,15 +281,20 @@ function buildStatsWorkbook(spec) {
     spec.sheets.forEach(s => {
         const teamStats = getGamesTeamStats(s.games);
         if (s.skipIfEmpty && teamStats.total === 0) return;
-        const sheet = buildStatsSheet(sheetPlayers, getGamesPlayerStats(s.games), teamStats, {
-            level: spec.level, titleRow: exportTitle(player, s.title), totalsPlayers,
-        });
+        const titleRow = exportTitle(player, s.title);
+        const sheet = spec.level === StatsLevel.FUN
+            ? buildFunSheet(getGamesPlayerStats(s.games), teamStats, { totalsPlayers, player, titleRow })
+            : buildStatsSheet(sheetPlayers, getGamesPlayerStats(s.games), teamStats, {
+                level: spec.level, titleRow, totalsPlayers,
+            });
         sheets.push({ name: uniqueSheetName(s.label, used), ...sheet });
     });
     if (spec.singleGame && !player) {
         const { game, teamName, opponentName } = spec.singleGame;
+        // Connections lists drops and throwaways per pair: not in a Fun export.
         [buildGameFlowSheet(game, { teamName, opponentName }),
-         buildConnectionsSheet(game, `Connections: ${teamName} vs ${opponentName}`)]
+         spec.level === StatsLevel.FUN ? null
+            : buildConnectionsSheet(game, `Connections: ${teamName} vs ${opponentName}`)]
             .filter(Boolean)
             .forEach(sheet => { sheet.name = uniqueSheetName(sheet.name, used); sheets.push(sheet); });
     }
@@ -383,7 +438,7 @@ function buildScrimmageWorkbook(team, games, filter, opts) {
 // --- ES-module exports ---
 export {
     buildGameWorkbook, buildEventWorkbook, buildTeamWorkbook, buildScrimmageWorkbook,
-    buildStatsSheet, buildGameFlowSheet, buildConnectionsSheet,
+    buildStatsSheet, buildFunSheet, buildGameFlowSheet, buildConnectionsSheet,
     exportSelection, exportTitle,
     safeSheetName, uniqueSheetName, safeFilename,
 };

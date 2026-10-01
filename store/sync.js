@@ -953,7 +953,9 @@ async function syncTeamToCloud(team) {
         iconUrl: team.iconUrl || null,
         // Set tagging opt-in + label lists (see Team constructor)
         setsEnabled: !!team.setsEnabled,
-        sets: team.sets || { offensive: [], defensive: [] }
+        sets: team.sets || { offensive: [], defensive: [] },
+        // Viewer stats restriction (utils/statsAudience.js)
+        viewerStatsLevel: team.viewerStatsLevel || null
     };
     
     log('📤 Queueing team sync:', {
@@ -1752,6 +1754,7 @@ async function syncUserTeams() {
                     offensive: serverTeam.sets?.offensive || [],
                     defensive: serverTeam.sets?.defensive || [],
                 };
+                localTeam.viewerStatsLevel = serverTeam.viewerStatsLevel || null;
 
                 // If server has embedded roster data, deserialize it
                 if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
@@ -1796,6 +1799,7 @@ async function syncUserTeams() {
                     localTeam.iconUrl = serverTeam.iconUrl || null;
 
                     // Set tagging fields follow the same server-newer rule
+                    localTeam.viewerStatsLevel = serverTeam.viewerStatsLevel || null;
                     localTeam.setsEnabled = !!serverTeam.setsEnabled;
                     localTeam.sets = {
                         offensive: serverTeam.sets?.offensive || [],

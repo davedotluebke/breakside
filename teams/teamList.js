@@ -792,6 +792,8 @@ async function selectCloudTeam(cloudTeam, options = {}) {
             localTeam.lines = cloudTeam.lines || [];
             localTeam.teamSymbol = cloudTeam.teamSymbol || null;
             localTeam.iconUrl = cloudTeam.iconUrl || null;
+            // A viewer's team is usually born here: carry the stats restriction.
+            localTeam.viewerStatsLevel = cloudTeam.viewerStatsLevel || null;
 
             // Fetch players for the team
             try {
