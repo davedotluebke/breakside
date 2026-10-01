@@ -12,7 +12,12 @@ tests/narration/
 ├── test_scenarios.py        # pytest entry point (auto-discovers scenarios/)
 ├── tools/
 │   ├── generate_synthetic_audio.py   # OpenAI TTS → audio.flac
-│   └── generate_noise_audio.py       # noise-probe audio for 023-025
+│   ├── generate_noise_audio.py       # noise-probe audio for 023-025
+│   ├── generate_gapped_audio.py      # segments.json → audio with silence gaps (026)
+│   └── generate_lineup_audio.py      # the 18-case lineup matrix as audio (+ -noisy)
+├── stt_eval.py              # transcription-model comparison (events + lineup legs)
+├── test_metrics.py          # offline unit tests for the metrics (default suite)
+├── lineup_scenarios/        # audio-driven lineup cases (see stt_eval.py)
 └── scenarios/
     └── 001_single_throw/
         ├── transcript.txt   # ground-truth: what the coach is saying
@@ -115,6 +120,32 @@ crowd bed. Their audio comes from `tools/generate_noise_audio.py` (seeded
 wind synthesis + TTS chatter), not the TTS generator. Note they also join the
 regular pytest suite: with an empty expected list, precision 1.0 requires the
 *slow* pass to emit nothing either.
+
+## Transcription-model comparison
+
+`stt_eval.py` compares Realtime transcription models on name accuracy. The
+harness's transcription session now mirrors production's stock settings
+(`TranscriptionConfig`: semantic VAD, near-field noise reduction, English,
+the roster vocabulary hint) and commits on stop as `realtimeSession.stop()`
+does. Two legs:
+
+- **events** — every audio scenario: WER, **name recall** (`name_recall()`:
+  roster-name mentions in the reference that survive transcription — the
+  thing WER hides, since a wrong name is one word) and, with `--slow-pass`,
+  event F1 through the real `/finalize` prompt.
+- **lineups** — the 18-case lineup matrix from `test_narration_lineup.py`
+  spoken by TTS (`tools/generate_lineup_audio.py`, clean and `-noisy` over a
+  sideline crowd bed), scored end to end: recognizer → real lineup prompt →
+  `_derive_players` → the real client matcher under node.
+
+```bash
+NARRATION_LINEUP_MODEL=claude-haiku-4-5 NARRATION_SLOW_MODEL=claude-haiku-4-5 \
+python -m breakside_server.tests.narration.stt_eval --runs 3 --slow-pass --json out.json
+```
+
+Models are probed first; the ones the Realtime API refuses are reported with
+the reason, and `MODEL_OVERRIDES` records the session knobs a model insists
+on (no turn detection, no prompt) — production would need the same change.
 
 ## Adding a scenario
 
