@@ -188,16 +188,64 @@ def _read_pcm16_chunks(audio_path: Path, chunk_ms: int = 100, sample_rate: int =
 REALTIME_TRANSCRIPTION_URL = "wss://api.openai.com/v1/realtime?intent=transcription"
 
 
+# Jargon half of production's vocabulary hint — mirrored from JARGON in
+# settings/advancedSettings.js; keep the two in step.
+VOCAB_JARGON = [
+    "huck", "hammer", "scoober", "blade", "break", "break mark", "dump",
+    "swing", "reset", "sky", "layout", "bid", "Callahan", "brick", "pull",
+    "stall", "stall out", "poach", "force", "flick", "backhand", "IO", "OI",
+    "inside-out", "outside-in", "endzone", "throwaway", "drop", "footblock",
+    "bookends", "Greatest", "handler", "cutter", "give-and-go", "strike",
+    "under", "deep", "goal", "assist", "turnover", "interception", "block",
+]
+
+
+def build_vocabulary_prompt(roster: Optional[List[Dict[str, Any]]]) -> str:
+    """Production's transcription `prompt` (DEFAULT_VOCAB_PROMPT in
+    settings/advancedSettings.js): roster names + nicknames, then jargon."""
+    names = ", ".join(
+        str(n) for p in (roster or []) for n in (p.get("name"), p.get("nickname")) if n
+    )
+    return f"Ultimate frisbee game. Likely names and terms: {names}, {', '.join(VOCAB_JARGON)}."
+
+
+@dataclass
+class TranscriptionConfig:
+    """Transcription-session knobs. Defaults mirror what production sends
+    with stock Advanced Settings (narration/realtimeSession.js +
+    settings/advancedSettings.js, 2026-10): semantic VAD at medium
+    eagerness, near-field noise reduction, English pinned, roster
+    vocabulary hint on. The July-2026 harness predated all four."""
+    model: str = "gpt-4o-mini-transcribe"
+    turn_detection: str = "semantic_vad"  # "semantic_vad" | "server_vad"
+    vad_eagerness: str = "medium"
+    noise_reduction: Optional[str] = "near_field"  # near_field | far_field | None (off)
+    language: Optional[str] = "en"
+    vocabulary_hint: bool = True
+    pace: float = 0.5  # per-chunk sleep multiplier; 0.5 = twice real-time
+    # After the audio (and the commit production sends on stop), keep
+    # reading until the transcription event stream has been quiet this long.
+    # Slower models need more; 2.5 s cut gpt-4o-transcribe off entirely.
+    drain_quiet_s: float = 5.0
+
+
 async def stream_audio_for_transcription(
     audio_path: Path,
     sample_rate: int = 24000,
-    transcription_model: str = "gpt-4o-mini-transcribe",
+    transcription_model: Optional[str] = None,
     timeout_s: float = 60.0,
+    config: Optional[TranscriptionConfig] = None,
+    roster: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
-    Stream a PCM16 audio file to the Realtime API and return the accumulated
-    transcript. Uses a GA transcription-only session (no tools, no model
-    output) — matches the production fast-pass mode in realtimeSession.js.
+    Stream a PCM16 audio file to the Realtime API as a GA transcription-only
+    session (no tools, no model output) and return the transcript — the
+    production fast-pass mode in realtimeSession.js, with the same session
+    knobs (see TranscriptionConfig). `roster` feeds the vocabulary hint.
+
+    Raises RuntimeError if the session rejects the configuration (e.g. a
+    transcription model the Realtime API doesn't accept), rather than
+    returning an empty transcript.
     """
     if websockets is None:
         raise RuntimeError(
@@ -208,18 +256,46 @@ async def stream_audio_for_transcription(
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY env var not set")
 
+    config = config or TranscriptionConfig()
+    if transcription_model:
+        config = dataclasses.replace(config, model=transcription_model)
+
+    transcription: Dict[str, Any] = {"model": config.model}
+    if config.language:
+        transcription["language"] = config.language
+    if config.vocabulary_hint:
+        transcription["prompt"] = build_vocabulary_prompt(roster)
+    input_cfg: Dict[str, Any] = {
+        # GA wants an object here, not a bare string.
+        "format": {"type": "audio/pcm", "rate": sample_rate},
+        "transcription": transcription,
+    }
+    if config.turn_detection == "server_vad":
+        input_cfg["turn_detection"] = {
+            "type": "server_vad", "threshold": 0.5,
+            "prefix_padding_ms": 300, "silence_duration_ms": 500,
+        }
+    elif config.turn_detection:
+        input_cfg["turn_detection"] = {"type": "semantic_vad", "eagerness": config.vad_eagerness}
+    else:
+        # Some models (gpt-live-transcribe) segment themselves and reject
+        # any turn_detection; null turns the server default off.
+        input_cfg["turn_detection"] = None
+    if config.noise_reduction:
+        input_cfg["noise_reduction"] = {"type": config.noise_reduction}
+
     # Server-to-server auth: a standard API key in the Authorization header.
-    # The GA endpoint no longer wants (and now rejects) the OpenAI-Beta header.
     # The browser uses an ephemeral token via subprotocol because it can't set
     # headers; server-side we just send the key directly.
     headers = [("Authorization", f"Bearer {api_key}")]
 
-    transcript_parts: List[str] = []
-    # Transcription-only GA sessions never emit response.done — the
-    # input_audio_transcription.completed that follows our manual
-    # input_audio_buffer.commit IS the end-of-turn signal.
-    transcription_completed = asyncio.Event()
+    completed_utterances: List[str] = []
+    delta_parts: List[str] = []
     session_error: Dict[str, Any] = {}
+    session_ready = asyncio.Event()
+    last_activity = [0.0]
+    raw_bytes, _ = _decode_audio_to_pcm16(audio_path)
+    audio_s = len(raw_bytes) / (sample_rate * 2)
 
     # websockets API note: the legacy `websockets.connect` (v10.x and the
     # legacy compat shim in v12+) uses `extra_headers=`; the new modern
@@ -228,87 +304,63 @@ async def stream_audio_for_transcription(
     async with websockets.connect(
         REALTIME_TRANSCRIPTION_URL, extra_headers=headers, max_size=2**24
     ) as ws:  # type: ignore[attr-defined]
-        # Configure the GA transcription session: nested under audio.input.*
-        # with session.type=transcription. No tools, no instructions, no
-        # response model — pure ASR. Mirrors realtimeSession.js.
-        await ws.send(
-            json.dumps(
-                {
-                    "type": "session.update",
-                    "session": {
-                        "type": "transcription",
-                        "audio": {
-                            "input": {
-                                # GA wants an object here, not a bare string.
-                                "format": {"type": "audio/pcm", "rate": sample_rate},
-                                "transcription": {"model": transcription_model},
-                                "turn_detection": {
-                                    "type": "server_vad",
-                                    "threshold": 0.5,
-                                    "prefix_padding_ms": 300,
-                                    "silence_duration_ms": 500,
-                                },
-                            }
-                        },
-                    },
-                }
-            )
-        )
+        await ws.send(json.dumps({
+            "type": "session.update",
+            "session": {"type": "transcription", "audio": {"input": input_cfg}},
+        }))
 
         async def reader():
             async for raw in ws:
                 msg = json.loads(raw)
                 t = msg.get("type", "")
-                if t == "conversation.item.input_audio_transcription.delta":
+                if t.startswith("conversation.item.input_audio_transcription"):
+                    last_activity[0] = asyncio.get_running_loop().time()
+                if t == "session.updated":
+                    session_ready.set()
+                elif t == "conversation.item.input_audio_transcription.delta":
                     if msg.get("delta"):
-                        transcript_parts.append(msg["delta"])
+                        delta_parts.append(msg["delta"])
                 elif t == "conversation.item.input_audio_transcription.completed":
-                    text = msg.get("transcript", "") or ""
-                    # Some servers emit only completed (no deltas); ensure we
-                    # have *something* in that case.
-                    if text and not "".join(transcript_parts).strip():
-                        transcript_parts.append(text)
-                    transcription_completed.set()
+                    if msg.get("transcript"):
+                        completed_utterances.append(msg["transcript"])
                 elif t == "error":
-                    session_error["error"] = msg.get("error")
-                    raise RuntimeError(f"Realtime error: {msg.get('error')}")
+                    err = msg.get("error") or {}
+                    if any(s in str(err.get("message", "")) for s in _BENIGN_ERROR_SNIPPETS):
+                        continue
+                    session_error["error"] = err
+                    session_ready.set()
+                    return
 
         async def writer():
-            # Stream audio chunks at roughly real-time pacing. Slightly faster
-            # than wall-clock is fine; OpenAI's server buffers and applies VAD.
+            # Stream at roughly real-time pacing (config.pace scales it).
             for payload_b64, dur in _read_pcm16_chunks(
                 audio_path, chunk_ms=100, sample_rate=sample_rate
             ):
                 await ws.send(
                     json.dumps({"type": "input_audio_buffer.append", "audio": payload_b64})
                 )
-                # A bit faster than real-time so tests aren't unnecessarily slow.
-                await asyncio.sleep(dur * 0.5)
-
-            # Append ~800ms of trailing silence so server_vad sees the gap and
-            # closes the turn (speech_stopped -> auto-commit -> transcription).
-            # A manual input_audio_buffer.commit is wrong here: VAD has usually
-            # already drained the buffer, so commit errors on an empty buffer.
-            silence_chunk = base64.b64encode(
-                b"\x00\x00" * int(sample_rate * 0.1)
-            ).decode("ascii")
-            for _ in range(8):
-                await ws.send(
-                    json.dumps({"type": "input_audio_buffer.append", "audio": silence_chunk})
-                )
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(dur * config.pace)
+            # Force end-of-turn exactly as realtimeSession.stop() does: the
+            # coach taps stop mid-pause, so production commits whatever is
+            # buffered rather than waiting for VAD. A "buffer too small"
+            # error (VAD already committed it) is benign and filtered.
+            await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
 
         reader_task = asyncio.create_task(reader())
-        writer_task = asyncio.create_task(writer())
-
         try:
-            await asyncio.wait_for(writer_task, timeout=timeout_s)
-            # After audio is committed, wait for the ASR result. The completed
-            # event can lag the audio for short clips, so give it a window.
-            try:
-                await asyncio.wait_for(transcription_completed.wait(), timeout=15.0)
-            except asyncio.TimeoutError:
-                pass  # take whatever transcript we have
+            await asyncio.wait_for(session_ready.wait(), timeout=15.0)
+            if session_error:
+                raise RuntimeError(f"Realtime error: {session_error['error']}")
+            writer_task = asyncio.create_task(writer())
+            await asyncio.wait_for(writer_task, timeout=max(timeout_s, audio_s * config.pace + 30.0))
+            # Drain: the last utterance's transcription lags the audio, and
+            # by how much depends on the model. Wait for the event stream to
+            # go quiet rather than for the first completion.
+            now = asyncio.get_running_loop().time
+            last_activity[0] = max(last_activity[0], now())
+            deadline = now() + 30.0
+            while now() < deadline and (now() - last_activity[0]) < config.drain_quiet_s and not session_error:
+                await asyncio.sleep(0.25)
         finally:
             reader_task.cancel()
             try:
@@ -316,7 +368,10 @@ async def stream_audio_for_transcription(
             except (asyncio.CancelledError, Exception):
                 pass
 
-    return "".join(transcript_parts).strip()
+    if session_error:
+        raise RuntimeError(f"Realtime error: {session_error['error']}")
+    transcript = " ".join(completed_utterances) if completed_utterances else "".join(delta_parts)
+    return transcript.strip()
 
 
 # =============================================================================
@@ -1030,6 +1085,60 @@ def _normalize(s: str) -> str:
 
 
 @dataclass
+class NameScore:
+    """Roster-name mentions in the reference transcript that survive into the
+    hypothesis — the metric WER hides, because a wrong name is one word."""
+    expected: int = 0
+    found: int = 0
+    missing: List[str] = field(default_factory=list)
+
+    @property
+    def recall(self) -> float:
+        return self.found / self.expected if self.expected else 1.0
+
+
+def name_recall(
+    reference: str, hypothesis: str, roster: Optional[List[Dict[str, Any]]]
+) -> NameScore:
+    """
+    Count each roster surface form (full name, nickname, and the first word
+    of a multi-word name) in the normalized reference, and how many of those
+    mentions also appear in the normalized hypothesis. Longer forms are
+    matched and consumed first, so "Morgan Vale" is not also counted as
+    "Morgan". Exact-token matching: "Sirius" for "Cyrus" is a miss, which is
+    the point.
+    """
+    forms = set()
+    for p in roster or []:
+        for raw in (p.get("name"), p.get("nickname")):
+            if not raw:
+                continue
+            f = _normalize(str(raw))
+            if not f:
+                continue
+            forms.add(f)
+            parts = f.split()
+            if len(parts) > 1:
+                forms.add(parts[0])
+    ref = f" {_normalize(reference)} "
+    hyp = f" {_normalize(hypothesis)} "
+    score = NameScore()
+    for f in sorted(forms, key=len, reverse=True):
+        needle = f" {f} "
+        n_ref = ref.count(needle)
+        if not n_ref:
+            continue
+        n_hyp = hyp.count(needle)
+        got = min(n_ref, n_hyp)
+        score.expected += n_ref
+        score.found += got
+        score.missing.extend([f] * (n_ref - got))
+        ref = ref.replace(needle, "  ")
+        hyp = hyp.replace(needle, "  ")
+    return score
+
+
+@dataclass
 class EventScore:
     matched: int = 0
     expected: int = 0
@@ -1164,19 +1273,21 @@ class ScenarioResult:
     expected_events: List[Dict[str, Any]]
     operations: List[Dict[str, Any]]
     event_score: EventScore
+    name_score: Optional[NameScore] = None
 
     def as_dict(self) -> Dict[str, Any]:
         d = dataclasses.asdict(self)
         d["precision"] = self.event_score.precision
         d["recall"] = self.event_score.recall
         d["f1"] = self.event_score.f1
+        d["name_recall"] = self.name_score.recall if self.name_score else None
         return d
 
 
 async def run_scenario(scenario_dir: Path) -> ScenarioResult:
     s = Scenario.load(scenario_dir)
     actual_transcript = await stream_audio_for_transcription(
-        s.audio_path, sample_rate=s.sample_rate
+        s.audio_path, sample_rate=s.sample_rate, roster=s.roster
     )
     finalize_response = call_finalize(
         actual_transcript, s.roster, s.game_context, game_id=f"test-{s.name}"
@@ -1191,6 +1302,7 @@ async def run_scenario(scenario_dir: Path) -> ScenarioResult:
         expected_events=s.expected_events,
         operations=operations,
         event_score=score,
+        name_score=name_recall(s.expected_transcript, actual_transcript, s.roster),
     )
 
 
@@ -1277,6 +1389,9 @@ def _print_result(r: ScenarioResult) -> None:
     print(f"Precision:  {r.event_score.precision:.3f}")
     print(f"Recall:     {r.event_score.recall:.3f}")
     print(f"F1:         {r.event_score.f1:.3f}")
+    if r.name_score:
+        print(f"Names:      {r.name_score.found}/{r.name_score.expected} roster mentions kept"
+              + (f"  (missed: {', '.join(r.name_score.missing)})" if r.name_score.missing else ""))
     print(f"\nExpected transcript:\n  {r.expected_transcript}")
     print(f"\nActual transcript:\n  {r.actual_transcript}")
     if r.event_score.missing:

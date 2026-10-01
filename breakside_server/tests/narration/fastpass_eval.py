@@ -107,7 +107,7 @@ async def _baseline_run(scenario_dir: Path) -> Dict[str, Any]:
     async-friendly run: mirrors runner.run_scenario but pushes the blocking
     finalize call to a thread so baselines can run concurrently."""
     s = Scenario.load(scenario_dir)
-    transcript = await stream_audio_for_transcription(s.audio_path, sample_rate=s.sample_rate)
+    transcript = await stream_audio_for_transcription(s.audio_path, sample_rate=s.sample_rate, roster=s.roster)
     finalize_response = await asyncio.to_thread(
         call_finalize, transcript, s.roster, s.game_context, f"test-{s.name}"
     )

@@ -1,0 +1,26 @@
+{
+  "grade": "s1",
+  "expect": null,
+  "must_in": [
+    "Sam",
+    "Morgan Vale",
+    "Nora",
+    "Omar"
+  ],
+  "must_out": [
+    "Kris",
+    "Priya",
+    "Dana",
+    "Jake",
+    "Charlie"
+  ],
+  "allowed": [
+    "Sam",
+    "Morgan Vale",
+    "Nora",
+    "Omar",
+    "Wes",
+    "Alice",
+    "Hank"
+  ]
+}

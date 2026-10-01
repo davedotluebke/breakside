@@ -1,0 +1,75 @@
+{
+  "roster": [
+    {
+      "name": "Kris",
+      "nickname": null,
+      "number": "12"
+    },
+    {
+      "name": "Sam",
+      "nickname": null,
+      "number": "3"
+    },
+    {
+      "name": "Hank",
+      "nickname": null,
+      "number": "21"
+    },
+    {
+      "name": "Morgan Vale",
+      "nickname": "HB",
+      "number": "8"
+    },
+    {
+      "name": "Nora",
+      "nickname": null,
+      "number": "44"
+    },
+    {
+      "name": "Omar",
+      "nickname": null,
+      "number": "10"
+    },
+    {
+      "name": "Wes",
+      "nickname": null,
+      "number": "7"
+    },
+    {
+      "name": "Alice",
+      "nickname": null,
+      "number": "2"
+    },
+    {
+      "name": "Priya",
+      "nickname": null,
+      "number": "5"
+    },
+    {
+      "name": "Dana",
+      "nickname": "Hammer",
+      "number": "99"
+    },
+    {
+      "name": "Jake",
+      "nickname": null,
+      "number": "77"
+    },
+    {
+      "name": "Charlie",
+      "nickname": null,
+      "number": "14"
+    }
+  ],
+  "previous_lineup": [
+    "Kris",
+    "Wes",
+    "Alice",
+    "Sam",
+    "Hank",
+    "Nora",
+    "Omar"
+  ],
+  "current_selection": [],
+  "expected_count": 7
+}

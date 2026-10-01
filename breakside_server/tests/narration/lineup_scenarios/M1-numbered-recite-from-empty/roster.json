@@ -1,0 +1,52 @@
+{
+  "roster": [
+    {
+      "name": "Jamal 23",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "Keisha 7",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "Marcus 15",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "Tanya 4",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "DeShawn 11",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "Lena 9",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "Otis 30",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "Rosa 2",
+      "nickname": null,
+      "number": null
+    },
+    {
+      "name": "Andre 55",
+      "nickname": null,
+      "number": null
+    }
+  ],
+  "previous_lineup": [],
+  "current_selection": [],
+  "expected_count": 7
+}
