@@ -26,7 +26,9 @@ import { initSummarySections } from '../ui/summarySections.js';
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import { StatsLevel } from '../utils/statsLevel.js';
-import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import {
+    activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect, getFunOptions,
+} from '../utils/statsAudience.js';
 import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
@@ -499,10 +501,11 @@ function openGameSummaryExport() {
         scope: 'game',
         level: activeStatsLevel(),
         lockedLevel: lockedStatsLevel(),
+        funOptions: getFunOptions(),
         players,
         formats: guest ? ['xlsx', 'sheets', 'text'] : undefined,
         buildWorkbook: async (choice) => buildGameWorkbook(game, {
-            players, playerId: choice.playerId, level: choice.level,
+            players, playerId: choice.playerId, level: choice.level, fun: choice.fun,
         }),
         gameFor: () => game,
         gameText: gameLogText,

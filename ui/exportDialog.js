@@ -10,6 +10,9 @@
  *             "a sheet per …" breakdown
  *   Stats     Fun · Basic · Advanced · Full (only the team's level when the
  *             user is held to one — utils/statsAudience.js)
+ *   Shout-outs  at Fun: "Shout out the top [5] players for each stat" and the
+ *             throws Completion % needs (blank = automatic); starts at the
+ *             screen's Fun options, hidden for a user held to Fun
  *   Players   All players, or one (the privacy handout — see
  *             utils/exportWorkbook.js exportSelection)
  *
@@ -88,6 +91,8 @@ function downloadBlob(text, type, filename) {
  * @param {string} opts.scope - the scope the screen is showing
  * @param {string} opts.level - the stats level the screen is showing
  * @param {string} [opts.lockedLevel] - the only level this user may export
+ * @param {{topN: number, minCompThrows: number|null}} [opts.funOptions] - the
+ *   screen's Fun options (utils/statsAudience.js getFunOptions)
  * @param {Array<object>} opts.players - who a stats export can cover
  * @param {Array<string>} [opts.formats] - allowed formats (default: all)
  * @param {Function} opts.buildWorkbook - async (choice, progress) → workbook
@@ -111,6 +116,8 @@ function openExportDialog(opts) {
         scope: startScope ? startScope.value : '',
         level: opts.lockedLevel || opts.level || StatsLevel.ADVANCED,
         playerId: '',
+        funTopN: (opts.funOptions && opts.funOptions.topN) || 5,
+        funMinThrows: (opts.funOptions && opts.funOptions.minCompThrows) || '',
         breakdown: readPref(BREAKDOWN_KEY, '0') === '1',
         busy: false,
     };
@@ -172,6 +179,14 @@ function openExportDialog(opts) {
                                 .map(o => `<option value="${o.value}">${esc(o.label)}</option>`).join('')}
                         </select>
                     </label>
+                    <div class="export-option export-fun-options" data-row="fun" hidden>
+                        <label>Shout out the top
+                            <input type="number" id="exportFunTopN" min="1" max="99" inputmode="numeric">
+                            players for each stat</label>
+                        <label>Completion % needs
+                            <input type="number" id="exportFunMinThrows" min="1" max="999" inputmode="numeric" placeholder="auto">
+                            throws</label>
+                    </div>
                     <label class="export-option" data-row="players">
                         <span>Players</span>
                         <select id="exportPlayerSelect" title="A single player's sheet still carries the team totals">${playerOptions}</select>
@@ -196,6 +211,10 @@ function openExportDialog(opts) {
 
     scopeSelect.value = state.scope;
     levelSelect.value = state.level;
+    const funTopNInput = $('#exportFunTopN');
+    const funMinThrowsInput = $('#exportFunMinThrows');
+    funTopNInput.value = state.funTopN;
+    funMinThrowsInput.value = state.funMinThrows;
     breakdownBox.checked = state.breakdown;
 
     const currentScope = () => scopes.find(s => s.value === state.scope) || {};
@@ -238,6 +257,7 @@ function openExportDialog(opts) {
         const statsFormat = state.format === 'xlsx' || state.format === 'sheets';
         $('[data-row="level"]').hidden = !statsFormat;
         $('[data-row="players"]').hidden = !statsFormat;
+        $('[data-row="fun"]').hidden = !statsFormat || state.level !== StatsLevel.FUN || !!opts.lockedLevel;
         const showBreakdown = statsFormat && !!scope.breakdown;
         $('[data-row="breakdown"]').hidden = !showBreakdown;
         $('#exportBreakdownLabel').textContent = scope.breakdown || '';
@@ -254,7 +274,9 @@ function openExportDialog(opts) {
         });
     });
     scopeSelect.onchange = () => { state.scope = scopeSelect.value; setStatus(''); refresh(); };
-    levelSelect.onchange = () => { state.level = levelSelect.value; };
+    levelSelect.onchange = () => { state.level = levelSelect.value; refresh(); };
+    funTopNInput.onchange = () => { state.funTopN = funTopNInput.value; };
+    funMinThrowsInput.onchange = () => { state.funMinThrows = funMinThrowsInput.value; };
     playerSelect.onchange = () => { state.playerId = playerSelect.value; };
     breakdownBox.onchange = () => {
         state.breakdown = breakdownBox.checked;
@@ -280,6 +302,12 @@ function openExportDialog(opts) {
             level: state.level,
             playerId: state.playerId,
             breakdown: !!currentScope().breakdown && state.breakdown,
+            // Read at click time: a number typed without leaving the box has
+            // not fired 'change' yet. A user held to Fun gets the defaults.
+            fun: opts.lockedLevel ? {} : {
+                topN: funTopNInput.value,
+                minCompThrows: funMinThrowsInput.value,
+            },
         };
         // Google's consent popup must open inside this click, before any await.
         let tokenPromise = null;

@@ -29,7 +29,7 @@ import {
 } from './statAccumulator.js';
 import { sheetStatsColumns } from './statsColumns.js';
 import { StatsLevel } from './statsLevel.js';
-import { buildFunStats, funStatsEmpty, TOP_N } from './funStats.js';
+import { buildFunStats, funStatsEmpty } from './funStats.js';
 import { buildGameFlow, describeGameFlow } from './gameFlow.js';
 import { buildConnections } from './connections.js';
 import { formatPlayerName } from './helpers.js';
@@ -159,11 +159,14 @@ function buildStatsSheet(players, playerStats, teamStats, opts) {
  * @param {object} opts
  * @param {Array<object>} opts.totalsPlayers - the roster the ranks run over
  * @param {object|null} [opts.player] - narrow to this player's lines
+ * @param {{topN?, minCompThrows?}} [opts.fun] - buildFunStats options
  * @param {string} [opts.titleRow]
  * @returns {object} a sheet (see file header), without `name`
  */
 function buildFunSheet(playerStats, teamStats, opts) {
-    const fun = buildFunStats(opts.totalsPlayers, playerStats, { onlyPlayerId: opts.player ? opts.player.id : '' });
+    const fun = buildFunStats(opts.totalsPlayers, playerStats, {
+        ...(opts.fun || {}), onlyPlayerId: opts.player ? opts.player.id : '',
+    });
     const rows = [];
     if (opts.titleRow) rows.push([opts.titleRow]);
     const frozenRows = rows.length;
@@ -179,7 +182,7 @@ function buildFunSheet(playerStats, teamStats, opts) {
     }
     if (fun.shoutouts.length) {
         if (rows.length) rows.push([]);
-        rows.push([`Shout-outs (top ${TOP_N})`]);
+        rows.push([`Shout-outs (top ${fun.topN})`]);
         fun.shoutouts.forEach(cat => {
             rows.push([]);
             rows.push([cat.label, cat.hint]);
@@ -266,6 +269,7 @@ function buildConnectionsSheet(games, title = 'Connections') {
  * @param {Array<object>} spec.players - the full roster this export covers
  * @param {string} [spec.playerId] - '' / undefined for all players
  * @param {string} spec.level
+ * @param {{topN?, minCompThrows?}} [spec.fun] - Fun options, at the Fun level
  * @param {Array<{label: string, title: string, games: Array<object>, skipIfEmpty?: boolean}>} spec.sheets
  *   The first is the main sheet; the rest are the breakdown.
  * @param {{game: object, teamName: string, opponentName: string}} [spec.singleGame]
@@ -283,7 +287,7 @@ function buildStatsWorkbook(spec) {
         if (s.skipIfEmpty && teamStats.total === 0) return;
         const titleRow = exportTitle(player, s.title);
         const sheet = spec.level === StatsLevel.FUN
-            ? buildFunSheet(getGamesPlayerStats(s.games), teamStats, { totalsPlayers, player, titleRow })
+            ? buildFunSheet(getGamesPlayerStats(s.games), teamStats, { totalsPlayers, player, titleRow, fun: spec.fun })
             : buildStatsSheet(sheetPlayers, getGamesPlayerStats(s.games), teamStats, {
                 level: spec.level, titleRow, totalsPlayers,
             });
@@ -323,6 +327,7 @@ function buildGameWorkbook(game, opts) {
         players: opts.players,
         playerId: opts.playerId,
         level: opts.level,
+        fun: opts.fun,
         sheets: [{
             label: opponentName,
             title: opts.titlePrefix ? `${opts.titlePrefix} — ${line}` : line,
@@ -361,7 +366,7 @@ function buildEventWorkbook(event, allGames, filter, opts) {
     }
     return buildStatsWorkbook({
         stem: filter.phase ? `${event.name}-${filter.phase}-stats` : `${event.name}-stats`,
-        players: opts.players, playerId: opts.playerId, level: opts.level, sheets,
+        players: opts.players, playerId: opts.playerId, level: opts.level, fun: opts.fun, sheets,
     });
 }
 
@@ -393,7 +398,7 @@ function buildTeamWorkbook(team, games, events, opts) {
     }
     return buildStatsWorkbook({
         stem: `${team.name}-stats`,
-        players: opts.players, playerId: opts.playerId, level: opts.level, sheets,
+        players: opts.players, playerId: opts.playerId, level: opts.level, fun: opts.fun, sheets,
     });
 }
 
@@ -431,7 +436,7 @@ function buildScrimmageWorkbook(team, games, filter, opts) {
     }
     return buildStatsWorkbook({
         stem: one ? `${team.name}-${mainLabel}-stats` : `${team.name}-scrimmages-stats`,
-        players: opts.players, playerId: opts.playerId, level: opts.level, sheets,
+        players: opts.players, playerId: opts.playerId, level: opts.level, fun: opts.fun, sheets,
     });
 }
 

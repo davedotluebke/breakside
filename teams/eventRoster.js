@@ -15,7 +15,9 @@ import {
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import { StatsLevel } from '../utils/statsLevel.js';
-import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import {
+    activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect, getFunOptions,
+} from '../utils/statsAudience.js';
 import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildEventWorkbook, buildGameWorkbook } from '../utils/exportWorkbook.js';
@@ -624,10 +626,11 @@ function openEventRosterExport() {
         scope: filterToValue(eventRosterFilter),
         level: activeStatsLevel(),
         lockedLevel: lockedStatsLevel(),
+        funOptions: getFunOptions(),
         players,
         buildWorkbook: async (choice) => {
             const filter = valueToFilter(choice.scope);
-            const opts = { players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown };
+            const opts = { players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown, fun: choice.fun };
             if (filter.gameId) {
                 const game = gameFor(choice);
                 return game ? buildGameWorkbook(game, { ...opts, titlePrefix: event.name }) : null;

@@ -1555,9 +1555,19 @@ table:
 
 - **Goals & Assists**: every player with at least one, most goals first. Nobody
   is listed with a zero.
-- **Shout-outs**: the top 5 (`TOP_N`) in Hockey assists, Ds, Completions,
-  Completion % and Hucks, with everyone tied with the 5th included. Completion %
-  needs 10 throws (`MIN_COMP_THROWS`). A category nobody scored in is left out.
+- **Shout-outs**: the top N (default 5) in Hockey assists, Ds, Completions,
+  Completion % and Hucks, with everyone tied with the Nth included. Completion %
+  needs a minimum number of throws; left blank, it is `defaultMinCompThrows`:
+  min(3, the 15th-percentile throw count, nearest rank, among players who threw
+  at all). A category nobody scored in is left out.
+
+Both numbers are per-device options (`getFunOptions` / `setFunOptions` in
+`utils/statsAudience.js`), edited from one line atop the Fun panel ("Shout out
+the top [5] players for each stat · Completion % needs [ ] throws") and from the
+same line in the Export dialog at the Fun level. The dialog's values start at
+the screen's and don't write back. A user held to Fun sees neither control and
+gets the defaults; otherwise a viewer could ask for "top 20" and rebuild the
+ranking Fun exists to avoid.
 
 Nothing negative (TOs, drops, throwaways, +/-) and nothing a player can't
 control (points played, playing time) appears. Fun is not in the

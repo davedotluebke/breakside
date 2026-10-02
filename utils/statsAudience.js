@@ -20,6 +20,7 @@
  */
 import { currentTeam, isViewer } from '../store/storage.js';
 import { StatsLevel, getStatsLevel, wireStatsLevelSelect } from './statsLevel.js';
+import { TOP_N, positiveIntOrNull } from './funStats.js';
 
 const RESTRICTABLE = new Set([StatsLevel.FUN]);
 
@@ -53,8 +54,49 @@ function wireActiveStatsLevelSelect(select, onChange) {
     wireStatsLevelSelect(select, onChange, { lockedTo: lockedStatsLevel() });
 }
 
+// ── Fun options ─────────────────────────────────────────────────────────
+// How many players each shout-out names, and the throws Comp% needs (null =
+// automatic, utils/funStats.js defaultMinCompThrows). Per device, like the
+// Stats menu. A user held to Fun gets the defaults and no controls: letting a
+// viewer ask for "top 20" would rebuild the full ranking Fun exists to avoid.
+
+const FUN_TOP_N_KEY = 'funStatsTopN';
+const FUN_MIN_THROWS_KEY = 'funStatsMinThrows';
+
+function readPref(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function writePref(key, value) {
+    try {
+        if (value == null) localStorage.removeItem(key);
+        else localStorage.setItem(key, String(value));
+    } catch (e) { /* private mode */ }
+}
+
+/** May this user change the Fun options? (No when held to Fun.) */
+function funOptionsEditable() {
+    return !lockedStatsLevel();
+}
+
+/** {topN, minCompThrows} for buildFunStats; minCompThrows null = automatic. */
+function getFunOptions() {
+    if (!funOptionsEditable()) return { topN: TOP_N, minCompThrows: null };
+    return {
+        topN: positiveIntOrNull(readPref(FUN_TOP_N_KEY)) || TOP_N,
+        minCompThrows: positiveIntOrNull(readPref(FUN_MIN_THROWS_KEY)),
+    };
+}
+
+/** Persist the Fun options (ignored when held to Fun). Blank minCompThrows = automatic. */
+function setFunOptions({ topN, minCompThrows } = {}) {
+    if (!funOptionsEditable()) return;
+    if (topN !== undefined) writePref(FUN_TOP_N_KEY, positiveIntOrNull(topN));
+    if (minCompThrows !== undefined) writePref(FUN_MIN_THROWS_KEY, positiveIntOrNull(minCompThrows));
+}
+
 // --- ES-module exports ---
 export {
     setGuestStatsLevel, teamViewerStatsLevel, lockedStatsLevel,
     activeStatsLevel, wireActiveStatsLevelSelect,
+    funOptionsEditable, getFunOptions, setFunOptions,
 };

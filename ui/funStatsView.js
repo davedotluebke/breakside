@@ -6,9 +6,12 @@
  * drops to its identity columns, otherwise clearFunStats(host).
  *
  * A card grid: Goals & Assists first (only players with one), then a card per
- * shout-out category. Lists, not a sortable table, on purpose.
+ * shout-out category. Lists, not a sortable table, on purpose. Above it, for
+ * anyone not held to Fun, one line of options: "Shout out the top [5] players
+ * for each stat", and the throws Completion % needs (blank = automatic).
  */
-import { buildFunStats, funStatsEmpty, TOP_N } from '../utils/funStats.js';
+import { buildFunStats, funStatsEmpty } from '../utils/funStats.js';
+import { funOptionsEditable, getFunOptions, setFunOptions } from '../utils/statsAudience.js';
 import { Gender } from '../store/models.js';
 
 function esc(s) {
@@ -53,6 +56,23 @@ function shoutoutCard(cat) {
 }
 
 /**
+ * The options line. `fun` is the built result, which carries the topN and
+ * Comp% minimum actually used (the automatic one when the box is blank).
+ */
+function optionsLine(fun, opts) {
+    return `
+        <div class="fun-options">
+            <label>Shout out the top
+                <input type="number" class="fun-topn" min="1" max="99" inputmode="numeric" value="${fun.topN}" aria-label="How many players each shout-out names">
+                players for each stat</label>
+            <label>Completion % needs
+                <input type="number" class="fun-minthrows" min="1" max="999" inputmode="numeric"
+                    value="${opts.minCompThrows || ''}" placeholder="${fun.minCompThrows}" aria-label="Throws needed to count for completion %">
+                throws<span class="fun-hint">${opts.minCompThrows ? '' : ' (auto)'}</span></label>
+        </div>`;
+}
+
+/**
  * Render the Fun panel into `host` and show it.
  * @param {HTMLElement} host
  * @param {Array<object>} players
@@ -62,18 +82,33 @@ function shoutoutCard(cat) {
  */
 function renderFunStats(host, players, playerStats, { emptyText = 'Shout-outs appear here once the team scores.' } = {}) {
     if (!host) return;
-    const fun = buildFunStats(players, playerStats);
+    const opts = getFunOptions();
+    const fun = buildFunStats(players, playerStats, opts);
     host.hidden = false;
     if (funStatsEmpty(fun)) {
         host.innerHTML = `<p class="fun-empty">${esc(emptyText)}</p>`;
         return;
     }
+    const editable = funOptionsEditable();
     host.innerHTML = `
+        ${editable ? optionsLine(fun, opts) : ''}
         <div class="fun-stats">
             ${scorersCard(fun.scorers)}
-            ${fun.shoutouts.length ? `<h4 class="fun-shoutouts-heading"><i class="fas fa-star" aria-hidden="true"></i> Shout-outs <span class="fun-hint">top ${TOP_N}</span></h4>` : ''}
+            ${fun.shoutouts.length ? `<h4 class="fun-shoutouts-heading"><i class="fas fa-star" aria-hidden="true"></i> Shout-outs <span class="fun-hint">top ${fun.topN}</span></h4>` : ''}
             ${fun.shoutouts.map(shoutoutCard).join('')}
         </div>`;
+    if (!editable) return;
+    // 'change' fires on Enter / blur, so typing a two-digit number doesn't
+    // re-render (and drop focus) after the first digit.
+    const rerender = () => renderFunStats(host, players, playerStats, { emptyText });
+    host.querySelector('.fun-topn').addEventListener('change', e => {
+        setFunOptions({ topN: e.target.value });
+        rerender();
+    });
+    host.querySelector('.fun-minthrows').addEventListener('change', e => {
+        setFunOptions({ minCompThrows: e.target.value });
+        rerender();
+    });
 }
 
 /** Empty and hide a Fun host (the active level is a table level). */

@@ -721,6 +721,20 @@
 .export-breakdown { padding-left: calc(4.5em + 10px); }
 .export-breakdown > span:first-child { flex: none; color: inherit; }
 .export-breakdown input { margin: 0; }
+/* Fun shout-out options: two sentences with a number box each, under Stats */
+.export-fun-options {
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding-left: calc(4.5em + 10px);
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+.export-fun-options input[type="number"] {
+    width: 3.5em;
+    margin: 0 2px;
+    padding: 2px 4px;
+    text-align: center;
+}
 
 .export-status {
     margin: 12px 0 0;

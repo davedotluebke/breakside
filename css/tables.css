@@ -141,6 +141,24 @@ th {
     margin: 10px;
     text-align: left;   /* the summary screens centre their text */
 }
+.fun-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 0 0 10px;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+.fun-options input[type="number"] {
+    width: 3.5em;
+    margin: 0 2px;
+    padding: 2px 4px;
+    text-align: center;
+    color: var(--text-primary);
+    background-color: var(--surface-inset);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+}
 .fun-stats {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

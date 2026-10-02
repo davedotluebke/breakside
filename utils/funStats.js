@@ -8,13 +8,15 @@
  *
  *   Goals & Assists   every player with at least one, most first. Nobody
  *                     appears with a zero.
- *   Shout-outs        the top few (TOP_N, ties at the cutoff all included) in
- *                     Hockey assists, Ds, Completions, Comp% and Hucks. A
- *                     category nobody has scored in is left out.
+ *   Shout-outs        the top N (`topN`, default TOP_N; ties at the cutoff
+ *                     all included) in Hockey assists, Ds, Completions, Comp%
+ *                     and Hucks. A category nobody has scored in is left out.
  *
  * Nothing negative (turnovers, drops, throwaways, +/-) and nothing a kid can't
- * control (points played, playing time). Comp% needs MIN_COMP_THROWS attempts
- * to qualify, so a 1-for-1 doesn't top the list.
+ * control (points played, playing time). Comp% needs a minimum number of
+ * throws to qualify (`minCompThrows`); left unset it is
+ * defaultMinCompThrows(): min(3, the 15th-percentile throw count among the
+ * players who threw at all).
  *
  * Pure: reads accumulateGameStats objects, so the screens (ui/funStatsView.js)
  * and the exports (utils/exportWorkbook.js) share it and it runs under
@@ -23,12 +25,14 @@
 import { formatPlayerName } from './helpers.js';
 
 const TOP_N = 5;
-const MIN_COMP_THROWS = 10;
+const MAX_COMP_THROWS_DEFAULT = 3;
+const COMP_THROWS_PERCENTILE = 0.15;
 
 /**
- * The shout-out categories, in display order. `value(ps)` is the ranking
- * number (0 or null = not listed); `display` formats it; `tiebreak` orders
- * equal values (higher first) before the name does.
+ * The shout-out categories, in display order. `value(ps, ctx)` is the ranking
+ * number (0 or null = not listed; ctx = {minCompThrows}); `display` formats
+ * it; `tiebreak` orders equal values (higher first) before the name does;
+ * `hint` may be a function of ctx.
  */
 const SHOUTOUT_CATEGORIES = [
     { key: 'ha', label: 'Hockey assists', icon: 'fa-hands-helping',
@@ -41,8 +45,9 @@ const SHOUTOUT_CATEGORIES = [
       hint: 'Throws caught by a teammate',
       value: ps => ps.completions || 0 },
     { key: 'compPct', label: 'Completion %', icon: 'fa-crosshairs',
-      hint: `At least ${MIN_COMP_THROWS} throws`,
-      value: ps => ((ps.totalThrows || 0) >= MIN_COMP_THROWS ? (ps.completions || 0) / ps.totalThrows : 0),
+      hint: ctx => `At least ${ctx.minCompThrows} throw${ctx.minCompThrows === 1 ? '' : 's'}`,
+      value: (ps, ctx) => ((ps.totalThrows || 0) > 0 && ps.totalThrows >= ctx.minCompThrows
+          ? (ps.completions || 0) / ps.totalThrows : 0),
       display: v => `${Math.round(v * 100)}%`,
       tiebreak: ps => ps.completions || 0 },
     { key: 'hucks', label: 'Hucks', icon: 'fa-rocket',
@@ -69,6 +74,28 @@ function topWithTies(entries, n) {
 }
 
 /**
+ * The default Comp% minimum: min(3, the 15th-percentile throw count, nearest
+ * rank, among players with at least one throw). 1 when nobody threw.
+ * @param {Array<object>} players
+ * @param {object} playerStats - playerId → accumulated stats
+ */
+function defaultMinCompThrows(players, playerStats) {
+    const throws = (players || [])
+        .map(p => ((playerStats && p && playerStats[p.id]) || {}).totalThrows || 0)
+        .filter(n => n > 0)
+        .sort((a, b) => a - b);
+    if (!throws.length) return 1;
+    const p15 = throws[Math.max(0, Math.ceil(COMP_THROWS_PERCENTILE * throws.length) - 1)];
+    return Math.min(MAX_COMP_THROWS_DEFAULT, p15);
+}
+
+/** Clamp a user-entered count to a whole number >= 1, or null when blank/invalid. */
+function positiveIntOrNull(v) {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n >= 1 ? n : null;
+}
+
+/**
  * Build the Fun view of a set of players' stats.
  *
  * Ranks always run over the whole `players` list. `onlyPlayerId` then narrows
@@ -78,13 +105,16 @@ function topWithTies(entries, n) {
  * @param {Array<object>} players - {id, name, ...}
  * @param {object} playerStats - playerId → accumulated stats
  * @param {object} [opts]
- * @param {number} [opts.topN]
+ * @param {number} [opts.topN] - default TOP_N
+ * @param {number|null} [opts.minCompThrows] - null = defaultMinCompThrows
  * @param {string} [opts.onlyPlayerId]
- * @returns {{scorers: Array<{player, name, goals, assists}>,
+ * @returns {{topN, minCompThrows, scorers: Array<{player, name, goals, assists}>,
  *            shoutouts: Array<{key, label, icon, hint, entries: Array<{player, name, value, text}>}>}}
  */
-function buildFunStats(players, playerStats, { topN = TOP_N, onlyPlayerId = '' } = {}) {
+function buildFunStats(players, playerStats, { topN = TOP_N, minCompThrows = null, onlyPlayerId = '' } = {}) {
     const roster = (players || []).filter(p => p && p.id);
+    topN = positiveIntOrNull(topN) || TOP_N;
+    const ctx = { minCompThrows: positiveIntOrNull(minCompThrows) || defaultMinCompThrows(roster, playerStats) };
     const statsOf = p => (playerStats && playerStats[p.id]) || {};
     const keep = e => !onlyPlayerId || e.player.id === onlyPlayerId;
 
@@ -98,17 +128,18 @@ function buildFunStats(players, playerStats, { topN = TOP_N, onlyPlayerId = '' }
         const entries = topWithTies(roster.map(p => ({
             player: p,
             name: nameOf(p),
-            value: cat.value(statsOf(p)),
+            value: cat.value(statsOf(p), ctx),
             tie: cat.tiebreak ? cat.tiebreak(statsOf(p)) : 0,
         })), topN)
             .filter(keep)
             .map(({ player, name, value }) => ({
                 player, name, value, text: cat.display ? cat.display(value) : String(value),
             }));
-        return { key: cat.key, label: cat.label, icon: cat.icon, hint: cat.hint, entries };
+        const hint = typeof cat.hint === 'function' ? cat.hint(ctx) : cat.hint;
+        return { key: cat.key, label: cat.label, icon: cat.icon, hint, entries };
     }).filter(s => s.entries.length > 0);
 
-    return { scorers, shoutouts };
+    return { topN, minCompThrows: ctx.minCompThrows, scorers, shoutouts };
 }
 
 /** True when there is nothing to celebrate yet (no goals, no shout-outs). */
@@ -117,4 +148,7 @@ function funStatsEmpty(fun) {
 }
 
 // --- ES-module exports ---
-export { buildFunStats, funStatsEmpty, SHOUTOUT_CATEGORIES, TOP_N, MIN_COMP_THROWS };
+export {
+    buildFunStats, funStatsEmpty, defaultMinCompThrows, positiveIntOrNull,
+    SHOUTOUT_CATEGORIES, TOP_N,
+};

@@ -5,8 +5,10 @@
  *
  * The contract under test:
  *  - Goals & Assists lists only players with one, most first; no zero rows
- *  - each shout-out keeps the top 5, plus everyone tied with the 5th
- *  - a category nobody scored in is left out; Comp% needs 10 throws
+ *  - each shout-out keeps the top N (default 5), plus everyone tied with the Nth
+ *  - a category nobody scored in is left out
+ *  - Comp% needs a minimum of throws: as set, or automatically min(3, the
+ *    15th-percentile throw count among players who threw)
  *  - nothing negative and no playing time reaches the Fun output
  *  - Fun shows no tagged table column, only identity columns
  *  - viewers of a team set to Fun, and share guests told so, are locked to
@@ -21,10 +23,12 @@ import assert from 'node:assert/strict';
 globalThis.window = globalThis;
 globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 
-const { buildFunStats, funStatsEmpty, MIN_COMP_THROWS } = await import('../../utils/funStats.js');
+const { buildFunStats, funStatsEmpty, defaultMinCompThrows } = await import('../../utils/funStats.js');
 const { StatsLevel, levelIncludes, columnsForLevel, setStatsLevel } = await import('../../utils/statsLevel.js');
 const { STATS_COLUMNS, SHEET_STATS_COLUMNS } = await import('../../utils/statsColumns.js');
-const { activeStatsLevel, lockedStatsLevel, setGuestStatsLevel } = await import('../../utils/statsAudience.js');
+const {
+    activeStatsLevel, lockedStatsLevel, setGuestStatsLevel, getFunOptions, setFunOptions,
+} = await import('../../utils/statsAudience.js');
 const { buildGameWorkbook } = await import('../../utils/exportWorkbook.js');
 const { setCurrentTeam, setCurrentTeamRole } = await import('../../store/storage.js');
 setCurrentTeam(null);
@@ -60,16 +64,43 @@ test('empty categories are left out; zero values never listed', () => {
     assert.ok(funStatsEmpty(buildFunStats(ROSTER, {})));
 });
 
-test('Comp% needs the minimum throws; ties break on completions', () => {
+test('Comp% needs the set minimum of throws; ties break on completions', () => {
     const fun = buildFunStats(ROSTER, {
         [ids.Ava]: { completions: 1, totalThrows: 1 },                       // 100% but too few
-        [ids.Ben]: { completions: MIN_COMP_THROWS, totalThrows: MIN_COMP_THROWS },
-        [ids.Cal]: { completions: 2 * MIN_COMP_THROWS, totalThrows: 2 * MIN_COMP_THROWS },
+        [ids.Ben]: { completions: 10, totalThrows: 10 },
+        [ids.Cal]: { completions: 20, totalThrows: 20 },
         [ids.Dee]: { completions: 9, totalThrows: 12 },
-    });
+    }, { minCompThrows: 10 });
+    assert.equal(fun.minCompThrows, 10);
     const pct = fun.shoutouts.find(s => s.key === 'compPct');
+    assert.equal(pct.hint, 'At least 10 throws');
     assert.deepEqual(names(pct.entries), ['Cal', 'Ben', 'Dee']);
     assert.deepEqual(pct.entries.map(e => e.text), ['100%', '100%', '75%']);
+});
+
+test('the automatic Comp% minimum is min(3, 15th percentile of throwers)', () => {
+    const withThrows = list => Object.fromEntries(list.map((n, i) => [ROSTER[i].id, { totalThrows: n }]));
+    // Throwers 1, 2, 8, 9, 10, 12, 20 (Hal threw none, so he doesn't count):
+    // 15th pct, nearest rank ceil(1.05) = 2nd of 7 → 2
+    assert.equal(defaultMinCompThrows(ROSTER, withThrows([1, 2, 8, 9, 10, 12, 20, 0])), 2);
+    // One-throw players at the bottom → 1
+    assert.equal(defaultMinCompThrows(ROSTER, withThrows([1, 1, 8, 9, 10, 12, 20, 0])), 1);
+    // 2 of 8 throwers at the bottom: rank ceil(1.2) = 2 → 4, capped at 3
+    assert.equal(defaultMinCompThrows(ROSTER, withThrows([4, 4, 8, 9, 10, 12, 20, 30])), 3);
+    assert.equal(defaultMinCompThrows(ROSTER, withThrows([2, 2, 8, 9, 10, 12, 20, 30])), 2);
+    assert.equal(defaultMinCompThrows(ROSTER, {}), 1);
+    const fun = buildFunStats(ROSTER, withThrows([2, 2, 8, 9, 10, 12, 20, 30]));
+    assert.equal(fun.minCompThrows, 2);
+});
+
+test('topN sets how many each shout-out names; junk falls back to 5', () => {
+    const stats = {};
+    [8, 7, 6, 5, 4, 3, 2, 1].forEach((d, i) => { stats[ROSTER[i].id] = { dPlays: d }; });
+    const ds = n => names(buildFunStats(ROSTER, stats, { topN: n }).shoutouts.find(s => s.key === 'ds').entries);
+    assert.deepEqual(ds(3), ['Ava', 'Ben', 'Cal']);
+    assert.equal(ds(8).length, 8);
+    assert.equal(ds('nonsense').length, 5);
+    assert.equal(ds(0).length, 5);
 });
 
 test('onlyPlayerId keeps that player\'s lines, ranked against the whole roster', () => {
@@ -109,6 +140,28 @@ test('viewers of a Fun team are locked to Fun; coaches and other teams are not',
     } finally {
         setCurrentTeamRole(null);
         setCurrentTeam(null);
+    }
+});
+
+test('Fun options persist per device, but a viewer held to Fun gets the defaults', () => {
+    const store = {};
+    const saved = globalThis.localStorage;
+    globalThis.localStorage = { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: k => { delete store[k]; } };
+    try {
+        setFunOptions({ topN: 3, minCompThrows: 7 });
+        assert.deepEqual(getFunOptions(), { topN: 3, minCompThrows: 7 });
+        setFunOptions({ minCompThrows: '' });
+        assert.deepEqual(getFunOptions(), { topN: 3, minCompThrows: null });
+
+        setCurrentTeam({ id: 't', name: 'Riverside', viewerStatsLevel: 'fun' });
+        setCurrentTeamRole('viewer');
+        assert.deepEqual(getFunOptions(), { topN: 5, minCompThrows: null });
+        setFunOptions({ topN: 30 });
+        assert.equal(store.funStatsTopN, '3', 'a held viewer cannot change them');
+    } finally {
+        setCurrentTeamRole(null);
+        setCurrentTeam(null);
+        globalThis.localStorage = saved;
     }
 });
 
@@ -152,6 +205,11 @@ test('the Fun export is lists, carries nothing negative, and drops Connections',
     }
     const header = sheet.rows.findIndex(r => r[0] === 'Name');
     assert.deepEqual(sheet.rows[header], ['Name', 'Goals', 'Assists']);
+});
+
+test('the Fun export honours the chosen top N', () => {
+    const wb = buildGameWorkbook(GAME, { players: [ALICE, BOB], level: StatsLevel.FUN, fun: { topN: 1 } });
+    assert.ok(wb.sheets[0].rows.some(r => r[0] === 'Shout-outs (top 1)'));
 });
 
 test('a single-player Fun export keeps that player\'s lines only', () => {

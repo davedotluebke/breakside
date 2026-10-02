@@ -41,7 +41,9 @@ import {
     sumPlayerStats, loadEventGames, formatGameLabel,
 } from '../utils/eventStats.js';
 import { StatsLevel, columnsForLevel } from '../utils/statsLevel.js';
-import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import {
+    activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect, getFunOptions,
+} from '../utils/statsAudience.js';
 import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import {
     createPlayerOffline, syncPlayerToCloud, syncTeamToCloud, syncEventToCloud,
@@ -975,9 +977,10 @@ function openTeamRosterExport() {
         scope: effectiveRosterScope(),
         level: activeStatsLevel(),
         lockedLevel: lockedStatsLevel(),
+        funOptions: getFunOptions(),
         players,
         buildWorkbook: async (choice, progress) => {
-            const opts = { players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown };
+            const opts = { players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown, fun: choice.fun };
             if (choice.scope === 'game') return buildGameWorkbook(game, opts);
             if (choice.scope === 'event') {
                 progress('Loading the event’s games…');

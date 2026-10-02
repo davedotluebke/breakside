@@ -24,7 +24,9 @@ import {
 import { createTableSortController } from '../utils/tableSort.js';
 import { attachStatsColumnHelp } from '../utils/statsHelp.js';
 import { StatsLevel } from '../utils/statsLevel.js';
-import { activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect } from '../utils/statsAudience.js';
+import {
+    activeStatsLevel, lockedStatsLevel, wireActiveStatsLevelSelect, getFunOptions,
+} from '../utils/statsAudience.js';
 import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildScrimmageWorkbook } from '../utils/exportWorkbook.js';
@@ -339,9 +341,10 @@ function openScrimmageStatsExport() {
         scope: filter.scrimmageId || '',
         level: activeStatsLevel(),
         lockedLevel: lockedStatsLevel(),
+        funOptions: getFunOptions(),
         players,
         buildWorkbook: async (choice) => buildScrimmageWorkbook(team, games, { scrimmageId: choice.scope || null }, {
-            players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown,
+            players, playerId: choice.playerId, level: choice.level, breakdown: choice.breakdown, fun: choice.fun,
         }),
     });
 }
