@@ -13,6 +13,9 @@ import { log } from '../utils/logger.js';
 import { getApiBaseUrl, authFetch } from '../store/sync.js';
 import { showControllerToast } from './controllerState.js';
 import { encodeQr, qrSvg } from '../utils/qrCode.js';
+import { currentTeam } from '../store/storage.js';
+import { teamViewerStatsLevel } from '../utils/statsAudience.js';
+import { StatsLevel } from '../utils/statsLevel.js';
 
 /*
  * Public listing switch. false since 2026-09-07: letting any coach of any
@@ -254,6 +257,15 @@ function showShareGameDialog(game) {
                         <input type="checkbox" id="shareListedCheckbox"> List publicly
                     </label>` : '';
 
+    // Which stats a link's guests see follows the team setting (Team Settings
+    // → Viewer Stats, utils/statsAudience.js), not anything chosen per link —
+    // say so here, where people look for it.
+    const funOnly = teamViewerStatsLevel(currentTeam) === StatsLevel.FUN;
+    const statsNote = funOnly
+        ? `<p class="share-stats-note share-stats-note-fun"><i class="fas fa-star" aria-hidden="true"></i>
+                    Viewers of these links see <strong>Fun stats only</strong>: goals, assists and shout-outs. Change this in Team Settings → Viewer Stats.</p>`
+        : `<p class="share-stats-note">Viewers of these links see full stats. To show Fun stats only (goals, assists and shout-outs), turn it on in Team Settings → Viewer Stats.</p>`;
+
     modal = document.createElement('div');
     modal.id = 'shareGameModal';
     modal.className = 'modal';
@@ -270,6 +282,7 @@ function showShareGameDialog(game) {
                     <strong>${esc(game.team || 'this game')} vs ${esc(game.opponent || 'TBD')}</strong>
                     live — score and play-by-play, no account needed. Copy a link, or show its QR code for someone to scan.
                 </p>
+                ${statsNote}
                 <div id="shareLinksList"></div>
                 <div class="share-create-row">
                     <label class="share-expiry-label">Expires:

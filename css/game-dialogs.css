@@ -461,6 +461,24 @@
     line-height: 1.45;
 }
 
+.share-stats-note {
+    margin: -4px 0 12px;
+    font-size: 0.85em;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+.share-stats-note-fun {
+    padding: 6px 10px;
+    color: var(--text-primary);
+    background-color: var(--surface-subtle);
+    border-left: 3px solid var(--brand-orange);
+    border-radius: 2px;
+}
+.share-stats-note-fun i {
+    color: var(--brand-orange);
+    margin-right: 2px;
+}
+
 #shareLinksList {
     margin-bottom: 14px;
 }
