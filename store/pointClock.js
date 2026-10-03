@@ -13,7 +13,9 @@
  * clock instead (`point.clockPending = true`, no startTimestamp) and the
  * first recorded touch starts it. Point time and per-player playing time then
  * measure actual play. Simple mode has no pickup tap, so its offensive
- * clock still starts at Start Point. A defensive point is armed on every
+ * clock still starts at Start Point, and an armed offensive point the coach
+ * carries onto the Simple surface starts its clock on arrival
+ * (startPointClockOnSurface). A defensive point is armed on every
  * surface and starts on the pull: at the stopwatch's release tap when the
  * coach timed the hang (the pull dialog and the Field tab note Date.now()
  * at that tap and pass it as `thrownAt` / the Date to startPointClock),
@@ -87,6 +89,20 @@ export function startPointClock(point, now = new Date()) {
     point.startTimestamp = now;
     point.lastPauseTime = null;
     return true;
+}
+
+/**
+ * The coach moved an in-progress point onto a surface. An offensive point
+ * armed on Full / Field and carried to a surface with no pickup tap (Simple,
+ * All) would otherwise never start its clock, so it starts now. A running
+ * clock (someone already picked up the disc) is left alone, and a defensive
+ * point keeps waiting for its pull, which every surface records.
+ * @returns {boolean} true when this call started the clock
+ */
+export function startPointClockOnSurface(point, mode, now = new Date()) {
+    if (!point || point.winner || point.endTimestamp || !point.clockPending) return false;
+    if (point.startingPosition !== 'offense' || clockWaitsForFirstTouch(point, mode)) return false;
+    return startPointClock(point, now);
 }
 
 /**

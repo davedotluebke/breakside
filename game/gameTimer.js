@@ -100,8 +100,8 @@ function handleTimerPauseClick(e) {
     const point = getLatestPoint();
     if (point && point.clockPending && !point.winner) {
         // Armed, waiting for the first touch: the button is the manual
-        // override (e.g. the coach is recording on the Simple tab after
-        // starting the point from Full / Field). Start the clock now.
+        // override. Start the clock now. (Moving to the Simple tab starts an
+        // armed offensive clock on its own; ui/panelSystem.js switchTab.)
         startPointClock(point);
         pointTimerPaused = false;
         updateTimerPauseButton();

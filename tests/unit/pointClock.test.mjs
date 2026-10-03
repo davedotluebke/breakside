@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import {
     TOUCH_EVENT_TYPES, isTouchEvent, pointHasTouch, awaitingPull,
     clockWaitsForFirstTouch, armPointClock, startPointClock, rearmPointClockIfUntouched,
+    startPointClockOnSurface,
 } from '../../store/pointClock.js';
 import {
     Point, Possession, Throw, Turnover, Defense, Pull, Pickup, Other, Violation, UNKNOWN_PLAYER,
@@ -128,6 +129,43 @@ test('rearm after undo: only an untouched, unconcluded offensive point on a defe
     const dUntouched = makePoint('defense', [], { startTimestamp: t0, totalPointTime: 900 });
     assert.equal(rearmPointClockIfUntouched(dUntouched, 'simple'), true, 'a D point left with no pull waits for it again, on any surface');
     assert.equal(dUntouched.totalPointTime, 0);
+});
+
+test('moving to the Simple surface starts an armed offensive clock, and nothing else', () => {
+    const now = new Date('2026-09-22T18:00:07Z');
+    for (const mode of ['simple', 'all']) {
+        const armed = makePoint('offense');
+        armPointClock(armed);
+        assert.equal(startPointClockOnSurface(armed, mode, now), true, mode);
+        assert.equal(armed.clockPending, false);
+        assert.equal(armed.startTimestamp, now, `${mode}: the clock starts on arrival`);
+    }
+
+    const stillFull = makePoint('offense');
+    armPointClock(stillFull);
+    for (const mode of ['full', 'field']) {
+        assert.equal(startPointClockOnSurface(stillFull, mode, now), false, `${mode} keeps waiting for the first touch`);
+    }
+    assert.equal(stillFull.clockPending, true);
+
+    const t0 = new Date('2026-09-22T18:00:00Z');
+    const pickedUp = makePoint('offense', [new Pickup({ receiver: P.Bob })], { startTimestamp: t0, totalPointTime: 1500 });
+    assert.equal(startPointClockOnSurface(pickedUp, 'simple', now), false, 'a running clock is not overwritten');
+    assert.equal(pickedUp.startTimestamp, t0);
+    assert.equal(pickedUp.totalPointTime, 1500);
+
+    const paused = makePoint('offense', [new Pickup({ receiver: P.Bob })], { startTimestamp: null, totalPointTime: 1500, lastPauseTime: t0 });
+    assert.equal(startPointClockOnSurface(paused, 'simple', now), false, 'a paused clock stays paused');
+    assert.equal(paused.startTimestamp, null);
+
+    const dPoint = makePoint('defense');
+    armPointClock(dPoint);
+    assert.equal(startPointClockOnSurface(dPoint, 'simple', now), false, 'a D point waits for its pull');
+    assert.equal(dPoint.clockPending, true);
+
+    const scored = makePoint('offense', [], { clockPending: true, winner: 'team', endTimestamp: t0 });
+    assert.equal(startPointClockOnSurface(scored, 'simple', now), false);
+    assert.equal(startPointClockOnSurface(null, 'simple', now), false);
 });
 
 test('Pickup summarizes as a pull catch or a pick-up; Unknown when unseen', () => {

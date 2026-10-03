@@ -10,7 +10,9 @@
  */
 import { showScreen } from '../screens/navigation.js';
 import { log } from '../utils/logger.js';
-import { isPointInProgress } from '../utils/helpers.js';
+import { isPointInProgress, getLatestPoint } from '../utils/helpers.js';
+import { saveAllTeamsData } from '../store/storage.js';
+import { startPointClockOnSurface } from '../store/pointClock.js';
 import {
     isTrackingTab, normalizeGameTab, normalizeTrackingTab,
     launchTab, trackingTabAtPointStart, DEFAULT_TRACKING_TAB,
@@ -1219,6 +1221,26 @@ function switchTab(tabName) {
 
     applyTabState();
     updateSegmentedSlider();
+    startArmedClockOnSimpleSurface();
+}
+
+/**
+ * An offensive point started (armed) on Full / Field and brought to the
+ * Simple or All tab has no pickup tap left to start its clock, so arriving
+ * there starts it (store/pointClock.js startPointClockOnSurface). Only the
+ * device that records play-by-play does this, so a spectating coach browsing
+ * tabs never moves the clock. Line / Log map to the last tracking tab, so
+ * passing through them changes nothing.
+ */
+function startArmedClockOnSimpleSurface() {
+    // window survivor: late-bound (game/controllerState.js sits above ui/).
+    if (typeof window.canEditPlayByPlay === 'function' && !window.canEditPlayByPlay()) return;
+    if (!isGameScreenVisible()) return;
+    if (startPointClockOnSurface(getLatestPoint(), getCurrentMode())) {
+        log('⏱ Point clock started — armed offensive point moved to the Simple surface');
+        saveAllTeamsData();
+        window.updateTimerDisplay?.();   // also refreshes the pause button
+    }
 }
 
 /**
