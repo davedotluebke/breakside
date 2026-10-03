@@ -8,7 +8,7 @@
  *  - each shout-out keeps the top N (default 5), plus everyone tied with the Nth
  *  - a category nobody scored in is left out
  *  - Comp% needs a minimum of throws: as set, or automatically min(3, the
- *    15th-percentile throw count among players who threw)
+ *    15th-percentile throw count among players who threw) when not set — max(3, …)
  *  - nothing negative and no playing time reaches the Fun output
  *  - Fun shows no tagged table column, only identity columns
  *  - viewers of a team set to Fun, and share guests told so, are locked to
@@ -78,19 +78,22 @@ test('Comp% needs the set minimum of throws; ties break on completions', () => {
     assert.deepEqual(pct.entries.map(e => e.text), ['100%', '100%', '75%']);
 });
 
-test('the automatic Comp% minimum is min(3, 15th percentile of throwers)', () => {
+test('the automatic Comp% minimum is max(3, 15th percentile of throwers)', () => {
     const withThrows = list => Object.fromEntries(list.map((n, i) => [ROSTER[i].id, { totalThrows: n }]));
     // Throwers 1, 2, 8, 9, 10, 12, 20 (Hal threw none, so he doesn't count):
-    // 15th pct, nearest rank ceil(1.05) = 2nd of 7 → 2
-    assert.equal(defaultMinCompThrows(ROSTER, withThrows([1, 2, 8, 9, 10, 12, 20, 0])), 2);
-    // One-throw players at the bottom → 1
-    assert.equal(defaultMinCompThrows(ROSTER, withThrows([1, 1, 8, 9, 10, 12, 20, 0])), 1);
-    // 2 of 8 throwers at the bottom: rank ceil(1.2) = 2 → 4, capped at 3
-    assert.equal(defaultMinCompThrows(ROSTER, withThrows([4, 4, 8, 9, 10, 12, 20, 30])), 3);
-    assert.equal(defaultMinCompThrows(ROSTER, withThrows([2, 2, 8, 9, 10, 12, 20, 30])), 2);
-    assert.equal(defaultMinCompThrows(ROSTER, {}), 1);
-    const fun = buildFunStats(ROSTER, withThrows([2, 2, 8, 9, 10, 12, 20, 30]));
-    assert.equal(fun.minCompThrows, 2);
+    // 15th pct, nearest rank ceil(1.05) = 2nd of 7 → 2, floored at 3
+    assert.equal(defaultMinCompThrows(ROSTER, withThrows([1, 2, 8, 9, 10, 12, 20, 0])), 3);
+    // 8 throwers: rank ceil(1.2) = 2nd → 6
+    assert.equal(defaultMinCompThrows(ROSTER, withThrows([5, 6, 8, 9, 10, 12, 20, 30])), 6);
+    assert.equal(defaultMinCompThrows(ROSTER, {}), 3);
+    const fun = buildFunStats(ROSTER, withThrows([5, 6, 8, 9, 10, 12, 20, 30]));
+    assert.equal(fun.minCompThrows, 6);
+    // a 1-for-1 no longer tops Completion %
+    const pct = buildFunStats(ROSTER, {
+        [ids.Ava]: { completions: 1, totalThrows: 1 },
+        [ids.Ben]: { completions: 4, totalThrows: 5 },
+    }).shoutouts.find(s => s.key === 'compPct');
+    assert.deepEqual(names(pct.entries), ['Ben']);
 });
 
 test('topN sets how many each shout-out names; junk falls back to 5', () => {

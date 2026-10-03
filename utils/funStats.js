@@ -15,8 +15,8 @@
  * Nothing negative (turnovers, drops, throwaways, +/-) and nothing a kid can't
  * control (points played, playing time). Comp% needs a minimum number of
  * throws to qualify (`minCompThrows`); left unset it is
- * defaultMinCompThrows(): min(3, the 15th-percentile throw count among the
- * players who threw at all).
+ * defaultMinCompThrows(): max(3, the 15th-percentile throw count among the
+ * players who threw at all) — never fewer than 3, more on a bigger sample.
  *
  * Pure: reads accumulateGameStats objects, so the screens (ui/funStatsView.js)
  * and the exports (utils/exportWorkbook.js) share it and it runs under
@@ -25,7 +25,7 @@
 import { formatPlayerName } from './helpers.js';
 
 const TOP_N = 5;
-const MAX_COMP_THROWS_DEFAULT = 3;
+const MIN_COMP_THROWS_DEFAULT = 3;
 const COMP_THROWS_PERCENTILE = 0.15;
 
 /**
@@ -74,8 +74,8 @@ function topWithTies(entries, n) {
 }
 
 /**
- * The default Comp% minimum: min(3, the 15th-percentile throw count, nearest
- * rank, among players with at least one throw). 1 when nobody threw.
+ * The default Comp% minimum: max(3, the 15th-percentile throw count, nearest
+ * rank, among players with at least one throw). 3 when nobody threw.
  * @param {Array<object>} players
  * @param {object} playerStats - playerId → accumulated stats
  */
@@ -84,9 +84,9 @@ function defaultMinCompThrows(players, playerStats) {
         .map(p => ((playerStats && p && playerStats[p.id]) || {}).totalThrows || 0)
         .filter(n => n > 0)
         .sort((a, b) => a - b);
-    if (!throws.length) return 1;
+    if (!throws.length) return MIN_COMP_THROWS_DEFAULT;
     const p15 = throws[Math.max(0, Math.ceil(COMP_THROWS_PERCENTILE * throws.length) - 1)];
-    return Math.min(MAX_COMP_THROWS_DEFAULT, p15);
+    return Math.max(MIN_COMP_THROWS_DEFAULT, p15);
 }
 
 /** Clamp a user-entered count to a whole number >= 1, or null when blank/invalid. */

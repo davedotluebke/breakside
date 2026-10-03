@@ -1558,8 +1558,8 @@ table:
 - **Shout-outs**: the top N (default 5) in Hockey assists, Ds, Completions,
   Completion % and Hucks, with everyone tied with the Nth included. Completion %
   needs a minimum number of throws; left blank, it is `defaultMinCompThrows`:
-  min(3, the 15th-percentile throw count, nearest rank, among players who threw
-  at all). A category nobody scored in is left out.
+  max(3, the 15th-percentile throw count, nearest rank, among players who threw
+  at all): never fewer than 3, more on a bigger sample. A category nobody scored in is left out.
 
 Both numbers are per-device options (`getFunOptions` / `setFunOptions` in
 `utils/statsAudience.js`), edited from one line atop the Fun panel ("Shout out
