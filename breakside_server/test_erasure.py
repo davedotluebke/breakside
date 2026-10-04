@@ -1024,3 +1024,117 @@ class TestPendingScalarFields:
         assert scrubber.scrub_game(game) is True
         assert game["pendingNextLine"]["lineupReadyBy"] is None
         assert scrubber.name_only_matches == 0
+
+
+# =============================================================================
+# A live player who shares an erased player's display name
+# =============================================================================
+
+def _lineup_game(game_id, team_id, player, teammate):
+    """A game as the current client stores it: point lineups hold display
+    NAMES, while events carry an ID beside each name."""
+    return {
+        "id": game_id, "teamId": team_id, "team": "Other Team",
+        "opponent": "Rivals", "scores": {"team": 1, "opponent": 0},
+        "rosterSnapshot": {"players": [
+            {"id": player["id"], "name": player["name"],
+             "nickname": player.get("nickname", ""), "number": "0", "gender": "MMP"},
+            {"id": teammate["id"], "name": teammate["name"], "nickname": "",
+             "number": "12", "gender": "MMP"},
+        ]},
+        "pendingNextLine": {"oLine": [player["name"], teammate["name"]]},
+        "points": [{
+            "players": [player["name"], teammate["name"]],
+            "winner": "team", "startingPosition": "offense",
+            "possessions": [{"offensive": True, "events": [
+                {"type": "Throw", "thrower": player["name"],
+                 "throwerId": player["id"], "receiver": teammate["name"],
+                 "receiverId": teammate["id"], "score_flag": True},
+            ]}],
+        }],
+    }
+
+
+class TestSharedDisplayName:
+    """Erasing one team's player must not erase another team's namesake.
+
+    2026-10-03: a demo team's erasure deny-listed the name "Cyrus", and every
+    later sync of a real team's game had its own Cyrus rewritten to the
+    tombstone in each point lineup (which holds names, not IDs), so he showed
+    0 points played while keeping his assists.
+    """
+
+    def _namesake(self, env):
+        from storage import player_storage
+        alice = env["alice"]
+        namesake_id = player_storage.save_player(
+            {"name": alice["name"], "nickname": env["nickname"], "number": "0"})
+        assert namesake_id != alice["id"]
+        return {"id": namesake_id, "name": alice["name"], "nickname": env["nickname"]}
+
+    def test_a_namesakes_game_sync_keeps_its_lineups(self, env, client):
+        from storage import erase_player, get_game_current
+        erase_player(env["alice"]["id"])
+        namesake = self._namesake(env)
+        game_id = "2026-10-03_Other-Team_vs_Rivals_1791000000000"
+        body = _lineup_game(game_id, env["other_team_id"], namesake, env["bob"])
+
+        _as(OTHER_COACH)
+        response = client.post(f"/api/games/{game_id}/sync", json=body)
+        assert response.status_code == 200
+
+        stored = get_game_current(game_id)
+        assert stored["points"][0]["players"] == [namesake["name"], env["bob"]["name"]]
+        assert stored["pendingNextLine"]["oLine"] == [namesake["name"], env["bob"]["name"]]
+        assert stored["rosterSnapshot"]["players"][0]["id"] == namesake["id"]
+        assert "Removed" not in json.dumps(stored)
+
+    def test_the_erased_players_own_cached_game_is_still_scrubbed(self, env, client):
+        """The claim comes from a DIFFERENT live ID; the erased player's own
+        snapshot entry claims nothing, so name-only lineups are rewritten."""
+        from storage import erase_player, get_game_current
+        alice = env["alice"]
+        body = _lineup_game(env["game_id"], env["team_id"], alice, env["bob"])
+        erase_player(alice["id"])
+
+        _as(COACH)
+        response = client.post(f"/api/games/{env['game_id']}/sync", json=body)
+        assert response.status_code == 200
+
+        stored = json.dumps(get_game_current(env["game_id"]))
+        assert alice["name"] not in stored
+        assert alice["id"] not in stored
+
+    def test_a_namesakes_team_lines_survive_a_team_sync(self, env, client):
+        from storage import erase_player, get_team
+        erase_player(env["alice"]["id"])
+        namesake = self._namesake(env)
+
+        _as(OTHER_COACH)
+        response = client.post("/api/teams", json={
+            "id": env["other_team_id"], "name": "Other Team",
+            "playerIds": [namesake["id"], env["bob"]["id"]],
+            "lines": [{"name": "O", "players": [namesake["name"], env["bob"]["name"]]}],
+        })
+        assert response.status_code == 200
+        team = get_team(env["other_team_id"])
+        assert namesake["id"] in team["playerIds"]
+        assert team["lines"][0]["players"] == [namesake["name"], env["bob"]["name"]]
+
+    def test_a_pickup_with_a_different_id_is_not_dropped(self):
+        from storage import PlayerScrubber
+        scrubber = PlayerScrubber("Alex-1111", "Alex", "Removed-aaaa1111")
+        event = {"roster": {"playerIds": [], "pickupPlayers": [
+            {"id": "Alex-2222", "name": "Alex"}]}}
+        assert scrubber.scrub_tournament_event(event) is False
+
+    def test_the_inbound_scrubber_shape_respects_the_claim(self):
+        """The inbound guard passes the deny-listed string as ID *and* name."""
+        from storage import PlayerScrubber
+        scrubber = PlayerScrubber("Alex", "Alex", "Removed-aaaa1111")
+        game = {
+            "rosterSnapshot": {"players": [{"id": "Alex-2222", "name": "Alex"}]},
+            "points": [{"players": ["Alex", "Bo"], "possessions": []}],
+        }
+        assert scrubber.scrub_game(game) is False
+        assert game["points"][0]["players"] == ["Alex", "Bo"]

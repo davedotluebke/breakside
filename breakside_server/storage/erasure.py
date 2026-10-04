@@ -138,8 +138,11 @@ _EVENT_ID_TO_NAME = {
     "assistId": "assist",
 }
 
-# Per-point lists of player references. Stored data uses IDs; the model
-# comments and older data use display names, so both are matched.
+# Per-point lists of player references. Some stored data uses IDs, but the
+# current client writes display names here (store/storage.js serializes
+# point.players as-is), so both are matched — and a name with no ID beside it
+# is only the erased player's when no live player in the same game claims it
+# (PlayerScrubber._claimed_names).
 # ``substitutedInPlayers`` is likewise absent from the spec table but is
 # written by the same serializer as ``substitutedOutPlayers``.
 _POINT_REF_LISTS = ("players", "substitutedOutPlayers", "substitutedInPlayers")
@@ -273,15 +276,64 @@ class PlayerScrubber:
         self.tombstone_id = tombstone_id
         self.tombstone_name = tombstone_name
         self.name_only_matches = 0
+        # Display names that, in the document being scrubbed, belong to a
+        # live player with a different ID. Set per document by scrub_game /
+        # scrub_team; see _claimed_names.
+        self._claimed: set = set()
 
     # -- predicates --------------------------------------------------------
 
     def _is_id(self, value: Any) -> bool:
-        return isinstance(value, str) and value == self.player_id
+        # The inbound guard builds a scrubber from a bare deny-listed string
+        # and passes it as both ID and name (see _scrubbers_for), so a name
+        # can reach this predicate as an "ID". A claimed name is never one.
+        return (isinstance(value, str) and value == self.player_id
+                and value not in self._claimed)
 
     def _is_name(self, value: Any) -> bool:
         """True for any string this player is displayed as (name or nickname)."""
-        return isinstance(value, str) and value in self._display_names
+        return (isinstance(value, str) and value in self._display_names
+                and value not in self._claimed)
+
+    def _claimed_names(self, players: Iterable[Any]) -> set:
+        """Display names held by someone other than this player.
+
+        Point lineups, pendingNextLine and team lines store bare display
+        names, with no ID beside them to gate on. When the same document
+        identifies a live player by a different ID who goes by that name, the
+        name is theirs, not the erased person's: erasing one team's "Cyrus"
+        must not rewrite another team's Cyrus out of every lineup he plays
+        (it did, 2026-10-03). A document where an erased player and a live
+        teammate share a display name keeps that name in name-only fields;
+        the name then identifies the live teammate as much as anyone, and the
+        ID-bearing fields are still scrubbed.
+        """
+        claimed = set()
+        for player in players or []:
+            if not isinstance(player, dict):
+                continue
+            pid = player.get("id")
+            if not isinstance(pid, str) or not pid or pid == self.player_id:
+                continue
+            if pid.startswith(TOMBSTONE_PREFIX):
+                continue
+            for key in ("name", "nickname"):
+                value = player.get(key)
+                if isinstance(value, str) and value:
+                    claimed.add(value)
+        return claimed
+
+    def _is_entry(self, player: Any) -> bool:
+        """Does an inline player record (id/name) refer to this player?
+
+        A present ID decides, exactly as for events; the name decides only
+        for an ID-less legacy record.
+        """
+        if not isinstance(player, dict):
+            return False
+        if player.get("id"):
+            return self._is_id(player.get("id"))
+        return self._is_name(player.get("name"))
 
     def needles(self) -> List[bytes]:
         """Byte needles for the cheap pre-parse file filter.
@@ -432,9 +484,20 @@ class PlayerScrubber:
         if not isinstance(game, dict):
             return False
 
+        snapshot = game.get("rosterSnapshot")
+        # Read the claims before the snapshot is scrubbed: the scrub is what
+        # would turn this player's own entry into a tombstone.
+        outer = self._claimed
+        self._claimed = outer | self._claimed_names(
+            snapshot.get("players") if isinstance(snapshot, dict) else None)
+        try:
+            return self._scrub_game_document(game, snapshot)
+        finally:
+            self._claimed = outer
+
+    def _scrub_game_document(self, game: dict, snapshot: Any) -> bool:
         changed = False
 
-        snapshot = game.get("rosterSnapshot")
         if isinstance(snapshot, dict):
             changed |= self.scrub_roster_snapshot(snapshot)
 
@@ -482,11 +545,28 @@ class PlayerScrubber:
 
     # -- team documents ----------------------------------------------------
 
-    def scrub_team(self, team: dict) -> bool:
-        """Drop the player from a team's roster, its lines, and legacy blobs."""
+    def scrub_team(self, team: dict, roster: Optional[Iterable[Any]] = None) -> bool:
+        """Drop the player from a team's roster, its lines, and legacy blobs.
+
+        ``roster`` is the team's live player records ({id, name, nickname}),
+        which the pure scrub cannot load itself. Lines hold bare display
+        names, so without it a teammate who shares an erased player's name
+        is dropped from every line (see _claimed_names).
+        """
         if not isinstance(team, dict):
             return False
 
+        legacy = team.get("teamRoster")
+        outer = self._claimed
+        self._claimed = (outer
+                         | self._claimed_names(roster)
+                         | self._claimed_names(legacy if isinstance(legacy, list) else None))
+        try:
+            return self._scrub_team_document(team, legacy)
+        finally:
+            self._claimed = outer
+
+    def _scrub_team_document(self, team: dict, roster: Any) -> bool:
         changed = self._drop_from_id_list(team, "playerIds")
 
         for line in team.get("lines") or []:
@@ -498,13 +578,8 @@ class PlayerScrubber:
         # and ``games`` (full game documents). Current production team files
         # carry neither, but a stale client could put a name here, and a name
         # that survives in one file is a failed erasure.
-        roster = team.get("teamRoster")
         if isinstance(roster, list):
-            kept = [
-                p for p in roster
-                if not (isinstance(p, dict)
-                        and (self._is_id(p.get("id")) or self._is_name(p.get("name"))))
-            ]
+            kept = [p for p in roster if not self._is_entry(p)]
             if len(kept) != len(roster):
                 team["teamRoster"] = kept
                 changed = True
@@ -531,11 +606,7 @@ class PlayerScrubber:
         # reach players/, but their IDs embed a name just the same.
         pickups = roster.get("pickupPlayers")
         if isinstance(pickups, list):
-            kept = [
-                p for p in pickups
-                if not (isinstance(p, dict)
-                        and (self._is_id(p.get("id")) or self._is_name(p.get("name"))))
-            ]
+            kept = [p for p in pickups if not self._is_entry(p)]
             if len(kept) != len(pickups):
                 roster["pickupPlayers"] = kept
                 changed = True
@@ -555,6 +626,23 @@ def _writable_dir(path: Path) -> bool:
     on the file itself.
     """
     return os.access(str(path.parent), os.W_OK | os.X_OK)
+
+
+def _live_roster(team: dict) -> List[dict]:
+    """The team's player records, for the line-name claims in scrub_team.
+
+    Missing or unreadable records are skipped: a player who cannot be loaded
+    cannot claim a name, which errs toward scrubbing.
+    """
+    records = []
+    for pid in (team.get("playerIds") or []) if isinstance(team, dict) else []:
+        if not isinstance(pid, str):
+            continue
+        try:
+            records.append(player_storage.get_player(pid))
+        except Exception:
+            continue
+    return records
 
 
 def _scrub_file(path: Path, scrubber: PlayerScrubber, kind: str,
@@ -577,7 +665,7 @@ def _scrub_file(path: Path, scrubber: PlayerScrubber, kind: str,
     if kind == "game":
         changed = scrubber.scrub_game(document)
     elif kind == "team":
-        changed = scrubber.scrub_team(document)
+        changed = scrubber.scrub_team(document, _live_roster(document))
     elif kind == "event":
         changed = scrubber.scrub_tournament_event(document)
     else:  # pragma: no cover - programming error
@@ -779,8 +867,10 @@ def strip_erased_from_team(team_data: dict) -> int:
     if not hits:
         return 0
 
+    roster = [p for p in _live_roster(team_data)
+              if isinstance(p, dict) and p.get("id") not in hits]
     for scrubber in _scrubbers_for(hits):
-        scrubber.scrub_team(team_data)
+        scrubber.scrub_team(team_data, roster)
 
     logger.warning(
         "ERASURE GUARD: an inbound team write carried %d erased player "
