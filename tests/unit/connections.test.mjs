@@ -104,6 +104,17 @@ test('per-player involvement counts passes thrown and caught, assists and goals'
     assert.deepEqual(conn.players.map(p => p.name), ['Bob', 'Charlie', 'Alice', 'Dana']);
 });
 
+test('an explicit assist holder takes the assist from the thrower; the pair keeps the goal', () => {
+    const conn = buildConnections(gameOf([[
+        throwTo('Alice', 'Bob'), throwTo('Bob', 'Charlie', { score_flag: true, assist: ref('Dana') }),
+    ]]));
+    assert.equal(pairOf(conn, 'Bob', 'Charlie').goals, 1);
+    const by = name => conn.players.find(p => p.name === name);
+    assert.equal(by('Bob').assists, 0);
+    assert.equal(by('Dana').assists, 1);
+    assert.equal(by('Charlie').goals, 1);
+});
+
 // ── refs and resolution ─────────────────────────────────────────────────
 
 test('legacy name-string refs resolve to the same pair as object refs', () => {

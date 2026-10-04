@@ -92,7 +92,7 @@ function applyUndoToGame(game, deps) {
             decrementStat(undoneEvent.thrower, 'completedPasses');
             if (undoneEvent.score_flag) {
                 decrementStat(undoneEvent.receiver, 'goals');
-                decrementStat(undoneEvent.thrower, 'assists');
+                decrementStat(undoneEvent.assist || undoneEvent.thrower, 'assists');
             }
         } else if (undoneEvent instanceof Defense) {
             // Handle Callahan: decrement defender's goals

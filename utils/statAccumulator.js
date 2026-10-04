@@ -131,13 +131,21 @@ function accumulateGameStats(game, stats) {
                             s.totalHucks++;
                             s.huckCompletions++;
                         }
-                        if (event.score_flag) s.assists++;
                     }
                     if (event.score_flag) {
                         const receiver = resolveRef(event.receiver);
                         if (receiver.name) ensurePlayer(receiver.id, receiver.name).goals++;
 
+                        // The assist goes to the explicit assist holder when
+                        // one was recorded, else to the thrower (Throw.assist
+                        // in store/models.js).
+                        const assister = resolveRef(event.assist || event.thrower);
+                        if (assister.name) ensurePlayer(assister.id, assister.name).assists++;
+
                         // Hockey assist: previous Throw in this possession.
+                        // It follows the throw sequence even when the assist
+                        // was credited to someone else (open question in
+                        // TODO.md: hockey assists as a judgment call).
                         // Walk back, skipping non-Throw events (Violations etc).
                         for (let j = idx - 1; j >= 0; j--) {
                             const prev = events[j];

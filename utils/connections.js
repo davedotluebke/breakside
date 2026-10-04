@@ -77,7 +77,12 @@ function accumulateConnections(game, acc) {
                     const tp = ensurePlayer(t.id, t.name), rp = ensurePlayer(r.id, r.name);
                     tp.thrown++; tp.attemptsThrown++;
                     rp.caught++; rp.attemptsCaught++;
-                    if (ev.score_flag) { tp.assists++; rp.goals++; }
+                    if (ev.score_flag) {
+                        rp.goals++;
+                        // Explicit assist holder when recorded, else the thrower.
+                        const a = ev.assist ? resolveRef(ev.assist) : t;
+                        if (a.id && a.name) ensurePlayer(a.id, a.name).assists++;
+                    }
                 } else if (ev.type === 'Turnover') {
                     const t = resolveRef(ev.thrower), r = resolveRef(ev.receiver);
                     if (!t.id || !r.id || !t.name || !r.name) return;

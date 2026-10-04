@@ -385,9 +385,11 @@ class Throw extends Event {
         // each {l, w} or null. Optional — only the Field tab populates them.
         this.from = from;   // {l, w} | null
         this.to = to;       // {l, w} | null
-        // Explicit assist attribution for scores. Defaults to null; the Field
-        // tab pre-fills it with the thrower for a goal and lets the coach edit
-        // it (e.g. to credit a hockey assist). A Player reference, like thrower.
+        // Explicit assist attribution for scores: a Player reference, like
+        // thrower, or null (the default) meaning the thrower holds the assist.
+        // Every reader credits `assist || thrower`. No entry surface sets it
+        // today: the Field tab's editable Assist chip was replaced by the
+        // shared Score Attribution dialog before it shipped.
         this.assist = assist;
     }
 

@@ -139,6 +139,20 @@ test('pop a scoring throw → goals/assists reverted, score reverted, lone posse
     assert.equal(game.points.length, 0);
 });
 
+test('pop a scoring throw with an explicit assist holder → that holder loses the assist, not the thrower', () => {
+    const alice = makePlayer('Alice'), bob = makePlayer('Bob'), dana = makePlayer('Dana');
+    const { deps } = makeDeps();
+    const scoreThrow = new Throw({ thrower: alice, receiver: bob, score: true, assist: dana });
+    const point = makePoint({ winner: Role.TEAM, possessions: [makePossession([scoreThrow])] });
+
+    applyUndoToGame(makeGame({ points: [point] }), deps);
+
+    assert.equal(alice.completedPasses, 2, 'the thrower still loses the completed pass');
+    assert.equal(alice.assists, 2, 'the thrower never held the assist');
+    assert.equal(dana.assists, 1);
+    assert.equal(bob.goals, 1);
+});
+
 test('stat clamping: decrements never go below zero', () => {
     const alice = makePlayer('Alice'), bob = makePlayer('Bob');
     alice.completedPasses = 0; alice.assists = 0; bob.goals = 0;

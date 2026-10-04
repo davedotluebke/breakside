@@ -674,8 +674,9 @@ Just listen. Transcription happens automatically.`;
                 evt.thrower.completedPasses = Math.max(0, evt.thrower.completedPasses - 1);
             }
             if (evt.score_flag) {
-                if (evt.thrower && typeof evt.thrower.assists === 'number') {
-                    evt.thrower.assists = Math.max(0, evt.thrower.assists - 1);
+                const assister = evt.assist || evt.thrower;
+                if (assister && typeof assister.assists === 'number') {
+                    assister.assists = Math.max(0, assister.assists - 1);
                 }
                 if (evt.receiver && typeof evt.receiver.goals === 'number') {
                     evt.receiver.goals = Math.max(0, evt.receiver.goals - 1);
