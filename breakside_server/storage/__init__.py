@@ -116,6 +116,7 @@ from .event_storage import (
     event_exists,
     list_team_events,
     add_game_to_event,
+    remove_game_from_event,
 )
 
 from .mail_storage import (
@@ -296,6 +297,7 @@ __all__ = [
     "event_exists",
     "list_team_events",
     "add_game_to_event",
+    "remove_game_from_event",
     # Mail (team mailing lists — storage/mail_storage.py)
     "list_mail_slugs",
     "resolve_mail_slug",

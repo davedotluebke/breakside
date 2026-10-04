@@ -31,6 +31,7 @@ from ._shared import (
     is_admin,
     list_all_games,
     list_game_versions,
+    remove_game_from_event,
     require_game_sync_coach,
     require_game_team_access,
     require_game_team_coach,
@@ -353,18 +354,34 @@ async def patch_game_end(
 @router.delete("/api/games/{game_id}")
 async def delete_game_endpoint(game_id: str, user: dict = Depends(require_game_team_coach)):
     """
-    Delete a game and all its versions.
+    Delete a game and all its versions, and drop it from its event's gameIds.
 
     Requires: Coach access to the game's team.
     """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
 
+    # Read the event link before the files go: sync adds a game to its
+    # event's gameIds, so delete takes it back out.
+    try:
+        event_id = get_game_current(game_id).get('eventId')
+    except (FileNotFoundError, ValueError):
+        event_id = None
+
     deleted = delete_game(game_id)
-    if deleted:
-        return {"status": "deleted", "game_id": game_id}
-    else:
+    if not deleted:
         raise HTTPException(status_code=500, detail="Failed to delete game")
+
+    if event_id and event_exists(event_id):
+        try:
+            remove_game_from_event(event_id, game_id)
+        except Exception:
+            # Non-fatal, as on sync: the game itself is gone
+            logger.warning(
+                "Could not remove game %s from event %s", game_id, event_id,
+                exc_info=True,
+            )
+    return {"status": "deleted", "game_id": game_id}
 
 
 # Version endpoints

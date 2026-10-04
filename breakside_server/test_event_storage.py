@@ -137,6 +137,40 @@ class TestEventStorage:
         add_game_to_event(event_id, "game-2")
         assert len(get_event(event_id)["gameIds"]) == 2
 
+    def test_remove_game_from_event(self, isolate_test_data):
+        from storage.event_storage import (
+            save_event, get_event, add_game_to_event, remove_game_from_event,
+        )
+        event_id = save_event({"name": "E", "teamId": "t1"})
+        add_game_to_event(event_id, "game-1")
+        add_game_to_event(event_id, "game-2")
+
+        assert remove_game_from_event(event_id, "game-1") is True
+        assert get_event(event_id)["gameIds"] == ["game-2"]
+
+        # Idempotent: an unlisted game, or an event that no longer exists
+        assert remove_game_from_event(event_id, "game-1") is False
+        assert get_event(event_id)["gameIds"] == ["game-2"]
+        assert remove_game_from_event("nonexistent-id", "game-2") is False
+
+    def test_update_keeps_stored_game_ids(self, isolate_test_data):
+        from storage.event_storage import (
+            save_event, get_event, update_event, add_game_to_event,
+        )
+        event_id = save_event({"name": "E", "teamId": "t1"})
+        add_game_to_event(event_id, "game-1")
+        add_game_to_event(event_id, "game-2")
+
+        # A client copy that still lists a deleted game and predates game-2
+        update_event(event_id, {"name": "E2", "teamId": "t1",
+                                "gameIds": ["game-1", "deleted-game"]})
+        updated = get_event(event_id)
+        assert updated["name"] == "E2"
+        assert updated["gameIds"] == ["game-1", "game-2"]
+
+        update_event(event_id, {"name": "E3", "teamId": "t1"})
+        assert get_event(event_id)["gameIds"] == ["game-1", "game-2"]
+
     def test_get_nonexistent(self, isolate_test_data):
         from storage.event_storage import get_event
         with pytest.raises(FileNotFoundError):

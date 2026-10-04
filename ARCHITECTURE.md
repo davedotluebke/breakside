@@ -1293,6 +1293,7 @@ Events carry an ordered, free-form **phases** list, and each game carries an opt
 
 - **Retroactive & backwards-compatible.** Both fields default to `[]` / `null`. Games predating the feature read back as `phase: null` ("Unassigned"); events without phases behave exactly as before. The schema-loose JSON storage round-trips both with no migration.
 - **Phase writes are metadata-only.** The per-game phase picker calls `PATCH /api/games/{id}/phase` rather than a full game sync, so labeling doesn't spawn a version backup of the whole game.
+- **`gameIds` belongs to the server.** Every game sync adds the game to its event's list (`add_game_to_event`), and `DELETE /api/games/{id}` takes it out (`remove_game_from_event`). `PUT /api/events/{id}` replaces the rest of the event but keeps the stored `gameIds` (`server_fields` in `storage/entity_store.py`), because the Event Settings dialog, the event roster save and a mid-game player add all send a whole event copied from an earlier fetch: a copy older than a delete would restore the deleted game, and one older than a new game's first sync would drop it. Clients never write the list.
 - **Stats are phase-aware.** `getEventPlayerStats`, `getEventRecord`, and `getEventTeamStats` take an optional `{ phase }` filter to scope aggregation to one phase ("Day 1 holds", "bracket-only hockey assists").
 
 #### Team list groups

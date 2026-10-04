@@ -32,6 +32,7 @@ def client(tmp_path_factory):
     from storage import (
         game_storage, team_storage, player_storage, user_storage,
         membership_storage, share_storage, invite_storage, index_storage,
+        event_storage,
     )
 
     patches = [
@@ -43,6 +44,7 @@ def client(tmp_path_factory):
         (config, "MEMBERSHIPS_DIR", data_dir / "memberships"),
         (config, "SHARES_DIR", data_dir / "shares"),
         (config, "INVITES_DIR", data_dir / "invites"),
+        (config, "EVENTS_DIR", data_dir / "events"),
         (config, "INDEX_FILE", data_dir / "index.json"),
         (game_storage, "GAMES_DIR", data_dir / "games"),
         (team_storage, "TEAMS_DIR", data_dir / "teams"),
@@ -54,6 +56,7 @@ def client(tmp_path_factory):
         (share_storage, "INDEX_FILE", data_dir / "shares" / "_index.json"),
         (invite_storage, "INVITES_DIR", data_dir / "invites"),
         (invite_storage, "INDEX_FILE", data_dir / "invites" / "_index.json"),
+        (event_storage, "EVENTS_DIR", data_dir / "events"),
         (index_storage, "INDEX_FILE", data_dir / "index.json"),
         (index_storage, "GAMES_DIR", data_dir / "games"),
         (index_storage, "TEAMS_DIR", data_dir / "teams"),
@@ -893,9 +896,86 @@ class TestGameAPI:
         
         # Get specific version
         response = client.get(f"/api/games/specific-version-game/versions/{timestamp}")
-        
+
         assert response.status_code == 200
         assert response.json()["version"] == 1
+
+
+# =============================================================================
+# Event gameIds
+# =============================================================================
+
+class TestEventGameIds:
+    """An event's gameIds follows its games: sync adds a game, delete removes
+    it, and a whole-event PUT can't change the list."""
+
+    def _event(self, client, name):
+        r = client.post("/api/events", json={"name": name, "teamId": "EventTeam-0001"})
+        assert r.status_code == 200
+        return r.json()["event_id"]
+
+    def _sync(self, client, game_id, event_id=None):
+        r = client.post(f"/api/games/{game_id}/sync", json={
+            "team": "EventTeam",
+            "teamId": "EventTeam-0001",
+            "opponent": "Opponent",
+            "eventId": event_id,
+            "points": []
+        })
+        assert r.status_code == 200
+
+    def _game_ids(self, client, event_id):
+        return client.get(f"/api/events/{event_id}").json()["gameIds"]
+
+    def test_delete_removes_the_game_from_its_event(self, client):
+        eid = self._event(client, "Delete Cup")
+        self._sync(client, "delete-cup-1", eid)
+        self._sync(client, "delete-cup-2", eid)
+        assert self._game_ids(client, eid) == ["delete-cup-1", "delete-cup-2"]
+
+        response = client.delete("/api/games/delete-cup-2")
+
+        assert response.status_code == 200
+        assert self._game_ids(client, eid) == ["delete-cup-1"]
+
+    def test_delete_non_event_game_leaves_events_alone(self, client):
+        eid = self._event(client, "Bystander Cup")
+        self._sync(client, "bystander-cup-1", eid)
+        self._sync(client, "standalone-game")
+
+        response = client.delete("/api/games/standalone-game")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "deleted"
+        assert client.get("/api/games/standalone-game").status_code == 404
+        assert self._game_ids(client, eid) == ["bystander-cup-1"]
+
+    def test_delete_game_whose_event_was_deleted(self, client):
+        eid = self._event(client, "Gone Cup")
+        self._sync(client, "gone-cup-1", eid)
+        assert client.delete(f"/api/events/{eid}").status_code == 200
+
+        response = client.delete("/api/games/gone-cup-1")
+
+        assert response.status_code == 200
+        assert client.get("/api/games/gone-cup-1").status_code == 404
+
+    def test_put_keeps_the_stored_game_ids(self, client):
+        """A coach's copy fetched before a delete, and before a new game's
+        first sync, neither puts the deleted game back nor drops the new one."""
+        eid = self._event(client, "Stale Cup")
+        self._sync(client, "stale-cup-1", eid)
+        self._sync(client, "stale-cup-2", eid)
+        stale = client.get(f"/api/events/{eid}").json()
+        client.delete("/api/games/stale-cup-2")
+        self._sync(client, "stale-cup-3", eid)
+
+        stale["name"] = "Stale Cup Renamed"
+        response = client.put(f"/api/events/{eid}", json=stale)
+
+        assert response.status_code == 200
+        assert response.json()["event"]["name"] == "Stale Cup Renamed"
+        assert response.json()["event"]["gameIds"] == ["stale-cup-1", "stale-cup-3"]
 
 
 # =============================================================================

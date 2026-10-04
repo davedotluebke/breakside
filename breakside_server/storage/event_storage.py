@@ -33,6 +33,11 @@ _store = JsonEntityStore(
     dir_getter=lambda: EVENTS_DIR,
     sort_key=lambda e: e.get('createdAt', ''),
     sort_reverse=True,
+    # gameIds belongs to the server: game sync adds a game, game delete
+    # removes it. PUT /api/events/{id} sends a whole event document, and a
+    # client copy fetched before a delete (or before a new game's first sync)
+    # would otherwise put a deleted game back, or drop a new one.
+    server_fields=('gameIds',),
     apply_defaults=_event_defaults,
 )
 
@@ -64,7 +69,7 @@ def list_events() -> List[dict]:
 
 
 def update_event(event_id: str, event_data: dict) -> str:
-    """Update an existing event."""
+    """Update an existing event. Its stored gameIds are kept (see _store)."""
     return _store.update(event_id, event_data)
 
 
@@ -94,3 +99,24 @@ def add_game_to_event(event_id: str, game_id: str) -> None:
         if game_id not in event.get('gameIds', []):
             event.setdefault('gameIds', []).append(game_id)
             save_event(event, event_id)
+
+
+def remove_game_from_event(event_id: str, game_id: str) -> bool:
+    """Remove a game ID from an event's gameIds list (idempotent).
+
+    The reverse of add_game_to_event, for a deleted game. A missing event, or
+    one that doesn't list the game, is left alone.
+
+    Returns:
+        True if the event listed the game and was rewritten without it.
+    """
+    with entity_lock(f"event:{event_id}"):
+        if not event_exists(event_id):
+            return False
+        event = get_event(event_id)
+        game_ids = event.get('gameIds', [])
+        if game_id not in game_ids:
+            return False
+        event['gameIds'] = [gid for gid in game_ids if gid != game_id]
+        save_event(event, event_id)
+        return True

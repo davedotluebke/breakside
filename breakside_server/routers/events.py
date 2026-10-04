@@ -61,7 +61,11 @@ async def update_event_endpoint(
     event_data: Dict[str, Any] = Depends(get_json_body),
     user: dict = Depends(require_event_team_coach)
 ):
-    """Update an event. Requires coach access to the event's team."""
+    """Update an event. Requires coach access to the event's team.
+
+    The body replaces the stored event, except createdAt and gameIds, which
+    the server keeps (games join and leave an event through sync and delete).
+    """
     validate_id(event_id, "event_id")
     if not event_exists(event_id):
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")

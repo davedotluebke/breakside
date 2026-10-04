@@ -28,6 +28,7 @@ class JsonEntityStore:
         sort_key: Callable[[dict], object],
         sort_reverse: bool = False,
         strip_fields: tuple = (),
+        server_fields: tuple = (),
         apply_defaults: Optional[Callable[[dict], None]] = None,
     ):
         """
@@ -37,6 +38,9 @@ class JsonEntityStore:
             dir_getter: Zero-arg callable returning the storage directory.
             sort_key / sort_reverse: Ordering for :meth:`list`.
             strip_fields: Client-side-only fields removed on save.
+            server_fields: Fields the server maintains itself. :meth:`update`
+                keeps the stored values and ignores the caller's; server-side
+                writers change them through :meth:`save`.
             apply_defaults: Optional hook that fills required fields on save.
         """
         self.kind = kind
@@ -45,6 +49,7 @@ class JsonEntityStore:
         self._sort_key = sort_key
         self._sort_reverse = sort_reverse
         self._strip_fields = strip_fields
+        self._server_fields = server_fields
         self._apply_defaults = apply_defaults
 
     def _file(self, entity_id: str) -> Path:
@@ -156,19 +161,24 @@ class JsonEntityStore:
 
     def update(self, entity_id: str, data: dict) -> str:
         """
-        Update an existing entity, preserving its createdAt.
+        Update an existing entity, preserving its createdAt and server fields.
 
         Raises:
             FileNotFoundError: If the entity doesn't exist
         """
-        # Serialize the read (createdAt) + write so concurrent updates to the
-        # same entity can't interleave and lose each other.
+        # Serialize the read (createdAt, server fields) + write so concurrent
+        # updates to the same entity can't interleave and lose each other.
         with entity_lock(f"{self.key}:{entity_id}"):
             if not self.exists(entity_id):
                 raise FileNotFoundError(f"{self.kind} {entity_id} not found")
 
             existing = self.get(entity_id)
             data['createdAt'] = existing.get('createdAt', datetime.now().isoformat())
+            for field in self._server_fields:
+                if field in existing:
+                    data[field] = existing[field]
+                else:
+                    data.pop(field, None)
 
             return self.save(data, entity_id)
 
