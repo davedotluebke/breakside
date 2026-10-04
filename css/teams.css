@@ -969,6 +969,8 @@ body.scrimmage-dialog-open {
 #eventRosterTable input[type="checkbox"] {
     width: 20px;
     height: 20px;
+    margin: 0;  /* UA margins differ per browser; the column is a fixed 40px (css/tables.css) */
+    vertical-align: middle;
 }
 
 .no-games-message {

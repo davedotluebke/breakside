@@ -637,16 +637,26 @@ ul {
 }
 
 /* Sticky left columns: checkbox + name on event roster, name only on game summary */
+/* The checkbox column is pinned to exactly 40px (border-box) because the
+   name column's `left` must equal it. Left to size itself, the column took
+   its width from the checkbox's UA margins: about 39px on desktop Chrome but
+   about 32px on iOS Safari, which left a gap after the checkbox column and
+   slid the name column over the first stats column. The checkbox margin is
+   zeroed in css/teams.css for the same reason. */
 #eventRosterTable tr td:nth-child(1),
 #eventRosterTable tr th:nth-child(1) {
     position: sticky;
     left: 0;
     z-index: 1;
+    box-sizing: border-box;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
 }
 #eventRosterTable tr td:nth-child(2),
 #eventRosterTable tr th:nth-child(2) {
     position: sticky;
-    left: 40px;  /* width of checkbox column (30px + padding) */
+    left: 40px;  /* the pinned checkbox-column width above */
     z-index: 1;
     box-shadow: 2px 0 0 -1px var(--border-default);  /* subtle divider */
 }
