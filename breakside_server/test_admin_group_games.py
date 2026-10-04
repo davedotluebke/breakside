@@ -9,6 +9,7 @@ Run with: cd breakside_server && python -m pytest test_admin_group_games.py -v
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -58,6 +59,10 @@ def only_event(data_dir: Path):
     files = list((data_dir / "events").glob("*.json"))
     assert len(files) == 1, f"expected 1 event, found {len(files)}"
     return json.loads(files[0].read_text())
+
+
+def read_event(data_dir: Path, event_id: str):
+    return json.loads((data_dir / "events" / f"{event_id}.json").read_text())
 
 
 @pytest.fixture
@@ -138,6 +143,51 @@ def test_group_is_idempotent(data):
     assert ev["gameIds"] == ["g1", "g2"]
 
 
+def test_group_by_event_id_alone(data):
+    run(data, "group", "--team", "Team B", "--event", "SL", "--games", "g1", "--yes")
+    eid = only_event(data)["id"]
+
+    # No --event: the id names the event, for the dry run and for real.
+    r = run(data, "group", "--team", "Team B", "--event-id", eid, "--games", "g2")
+    assert r.returncode == 0, r.stderr
+    assert "(existing)" in r.stdout and "Dry run" in r.stdout
+
+    r = run(data, "group", "--team", "Team B", "--event-id", eid,
+            "--games", "g2", "--yes")
+    assert r.returncode == 0, r.stderr
+    assert only_event(data)["gameIds"] == ["g1", "g2"]
+    assert read_game_event(data, "g2") == eid
+
+
+def test_group_needs_event_or_event_id(data):
+    r = run(data, "group", "--team", "Team B", "--games", "g1", "--yes")
+    assert r.returncode != 0
+    assert "--event" in r.stderr
+    assert read_game_event(data, "g1") is None
+
+
+def test_deleted_game_listed_as_missing(data):
+    # An event still listing a game deleted before deletes dropped their ids.
+    run(data, "group", "--team", "Team B", "--event", "SL", "--games", "g1", "--yes")
+    eid = only_event(data)["id"]
+    shutil.rmtree(data / "games" / "g1")
+
+    r = run(data, "group", "--team", "Team B", "--event", "SL",
+            "--games", "g2", "--yes")
+    assert r.returncode == 0, r.stderr
+    assert "g1  MISSING" in r.stdout
+    assert f"unlink --event {eid} --games g1 --yes" in r.stdout
+
+    r = run(data, "events", "--team", "Team B")
+    assert r.returncode == 0, r.stderr
+    assert "g1  MISSING" in r.stdout
+
+    # The suggested unlink drops it.
+    r = run(data, "unlink", "--event", eid, "--games", "g1", "--yes")
+    assert r.returncode == 0, r.stderr
+    assert only_event(data)["gameIds"] == ["g2"]
+
+
 def test_refuses_cross_team_game(data):
     r = run(data, "group", "--team", "Team B", "--event", "SL",
             "--games", "g1", "other", "--yes")
@@ -160,7 +210,11 @@ def test_conflict_requires_force(data):
     r = run(data, "group", "--team", "Team B", "--event", "Second",
             "--games", "g1", "--force", "--yes")
     assert r.returncode == 0, r.stderr
-    assert read_game_event(data, "g1") != eid
+    second = read_game_event(data, "g1")
+    assert second != eid
+    # Moved, not copied: the old event no longer lists it.
+    assert read_event(data, eid)["gameIds"] == []
+    assert read_event(data, second)["gameIds"] == ["g1"]
 
 
 def test_unlink_and_delete(data):

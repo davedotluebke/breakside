@@ -23,7 +23,7 @@ SAFETY
     - `group` and `unlink` print a plan and require --yes to actually write
       (otherwise they run as a dry run).
     - `group` refuses to move a game that is already in a *different* event
-      unless you pass --force.
+      unless you pass --force (which also takes it off the old event).
 
 USAGE
     # always run from inside the breakside_server/ directory, or anywhere with
@@ -43,6 +43,10 @@ USAGE
     python3 admin_group_games.py group --team "Team B" \
         --event "Summer League - June 19" \
         --games <gameId1> <gameId2> --yes
+
+    # add a game to an existing event by its id (no --event needed):
+    python3 admin_group_games.py group --team "Team B" \
+        --event-id <eventId> --games <gameId3> --yes
 
     # undo (useful when testing on the throwaway "Offline Test" team):
     python3 admin_group_games.py unlink --event <eventId> --all --delete-event --yes
@@ -169,7 +173,8 @@ def cmd_events(args):
         print(f"  {e.get('id'):<28} {e.get('name'):<30} "
               f"[{e.get('status', '?')}]  {len(gids)} game(s)")
         for gid in gids:
-            print(f"      {gid}")
+            missing = "" if game_storage.game_exists(gid) else "  MISSING (game deleted)"
+            print(f"      {gid}{missing}")
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +241,8 @@ def _resolve_target_event(team_id: str, event_name: str, event_id: str):
 
 
 def cmd_group(args):
+    if not (args.event or args.event_id):
+        _die("specify --event <name> or --event-id <id>")
     team = resolve_team(args.team)
     team_id = team["id"]
     event, will_create = _resolve_target_event(team_id, args.event, args.event_id)
@@ -311,21 +318,36 @@ def cmd_group(args):
             event.setdefault("phases", []).append(args.phase)
             event_storage.save_event(event, target_event_id)
 
+    moved_from = dict(conflicts)
     for gid in args.games:
         updates = {"eventId": target_event_id}
         if args.phase:
             updates["phase"] = args.phase
         game_storage.update_game_metadata(gid, updates)
         event_storage.add_game_to_event(target_event_id, gid)
-        print(f"  linked {gid}")
+        if gid in moved_from:
+            event_storage.remove_game_from_event(moved_from[gid], gid)
+            print(f"  linked {gid}  (removed from {moved_from[gid]})")
+        else:
+            print(f"  linked {gid}")
 
-    # Verify.
+    # Verify. The event may list games deleted before game deletes started
+    # removing their ids (unlink drops those).
     final = event_storage.get_event(target_event_id)
     print(f"\nDone. Event '{final.get('name')}' ({target_event_id}) now has "
           f"{len(final.get('gameIds', []))} game(s):")
+    missing = []
     for gid in final.get("gameIds", []):
+        if not game_storage.game_exists(gid):
+            missing.append(gid)
+            print(f"    {gid}  MISSING (game deleted)")
+            continue
         cur = game_storage.get_game_current(gid)
         print(f"    {gid}  eventId={cur.get('eventId')}  phase={cur.get('phase')}")
+    if missing:
+        print(f"\nDrop the missing game(s) with:\n"
+              f"    python3 admin_group_games.py unlink --event {target_event_id} "
+              f"--games {' '.join(missing)} --yes")
 
 
 # ---------------------------------------------------------------------------
@@ -398,8 +420,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     pgr = sub.add_parser("group", help="create/reuse an event and link games")
     pgr.add_argument("--team", required=True, help="team name or id")
-    pgr.add_argument("--event", required=True, help="event name")
-    pgr.add_argument("--event-id", help="reuse this exact event id")
+    pgr.add_argument("--event",
+                     help="event name: the team's event of that name, else a new one")
+    pgr.add_argument("--event-id",
+                     help="reuse this exact event id (then --event is not needed)")
     pgr.add_argument("--games", nargs="+", required=True, help="game ids to add")
     pgr.add_argument("--phase", help="optional phase label for these games")
     pgr.add_argument("--force", action="store_true",
