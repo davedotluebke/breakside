@@ -193,7 +193,15 @@ function accumulateGameStats(game, stats) {
                     }
                 } else if (event.type === 'Defense') {
                     const defender = resolveRef(event.defender);
-                    if (defender.name) ensurePlayer(defender.id, defender.name).dPlays++;
+                    if (defender.name) {
+                        const s = ensurePlayer(defender.id, defender.name);
+                        s.dPlays++;
+                        // A Callahan is the point's goal: a D-play and a
+                        // score, with no assist (nobody on our team threw
+                        // it). The live counters already credit it
+                        // (pbpPossession.js, gameScreenEvents.js).
+                        if (event.Callahan_flag) s.goals++;
+                    }
                 } else if (event.type === 'Pull') {
                     const puller = resolveRef(event.puller);
                     if (puller.name) {

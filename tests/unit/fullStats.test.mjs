@@ -227,6 +227,24 @@ test('with a dropped pull, throwaways + drops still equals turnovers', () => {
 
 // ── aggregation ─────────────────────────────────────────────────────────
 
+test('a Callahan is a goal and a D-play for the defender, with no assist', () => {
+    const stats = statsFor([
+        { type: 'Defense', defender: ALICE, Callahan_flag: true },
+    ]);
+    assert.equal(stats[ALICE.id].goals, 1);
+    assert.equal(stats[ALICE.id].dPlays, 1);
+    assert.equal(stats[ALICE.id].assists, 0);
+    assert.equal(stats[BOB.id].assists, 0);
+});
+
+test('an ordinary block is a D-play but not a goal', () => {
+    const stats = statsFor([
+        { type: 'Defense', defender: ALICE, block_flag: true },
+    ]);
+    assert.equal(stats[ALICE.id].goals, 0);
+    assert.equal(stats[ALICE.id].dPlays, 1);
+});
+
 test('sumPlayerStats adds pull catches and pull drops', () => {
     const s = statsFor([
         { type: 'Pickup', receiver: ALICE, pullCatch_flag: true },
