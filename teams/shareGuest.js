@@ -280,16 +280,17 @@ function handleShareDead(status) {
         return;
     }
 
+    // A dead link answers before saying whether it opened a game or an
+    // event, so the wording names neither.
     const title = $('shareErrorTitle');
     const message = $('shareErrorMessage');
-    const what = eventShare ? 'event' : 'game';
     if (status === 410) {
         title.textContent = 'This link has expired';
         message.textContent =
-            `The coach’s share link for this ${what} has expired or been turned off. ` +
+            'The coach’s share link has expired or been turned off. ' +
             'Ask them for a fresh link.';
     } else {
-        title.textContent = eventShare ? 'Event not found' : 'Game not found';
+        title.textContent = 'Link not found';
         message.textContent =
             'This share link isn’t valid — check that the whole link was copied.';
     }
