@@ -1,13 +1,16 @@
 """
-Game share link storage module.
+Share link storage module.
 
-Manages share links that allow public (no-auth) access to specific games.
-Share links can have optional expiration dates and can be revoked.
+Manages share links that allow public (no-auth) access to a specific game or
+to a whole event (every game in it, plus the event's stats). Share links can
+have optional expiration dates and can be revoked.
 
 Share link structure:
 {
     "id": "share_abc123def456",
-    "gameId": "2025-12-07_Sample-Team_vs_Bad-Guys_...",
+    "kind": "game",               # "game" | "event" (absent on pre-2026-10 links = game)
+    "gameId": "2025-12-07_Sample-Team_vs_Bad-Guys_...",   # game shares
+    "eventId": "Fall-Classic-7y0n",                       # event shares
     "hash": "a8f3e2b1c9d4",      # 12-char random hex for URL
     "teamId": "Sample-Team-7y0n", # Denormalized for permission checks
     "createdBy": "user-uuid",
@@ -18,13 +21,17 @@ Share link structure:
     "listed": false               # opt-in to the public landing-page list
 }
 
+An event share covers whichever games the event lists at the time of each
+request, so a game added to the event after the link was made is reachable
+through it, and a game removed from the event is not.
+
 "listed" is deliberately separate from the link itself existing: a coach
 sharing a URL with parents is NOT publishing the game. Only listed=true
 shares appear in the public games endpoint. Shares created before the flag
 existed lack the key — treated as unlisted.
 
 Storage: One JSON file per share, stored as {share_id}.json
-Also maintain an index file for fast lookups by hash and game.
+Also maintain an index file for fast lookups by hash, game and event.
 """
 
 import json
@@ -46,7 +53,7 @@ INDEX_FILE = SHARES_DIR / "_index.json"
 _index = JsonIndex(
     path_getter=lambda: INDEX_FILE,
     lock_key="share-index",
-    empty=lambda: {"byHash": {}, "byGame": {}},
+    empty=lambda: {"byHash": {}, "byGame": {}, "byEvent": {}},
 )
 
 
@@ -65,10 +72,22 @@ def _generate_share_hash() -> str:
     return secrets.token_hex(6)
 
 
+def share_kind(share: Dict[str, Any]) -> str:
+    """'event' for an event share, else 'game' (links made before the field existed)."""
+    if share.get("kind") == "event" or (share.get("eventId") and not share.get("gameId")):
+        return "event"
+    return "game"
+
+
 def _index_entry_add(index: Dict[str, Any], share: Dict[str, Any]) -> None:
-    """Record one share in the index (byHash + byGame)."""
+    """Record one share in the index (byHash + byGame / byEvent)."""
     index["byHash"][share["hash"]] = share["id"]
-    add_to_bucket(index, "byGame", share["gameId"], share["id"])
+    # An index written before event shares existed has no byEvent bucket.
+    index.setdefault("byEvent", {})
+    if share_kind(share) == "event":
+        add_to_bucket(index, "byEvent", share["eventId"], share["id"])
+    else:
+        add_to_bucket(index, "byGame", share["gameId"], share["id"])
 
 
 def _update_index_add(share: Dict[str, Any]) -> None:
@@ -81,7 +100,11 @@ def _update_index_remove(share: Dict[str, Any]) -> None:
     """Remove a share from the index (serialized read-modify-write)."""
     with _index.update() as index:
         index["byHash"].pop(share["hash"], None)
-        remove_from_bucket(index, "byGame", share["gameId"], share["id"])
+        index.setdefault("byEvent", {})
+        if share_kind(share) == "event":
+            remove_from_bucket(index, "byEvent", share["eventId"], share["id"])
+        else:
+            remove_from_bucket(index, "byGame", share["gameId"], share["id"])
 
 
 def share_exists(share_id: str) -> bool:
@@ -170,6 +193,41 @@ def create_share_link(
     Returns:
         The created share link dict
     """
+    return _write_new_share(
+        {"kind": "game", "gameId": game_id, "listed": bool(listed)},
+        team_id=team_id, created_by=created_by, expires_days=expires_days,
+    )
+
+
+def create_event_share_link(
+    event_id: str,
+    team_id: str,
+    created_by: str,
+    expires_days: int = 31,
+) -> Dict[str, Any]:
+    """
+    Create a new share link for an event: every game the event lists, and
+    the event's stats. Never listed publicly (the listing is a per-game
+    opt-in, and disabled anyway — see routers/shares.py).
+
+    Args:
+        event_id: The event ID
+        team_id: The team ID (denormalized for permission checks)
+        created_by: User ID of who created the share
+        expires_days: Days until expiration (1-365), or 0 for no expiry
+
+    Returns:
+        The created share link dict
+    """
+    return _write_new_share(
+        {"kind": "event", "eventId": event_id, "listed": False},
+        team_id=team_id, created_by=created_by, expires_days=expires_days,
+    )
+
+
+def _write_new_share(subject: Dict[str, Any], *, team_id: str, created_by: str,
+                     expires_days: int) -> Dict[str, Any]:
+    """Mint, store and index a share; ``subject`` names what it opens."""
     now = datetime.now(timezone.utc)
 
     # Calculate expiry
@@ -179,7 +237,7 @@ def create_share_link(
 
     share = {
         "id": _generate_share_id(),
-        "gameId": game_id,
+        **subject,
         "hash": _generate_share_hash(),
         "teamId": team_id,
         "createdBy": created_by,
@@ -187,7 +245,6 @@ def create_share_link(
         "expiresAt": expires_at,
         "revokedAt": None,
         "revokedBy": None,
-        "listed": bool(listed),
     }
 
     # Ensure directory exists
@@ -243,6 +300,16 @@ def list_game_shares(game_id: str) -> List[Dict[str, Any]]:
     # Sort by creation date, newest first
     shares.sort(key=lambda s: s.get("createdAt", ""), reverse=True)
 
+    return shares
+
+
+def list_event_shares(event_id: str) -> List[Dict[str, Any]]:
+    """All share links for an event (including revoked ones), newest first."""
+    index = _index.load()
+    share_ids = index.get("byEvent", {}).get(event_id, [])
+
+    shares = [s for s in (get_share(sid) for sid in share_ids) if s]
+    shares.sort(key=lambda s: s.get("createdAt", ""), reverse=True)
     return shares
 
 

@@ -63,6 +63,18 @@ def get_event(event_id: str) -> dict:
     return _store.get(event_id)
 
 
+def get_event_mtime_ns(event_id: str) -> Optional[int]:
+    """Change stamp for an event: its file's mtime in ns, or None if missing.
+
+    The event-share poll folds this in with the games' stamps so a renamed
+    event or a changed phase list reaches a guest without a reload.
+    """
+    try:
+        return _store._file(event_id).stat().st_mtime_ns
+    except (FileNotFoundError, ValueError):
+        return None
+
+
 def list_events() -> List[dict]:
     """List all events, newest first."""
     return _store.list()

@@ -607,3 +607,27 @@ class TestTeamEraserSeam:
             account_deletion.set_team_eraser(
                 None if original is account_deletion._fallback_erase_team else original
             )
+
+
+class TestTeamEraseCascade:
+    """The team cascade (``_fallback_erase_team``) on a still-seeded team."""
+
+    def test_event_shares_go_with_an_erased_team(self, seeded):
+        """A share link on the erased team's event is the team's record, not
+        a bystander's: the cascade removes it along with the game shares."""
+        import account_deletion
+        from storage import event_storage, share_storage
+
+        event_id = event_storage.list_team_events(seeded["solo_team"])[0]["id"]
+        share = share_storage.create_event_share_link(
+            event_id, seeded["solo_team"], SOLO["id"])
+        assert share_storage.get_share_by_hash(share["hash"]) is not None
+
+        counts = account_deletion._fallback_erase_team(seeded["solo_team"], dry_run=True)
+        assert counts["shares"] == 1
+        assert share_storage.get_share_by_hash(share["hash"]) is not None, "dry run deletes nothing"
+
+        counts = account_deletion._fallback_erase_team(seeded["solo_team"])
+        assert counts["shares"] == 1
+        assert share_storage.get_share_by_hash(share["hash"]) is None
+        assert share_storage.list_event_shares(event_id) == []

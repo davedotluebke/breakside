@@ -15,6 +15,10 @@ end-to-end contract added when sharing was wired up for real:
 - GET  /api/public/games lists only valid listed shares, one card per game
 - GET  /view/{hash} 302s to the canonical www share URL (the PWA renders
   share links as a guest session; this host serves no copy of the app)
+- Event shares (2026-10): POST /api/events/{id}/share mints the same kind of
+  URL; GET /api/share/{hash} then answers with the event + a card per game,
+  and GET /api/share/{hash}/games/{game_id} serves each listed game through
+  the game projection. A game the event does not list is 404 through it.
 
 Run: cd breakside_server && python -m pytest test_shares.py -v
 """
@@ -41,7 +45,7 @@ def seeded(tmp_path_factory):
     import config
     from storage import (
         game_storage, team_storage, player_storage, membership_storage,
-        share_storage, index_storage,
+        share_storage, index_storage, event_storage,
     )
 
     patches = [
@@ -52,8 +56,10 @@ def seeded(tmp_path_factory):
         (config, "USERS_DIR", data_dir / "users"),
         (config, "MEMBERSHIPS_DIR", data_dir / "memberships"),
         (config, "SHARES_DIR", data_dir / "shares"),
+        (config, "EVENTS_DIR", data_dir / "events"),
         (config, "INDEX_FILE", data_dir / "index.json"),
         (game_storage, "GAMES_DIR", data_dir / "games"),
+        (event_storage, "EVENTS_DIR", data_dir / "events"),
         (team_storage, "TEAMS_DIR", data_dir / "teams"),
         (player_storage, "PLAYERS_DIR", data_dir / "players"),
         (membership_storage, "MEMBERSHIPS_DIR", data_dir / "memberships"),
@@ -77,9 +83,9 @@ def seeded(tmp_path_factory):
     membership_storage.create_membership(
         team_id=team_id, user_id=VIEWER["id"], role="viewer")
 
-    for gid, opponent, ended in (
-        (GAME_ID, "Rivals", None),
-        (GAME_ID_2, "Others", "2026-07-02T20:00:00Z"),
+    for gid, opponent, started, ended, phase in (
+        (GAME_ID, "Rivals", "2026-07-01T18:00:00Z", None, "Pool"),
+        (GAME_ID_2, "Others", "2026-07-02T18:00:00Z", "2026-07-02T20:00:00Z", "Bracket"),
     ):
         game_storage.save_game_version(gid, {
             "id": gid,
@@ -87,13 +93,25 @@ def seeded(tmp_path_factory):
             "team": "Share Test Team",
             "opponent": opponent,
             "scores": {"team": 3, "opponent": 1},
-            "gameStartTimestamp": "2026-07-01T18:00:00Z",
+            "gameStartTimestamp": started,
             "gameEndTimestamp": ended,
+            "phase": phase,
             "points": [],
         })
     index_storage.rebuild_index()
 
-    yield {"data_dir": data_dir, "team_id": team_id}
+    # Both games in one event (the second is listed first, so the public
+    # cards' chronological order is something the test can observe).
+    event_id = event_storage.save_event({
+        "name": "Fall Classic",
+        "teamId": team_id,
+        "gameIds": [GAME_ID_2, GAME_ID],
+        "phases": ["Pool", "Bracket"],
+        "roster": {"playerIds": ["Secret-0001"], "pickupPlayers": []},
+        "defaults": {"playersPerSide": 7},
+    })
+
+    yield {"data_dir": data_dir, "team_id": team_id, "event_id": event_id}
 
     for mod, name, original in saved:
         setattr(mod, name, original)
@@ -142,6 +160,12 @@ def _mint(game_id=GAME_ID, listed=False, **kwargs):
     return share_storage.create_share_link(
         game_id=game_id, team_id="Share-Test-Team", created_by=COACH["id"],
         listed=listed, **kwargs)
+
+
+def _mint_event(event_id, team_id="Share-Test-Team", **kwargs):
+    from storage import share_storage
+    return share_storage.create_event_share_link(
+        event_id=event_id, team_id=team_id, created_by=COACH["id"], **kwargs)
 
 
 def _expire(share):
@@ -575,3 +599,232 @@ class TestPublicGameProjection:
         from routers.shares import _public_game_view
         view = _public_game_view({"team": "A", "opponent": "B", "points": []})
         assert "rosterSnapshot" not in view
+
+
+# =============================================================================
+# Event shares
+# =============================================================================
+
+GAME_CARD_KEYS = {
+    "id", "phase", "team", "opponent", "scores",
+    "gameStartTimestamp", "gameEndTimestamp", "version", "updatedAt",
+}
+
+
+class TestEventShares:
+    """One link for a whole event: the event's stats page plus every game the
+    event lists, reached through the same public projection a game share
+    uses."""
+
+    def test_coach_mints_an_event_link(self, client, seeded):
+        _as(COACH)
+        r = client.post(f"/api/events/{seeded['event_id']}/share")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["url"] == f"https://www.breakside.pro/view/{body['share']['hash']}"
+        assert body["share"]["kind"] == "event"
+        assert body["share"]["eventId"] == seeded["event_id"]
+        assert "gameId" not in body["share"]
+        assert body["share"]["listed"] is False
+
+    def test_event_links_default_to_a_month(self, client, seeded):
+        _as(COACH)
+        share = client.post(f"/api/events/{seeded['event_id']}/share").json()["share"]
+        created = datetime.fromisoformat(share["createdAt"].replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(share["expiresAt"].replace("Z", "+00:00"))
+        assert (expires - created).days == 31
+
+    def test_viewer_cannot_create_an_event_link(self, client, seeded):
+        _as(VIEWER)
+        assert client.post(f"/api/events/{seeded['event_id']}/share").status_code == 403
+
+    def test_unknown_event_404(self, client, seeded):
+        _as(COACH)
+        assert client.post("/api/events/No-Such-Event-0000/share").status_code == 404
+
+    def test_event_share_list_carries_urls_and_validity(self, client, seeded):
+        from storage import share_storage
+        share = _mint_event(seeded["event_id"])
+        revoked = _mint_event(seeded["event_id"])
+        share_storage.revoke_share(revoked["id"], COACH["id"])
+        _as(COACH)
+        r = client.get(f"/api/events/{seeded['event_id']}/shares")
+        assert r.status_code == 200
+        rows = {s["id"]: s for s in r.json()["shares"]}
+        assert rows[share["id"]]["isValid"] is True
+        assert rows[share["id"]]["url"] == f"https://www.breakside.pro/view/{share['hash']}"
+        assert rows[revoked["id"]]["isValid"] is False
+        # Event shares never appear in a game's list, and vice versa.
+        assert all(s["kind"] == "event" for s in rows.values())
+        assert client.get(f"/api/games/{GAME_ID}/shares").json()["count"] == 0
+
+    def test_public_event_payload_is_the_allowlist(self, client, seeded):
+        share = _mint_event(seeded["event_id"])
+        _anon()
+        r = client.get(f"/api/share/{share['hash']}")
+        assert r.status_code == 200
+        body = r.json()
+        assert set(body) == {"event", "games", "version", "viewerStatsLevel", "shareInfo"}
+        # The event document's roster, defaults and ids stay private.
+        assert body["event"] == {"name": "Fall Classic", "phases": ["Pool", "Bracket"], "status": "open"}
+        assert body["shareInfo"]["expiresAt"] == share["expiresAt"]
+        assert body["version"]
+        cards = body["games"]
+        assert [c["id"] for c in cards] == [GAME_ID, GAME_ID_2], "chronological, not gameIds order"
+        for card in cards:
+            assert set(card) == GAME_CARD_KEYS, card
+        assert cards[0]["phase"] == "Pool"
+        assert cards[0]["scores"] == {"team": 3, "opponent": 1}
+        assert cards[0]["gameEndTimestamp"] is None
+        assert cards[1]["gameEndTimestamp"] == "2026-07-02T20:00:00Z"
+
+    def test_games_endpoint_serves_the_game_projection(self, client, seeded):
+        share = _mint_event(seeded["event_id"])
+        _anon()
+        r = client.get(f"/api/share/{share['hash']}/games/{GAME_ID}")
+        assert r.status_code == 200
+        body = r.json()
+        assert set(body) == {"game", "version", "viewerStatsLevel", "shareInfo"}
+        # Exactly what a game share publishes — same allowlist, same keys.
+        assert set(body["game"]) == {
+            "team", "opponent", "scores", "gameStartTimestamp", "gameEndTimestamp", "points",
+        }
+        assert body["game"]["opponent"] == "Rivals"
+        # The per-game stamp is the one the event's card carries.
+        card = next(c for c in client.get(f"/api/share/{share['hash']}").json()["games"] if c["id"] == GAME_ID)
+        assert body["version"] == card["version"]
+        poll = client.get(f"/api/share/{share['hash']}/games/{GAME_ID}/poll")
+        assert poll.status_code == 200 and poll.json()["version"] == body["version"]
+
+    def test_games_endpoint_refuses_games_outside_the_event(self, client, seeded):
+        """The event link is a key to the event's games only: a game of the
+        same team that is not in the event, a game that never existed, and a
+        malformed id all read as not found."""
+        _seed_rich_game(seeded)   # same team, not in the event
+        share = _mint_event(seeded["event_id"])
+        _anon()
+        for game_id in (RICH_GAME_ID, "2026-01-01_Nope_vs_Nope_0000", "..%2F..%2Fetc"):
+            r = client.get(f"/api/share/{share['hash']}/games/{game_id}")
+            assert r.status_code in (400, 404), game_id
+            assert client.get(f"/api/share/{share['hash']}/games/{game_id}/poll").status_code in (400, 404)
+
+    def test_games_endpoint_is_not_a_back_door_for_game_links(self, client, seeded):
+        """A single-game hash opens its one game and nothing else."""
+        share = _mint()   # a GAME share on GAME_ID
+        _anon()
+        assert client.get(f"/api/share/{share['hash']}/games/{GAME_ID}").status_code == 404
+        assert client.get(f"/api/share/{share['hash']}/games/{GAME_ID_2}").status_code == 404
+        # ...and it still answers with a game, not an event.
+        body = client.get(f"/api/share/{share['hash']}").json()
+        assert "game" in body and "event" not in body
+
+    def test_game_removed_from_the_event_drops_off_the_link(self, client, seeded):
+        from storage import event_storage
+        share = _mint_event(seeded["event_id"])
+        _anon()
+        event_storage.remove_game_from_event(seeded["event_id"], GAME_ID_2)
+        try:
+            cards = client.get(f"/api/share/{share['hash']}").json()["games"]
+            assert [c["id"] for c in cards] == [GAME_ID]
+            assert client.get(f"/api/share/{share['hash']}/games/{GAME_ID_2}").status_code == 404
+        finally:
+            event_storage.add_game_to_event(seeded["event_id"], GAME_ID_2)
+        # Added back: reachable again without a new link.
+        assert client.get(f"/api/share/{share['hash']}/games/{GAME_ID_2}").status_code == 200
+
+    def test_event_poll_moves_when_a_game_or_the_event_changes(self, client, seeded):
+        from storage import game_storage, event_storage
+        share = _mint_event(seeded["event_id"])
+        _anon()
+        full = client.get(f"/api/share/{share['hash']}").json()
+        v0 = client.get(f"/api/share/{share['hash']}/poll").json()["version"]
+        assert v0 == full["version"]
+
+        # A game changed (deterministic: bump its stamp, as the game poll test does).
+        current = game_storage.GAMES_DIR / GAME_ID_2 / "current.json"
+        st = current.stat()
+        os.utime(current, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+        v1 = client.get(f"/api/share/{share['hash']}/poll").json()["version"]
+        assert v1 != v0
+
+        # The event document changed (a rename, a phase added).
+        event_file = event_storage.EVENTS_DIR / f"{seeded['event_id']}.json"
+        st = event_file.stat()
+        os.utime(event_file, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+        v2 = client.get(f"/api/share/{share['hash']}/poll").json()["version"]
+        assert v2 not in (v0, v1)
+
+        # Unchanged since: stable.
+        assert client.get(f"/api/share/{share['hash']}/poll").json()["version"] == v2
+
+    def test_every_event_endpoint_dies_with_the_share(self, client, seeded):
+        from storage import share_storage
+        share = _mint_event(seeded["event_id"])
+        _anon()
+        share_storage.revoke_share(share["id"], COACH["id"])
+        for path in ("", "/poll", f"/games/{GAME_ID}", f"/games/{GAME_ID}/poll"):
+            assert client.get(f"/api/share/{share['hash']}{path}").status_code == 410, path
+
+        expired = _mint_event(seeded["event_id"])
+        _expire(expired)
+        assert client.get(f"/api/share/{expired['hash']}").status_code == 410
+
+    def test_deleted_event_reads_as_not_found(self, client, seeded):
+        from storage import event_storage
+        doomed = event_storage.save_event({
+            "name": "Gone Tourney", "teamId": seeded["team_id"], "gameIds": [GAME_ID],
+        })
+        share = _mint_event(doomed)
+        _anon()
+        assert client.get(f"/api/share/{share['hash']}").status_code == 200
+        event_storage.delete_event(doomed)
+        assert client.get(f"/api/share/{share['hash']}").status_code == 404
+        assert client.get(f"/api/share/{share['hash']}/games/{GAME_ID}").status_code == 404
+
+    def test_viewer_stats_level_rides_on_the_event_payload(self, client, seeded):
+        from storage import team_storage
+        team_id = seeded["team_id"]
+        share = _mint_event(seeded["event_id"])
+        _anon()
+        assert client.get(f"/api/share/{share['hash']}").json()["viewerStatsLevel"] is None
+        team = team_storage.get_team(team_id)
+        try:
+            team_storage.update_team(team_id, {**team, "viewerStatsLevel": "fun"})
+            assert client.get(f"/api/share/{share['hash']}").json()["viewerStatsLevel"] == "fun"
+            assert client.get(f"/api/share/{share['hash']}/games/{GAME_ID}").json()["viewerStatsLevel"] == "fun"
+        finally:
+            team_storage.update_team(team_id, team)
+
+    def test_revoke_endpoint_covers_event_shares(self, client, seeded):
+        # The real team id: revoke checks the caller's role on share.teamId.
+        share = _mint_event(seeded["event_id"], team_id=seeded["team_id"])
+        _as(VIEWER)
+        assert client.delete(f"/api/shares/{share['id']}").status_code == 403
+        _as(COACH)
+        assert client.delete(f"/api/shares/{share['id']}").status_code == 200
+        _anon()
+        assert client.get(f"/api/share/{share['hash']}").status_code == 410
+
+
+class TestShareStorageCompat:
+    """Links and index files written before event shares existed keep working."""
+
+    def test_legacy_share_without_kind_is_a_game_share(self):
+        from storage import share_storage
+        assert share_storage.share_kind({"gameId": "g", "hash": "h"}) == "game"
+        assert share_storage.share_kind({"kind": "event", "eventId": "e", "hash": "h"}) == "event"
+
+    def test_index_without_byevent_bucket_accepts_an_event_share(self, seeded):
+        from storage import share_storage
+        from storage.file_utils import atomic_write_json
+        index = share_storage._index.load()
+        index.pop("byEvent", None)
+        atomic_write_json(share_storage.INDEX_FILE, index)
+
+        share = _mint_event(seeded["event_id"])
+        assert [s["id"] for s in share_storage.list_event_shares(seeded["event_id"])] == [share["id"]]
+        assert share_storage.get_share_by_hash(share["hash"])["id"] == share["id"]
+        # And the rebuilt index agrees.
+        rebuilt = share_storage.rebuild_share_index()
+        assert rebuilt["byEvent"][seeded["event_id"]] == [share["id"]]
+        assert share["id"] not in sum(rebuilt["byGame"].values(), [])

@@ -41,7 +41,7 @@ try:  # Both import modes — see routers/_shared.py.
         get_team_memberships,
         get_user_memberships,
     )
-    from storage.share_storage import delete_share, list_game_shares
+    from storage.share_storage import delete_share, list_event_shares, list_game_shares
     from storage.team_storage import delete_team, get_team, list_teams, team_exists
     from storage.user_storage import delete_user, get_user
 except ImportError:  # pragma: no cover - exercised by the package import mode
@@ -61,7 +61,11 @@ except ImportError:  # pragma: no cover - exercised by the package import mode
         get_team_memberships,
         get_user_memberships,
     )
-    from breakside_server.storage.share_storage import delete_share, list_game_shares
+    from breakside_server.storage.share_storage import (
+        delete_share,
+        list_event_shares,
+        list_game_shares,
+    )
     from breakside_server.storage.team_storage import (
         delete_team,
         get_team,
@@ -267,6 +271,10 @@ def _fallback_erase_team(team_id: str, *, dry_run: bool = False) -> Dict[str, in
             delete_game(game_id)
 
     for event in list_team_events(team_id):
+        for share in list_event_shares(event["id"]):
+            counts["shares"] += 1
+            if not dry_run:
+                delete_share(share["id"])
         counts["events"] += 1
         if not dry_run:
             delete_event(event["id"])

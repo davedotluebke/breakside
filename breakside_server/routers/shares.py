@@ -1,20 +1,32 @@
 """
-Share link endpoints (public no-auth game viewing).
+Share link endpoints (public no-auth game and event viewing).
 
 The public share URL is https://www.breakside.pro/view/{hash} — see
 ARCHITECTURE.md § Share Links for how that path resolves on each origin
 (the PWA's head shim boots a guest session from /?share={hash} on
 www/staging; static_files.py 302s to the canonical URL on the API host).
+
+A hash opens either one game or one event (storage/share_storage.py
+``share_kind``). The URL shape is the same for both; GET /api/share/{hash}
+answers with a ``game`` or an ``event`` and the guest renders whichever it
+got. An event share reaches each of the event's games through
+GET /api/share/{hash}/games/{game_id}, which serves the same public
+projection a game share does.
 """
+import hashlib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ._shared import (
     auth_required,
+    create_event_share_link,
     create_share_link,
+    event_exists,
     game_exists,
     get_current_user,
+    get_event,
+    get_event_mtime_ns,
     get_game_current,
     get_game_current_mtime_ns,
     get_share,
@@ -24,10 +36,13 @@ from ._shared import (
     is_admin,
     is_share_valid,
     list_all_shares,
+    list_event_shares,
     list_game_shares,
     public_listing_enabled,
+    require_event_team_coach,
     require_game_team_coach,
     revoke_share,
+    share_kind,
     validate_id,
 )
 
@@ -122,19 +137,71 @@ async def list_game_shares_endpoint(
 
     shares = list_game_shares(game_id)
 
-    # Add validity status + canonical URL to each share
     listing_on = public_listing_enabled()
-    shares_with_status = []
-    for share in shares:
-        share_copy = dict(share)
-        share_copy["isValid"] = is_share_valid(share)
-        share_copy["url"] = share_url(share["hash"])
-        # Report the *effective* state: a share minted while listing was on
-        # keeps listed=true on disk, but it is not on any public list now.
-        share_copy["listed"] = bool(share.get("listed")) and listing_on
-        shares_with_status.append(share_copy)
-
+    shares_with_status = [_share_with_status(s, listing_on) for s in shares]
     return {"shares": shares_with_status, "count": len(shares_with_status)}
+
+
+def _share_with_status(share: dict, listing_on: bool) -> dict:
+    """A share as the coach's dialog lists it: validity and canonical URL added."""
+    share_copy = dict(share)
+    share_copy["isValid"] = is_share_valid(share)
+    share_copy["url"] = share_url(share["hash"])
+    # Report the *effective* state: a share minted while listing was on
+    # keeps listed=true on disk, but it is not on any public list now.
+    share_copy["listed"] = bool(share.get("listed")) and listing_on
+    return share_copy
+
+
+@router.post("/api/events/{event_id}/share")
+async def create_event_share(
+    event_id: str,
+    expires_days: int = Query(default=31, ge=1, le=365),
+    user: dict = Depends(require_event_team_coach)
+):
+    """
+    Create a share link for an event: the event's stats, and every game the
+    event lists — including games added after the link was made.
+
+    Args:
+        expires_days: Days until the link expires (1-365, default 31: an
+            event is reviewed in the weeks after it, not the days)
+
+    Requires: Coach access to the event's team.
+    """
+    if not event_exists(event_id):
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+
+    event = get_event(event_id)
+    team_id = event.get("teamId")
+    if not team_id:
+        raise HTTPException(status_code=400, detail="Event has no teamId")
+
+    share = create_event_share_link(
+        event_id=event_id,
+        team_id=team_id,
+        created_by=user["id"],
+        expires_days=expires_days,
+    )
+    return {"share": share, "url": share_url(share["hash"])}
+
+
+@router.get("/api/events/{event_id}/shares")
+async def list_event_shares_endpoint(
+    event_id: str,
+    user: dict = Depends(require_event_team_coach)
+):
+    """
+    List all share links for an event, active and revoked.
+
+    Requires: Coach access to the event's team.
+    """
+    if not event_exists(event_id):
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+
+    listing_on = public_listing_enabled()
+    shares = [_share_with_status(s, listing_on) for s in list_event_shares(event_id)]
+    return {"shares": shares, "count": len(shares)}
 
 
 @router.delete("/api/shares/{share_id}")
@@ -306,41 +373,146 @@ def _viewer_stats_level(team_id):
     return level if level in _RESTRICTABLE_STATS_LEVELS else None
 
 
+# =============================================================================
+# Public event projection
+# =============================================================================
+#
+# An event share publishes the event's name and phase list, and one card per
+# game: the two team names, the score and the timing — what a tournament's
+# public schedule board shows. The card carries the game's id because it is
+# the key the guest fetches the game by (GET /api/share/{hash}/games/{id});
+# an id is "{date}_{team}_vs_{opponent}_{hash}", nothing the card doesn't
+# already say. Per-player data comes only through the per-game endpoint,
+# which applies the same allowlist as a game share.
+
+# "Tournament" to keep clear of _PUBLIC_EVENT_FIELDS above, which is the
+# allowlist for play-by-play events.
+_PUBLIC_TOURNAMENT_FIELDS = ("name", "phases", "status")
+
+
+def _public_tournament_view(event: dict) -> dict:
+    view = {k: event[k] for k in _PUBLIC_TOURNAMENT_FIELDS if k in event}
+    view.setdefault("phases", [])
+    return view
+
+
+def _event_game_cards(event: dict) -> list:
+    """One public card per game the event lists, chronological.
+
+    A game that no longer exists is skipped rather than failing the whole
+    payload: the event's gameIds are kept by the server on game delete, but
+    a half-finished delete or a restore can leave a dangling id.
+    """
+    cards = []
+    for game_id in event.get("gameIds") or []:
+        stamp = get_game_current_mtime_ns(game_id)
+        if stamp is None:
+            continue
+        try:
+            game = get_game_current(game_id)
+        except (FileNotFoundError, ValueError):
+            continue
+        scores = game.get("scores") or {}
+        cards.append({
+            "id": game_id,
+            "phase": game.get("phase"),
+            "team": game.get("team", "Unknown"),
+            "opponent": game.get("opponent", "Unknown"),
+            "scores": {
+                "team": scores.get("team", 0),
+                "opponent": scores.get("opponent", 0),
+            },
+            "gameStartTimestamp": game.get("gameStartTimestamp"),
+            "gameEndTimestamp": game.get("gameEndTimestamp"),
+            # Per-game change stamp (= that game's poll version), so a guest
+            # refetches only the games that moved when the event stamp does.
+            "version": str(stamp),
+            "updatedAt": datetime.fromtimestamp(
+                stamp / 1e9, tz=timezone.utc
+            ).isoformat().replace("+00:00", "Z"),
+        })
+    cards.sort(key=lambda c: (c["gameStartTimestamp"] is None, c["gameStartTimestamp"] or "", c["id"]))
+    return cards
+
+
+def _event_version(event_id: str, cards: list) -> str:
+    """Change stamp for a shared event: moves when the event document or any
+    listed game changes, or a game joins or leaves the event."""
+    parts = [str(get_event_mtime_ns(event_id))]
+    parts.extend(f"{c['id']}:{c['version']}" for c in cards)
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _shared_event_or_raise(share: dict) -> dict:
+    """The event an event share opens, or 404 when it has been deleted."""
+    event_id = share.get("eventId")
+    if not event_id or not event_exists(event_id):
+        raise HTTPException(status_code=404, detail="Event not found")
+    return get_event(event_id)
+
+
+def _shared_event_game_or_raise(share: dict, game_id: str) -> dict:
+    """A game reachable through an event share: it must be one the event
+    lists *now* (so a game removed from the event drops off the link) and
+    still exist. 404 either way — a guest cannot tell the two apart, and
+    should not be able to probe which game ids exist."""
+    validate_id(game_id, "game_id")
+    event = _shared_event_or_raise(share)
+    if game_id not in (event.get("gameIds") or []) or not game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    return get_game_current(game_id)
+
+
+def _share_info(share: dict) -> dict:
+    return {"expiresAt": share["expiresAt"], "createdAt": share["createdAt"]}
+
+
+def _public_game_payload(share: dict, game_id: str, game: dict) -> dict:
+    stamp = get_game_current_mtime_ns(game_id)
+    return {
+        "game": _public_game_view(game),
+        # Change stamp matching the poll endpoint, so a viewer can seed its
+        # poll loop from the initial fetch without an extra request.
+        "version": str(stamp) if stamp is not None else None,
+        "viewerStatsLevel": _viewer_stats_level(game.get("teamId")),
+        "shareInfo": _share_info(share),
+    }
+
+
 @router.get("/api/share/{hash}")
 async def get_game_by_share(hash: str):
     """
-    Get a game via a share link.
+    Get what a share link opens: one game, or one event.
 
     This is a public endpoint - no authentication required, so the game is
-    projected through ``_public_game_view`` rather than returned as stored.
+    projected through ``_public_game_view`` rather than returned as stored,
+    and an event through ``_public_tournament_view`` plus a card per game.
     """
     share = _get_valid_share_or_raise(hash)
+
+    if share_kind(share) == "event":
+        event = _shared_event_or_raise(share)
+        cards = _event_game_cards(event)
+        return {
+            "event": _public_tournament_view(event),
+            "games": cards,
+            "version": _event_version(share["eventId"], cards),
+            "viewerStatsLevel": _viewer_stats_level(event.get("teamId")),
+            "shareInfo": _share_info(share),
+        }
 
     if not game_exists(share["gameId"]):
         raise HTTPException(status_code=404, detail="Game not found")
 
-    game = get_game_current(share["gameId"])
-    stamp = get_game_current_mtime_ns(share["gameId"])
-
-    return {
-        "game": _public_game_view(game),
-        # Change stamp matching /api/share/{hash}/poll, so a viewer can seed
-        # its poll loop from the initial fetch without an extra request.
-        "version": str(stamp) if stamp is not None else None,
-        "viewerStatsLevel": _viewer_stats_level(game.get("teamId")),
-        "shareInfo": {
-            "expiresAt": share["expiresAt"],
-            "createdAt": share["createdAt"]
-        }
-    }
+    return _public_game_payload(share, share["gameId"], get_game_current(share["gameId"]))
 
 
 @router.get("/api/share/{hash}/poll")
 async def poll_game_by_share(hash: str):
     """
-    Lightweight change poll for a shared game (public, no auth).
+    Lightweight change poll for a shared game or event (public, no auth).
 
-    Returns only a change stamp — the viewer refetches the full game via
+    Returns only a change stamp — the viewer refetches the full payload via
     GET /api/share/{hash} when the stamp differs from the one it holds.
     Keeps the every-few-seconds live-viewer poll from shipping the whole
     game JSON each time. 410 once the share expires or is revoked, so
@@ -348,10 +520,41 @@ async def poll_game_by_share(hash: str):
     """
     share = _get_valid_share_or_raise(hash)
 
+    if share_kind(share) == "event":
+        event = _shared_event_or_raise(share)
+        return {"version": _event_version(share["eventId"], _event_game_cards(event))}
+
     stamp = get_game_current_mtime_ns(share["gameId"])
     if stamp is None:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    return {"version": str(stamp)}
+
+
+@router.get("/api/share/{hash}/games/{game_id}")
+async def get_event_share_game(hash: str, game_id: str):
+    """
+    One of a shared event's games (public, no auth): the same projection a
+    game share serves. 404 for a hash that opens a single game, for a game
+    the event does not list, and for a deleted game.
+    """
+    share = _get_valid_share_or_raise(hash)
+    if share_kind(share) != "event":
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = _shared_event_game_or_raise(share, game_id)
+    return _public_game_payload(share, game_id, game)
+
+
+@router.get("/api/share/{hash}/games/{game_id}/poll")
+async def poll_event_share_game(hash: str, game_id: str):
+    """Change stamp for one of a shared event's games (public, no auth)."""
+    share = _get_valid_share_or_raise(hash)
+    if share_kind(share) != "event":
+        raise HTTPException(status_code=404, detail="Game not found")
+    _shared_event_game_or_raise(share, game_id)
+    stamp = get_game_current_mtime_ns(game_id)
+    if stamp is None:
+        raise HTTPException(status_code=404, detail="Game not found")
     return {"version": str(stamp)}
 
 
