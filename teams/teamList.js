@@ -43,6 +43,7 @@ import { updateTeamRosterDisplay } from './rosterManagement.js';
 import { showTeamSettingsScreen } from './teamSettings.js';
 import { showGameSummaryFromList } from './gameSummary.js';
 import { downloadJSON } from '../game/gameLogic.js';
+import { showShareEventDialog } from '../game/shareGame.js';
 import { log } from '../utils/logger.js';
 
 function showSelectTeamScreen(firsttime = false) {
@@ -1675,6 +1676,14 @@ function renderEventContainer(event, games, team, role, item) {
             icon: 'fa-cog', label: 'Event settings', labelClass: 'ev-btn-label ev-settings-label',
             title: 'Event Settings',
             onClick: () => showEventSettingsDialog(event, team),
+        }));
+
+        // One public link for the whole event: its games and its stats
+        // (game/shareGame.js). Its label drops with the settings label.
+        buttons.push(groupHeaderButton({
+            icon: 'fa-share-alt', label: 'Share', labelClass: 'ev-btn-label ev-settings-label',
+            title: 'Share event — a public link to its games and stats',
+            onClick: () => showShareEventDialog(event),
         }));
     }
 

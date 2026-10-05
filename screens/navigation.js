@@ -14,6 +14,7 @@ const screens = [
     document.getElementById('eventRosterScreen'),
     document.getElementById('scrimmageStatsScreen'),
     document.getElementById('gameSummaryScreen'),
+    document.getElementById('shareEventScreen'),   // share-link guest only (teams/shareEventScreen.js)
     document.getElementById('shareErrorScreen'),   // share-link guest only (teams/shareGuest.js)
 ];
 
@@ -25,7 +26,8 @@ const nonGameScreenIds = [
     'teamMailScreen',
     'eventRosterScreen',
     'scrimmageStatsScreen',
-    'gameSummaryScreen'
+    'gameSummaryScreen',
+    'shareEventScreen'
 ];
 
 function showScreen(screenId) {

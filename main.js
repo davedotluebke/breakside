@@ -112,6 +112,7 @@ import './utils/statsLevel.js';
 import './utils/statsColumns.js';
 import './utils/funStats.js';
 import './utils/statsAudience.js';
+import './utils/eventShare.js';
 import './utils/exportWorkbook.js';
 import './utils/xlsxExport.js';
 import './utils/sheetsExport.js';
@@ -145,6 +146,7 @@ import './teams/teamMail.js';
 import './teams/eventRoster.js';
 import { getGameSummaryBackTarget } from './teams/gameSummary.js';
 // Share-link guest sessions (/view/<hash>): checked first in initializeApp.
+import './teams/shareEventScreen.js';
 import { matchShareRoute, startShareGuest } from './teams/shareGuest.js';
 import './game/genderRatioDropdown.js';
 import './game/pointStats.js';

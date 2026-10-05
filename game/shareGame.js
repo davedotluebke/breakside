@@ -1,9 +1,12 @@
 /*
- * Share Game dialog — create, copy, and revoke public share links for a game.
+ * Share dialog — create, copy, and revoke public share links for a game or
+ * for a whole event.
  *
- * A share link (https://www.breakside.pro/view/{hash}) opens the standalone
- * viewer in share mode: live score + play-by-play, no account needed. Links
- * expire. Routing chain documented in ARCHITECTURE.md § Share Links.
+ * A share link (https://www.breakside.pro/view/{hash}) opens the app as a
+ * read-only guest (teams/shareGuest.js): a game's live score + play-by-play,
+ * or an event's games and stats, no account needed. Links expire. Routing
+ * chain documented in ARCHITECTURE.md § Share Links. The two kinds differ
+ * only in their endpoints, wording and default expiry (shareConfig below).
  *
  * "List publicly" (put the game on the breakside.pro landing page) is
  * DISABLED — see PUBLIC_LISTING_ENABLED below. The code is kept so it can
@@ -36,6 +39,47 @@ const EXPIRY_CHOICES = [
     { days: 183, label: '6 months' },
 ];
 const DEFAULT_EXPIRY_DAYS = 7;
+// An event is reviewed in the weeks after it, not the days.
+const DEFAULT_EVENT_EXPIRY_DAYS = 31;
+
+/**
+ * What a Share dialog is about: the endpoints, the wording, the default
+ * expiry. Everything else in this file is the same for both kinds.
+ */
+function gameShareConfig(game) {
+    const api = getApiBaseUrl();
+    return {
+        heading: 'Share Game',
+        intro: `Anyone with a share link can watch
+                    <strong>${esc(game.team || 'this game')} vs ${esc(game.opponent || 'TBD')}</strong>
+                    live — score and play-by-play, no account needed. Copy a link, or show its QR code for someone to scan.`,
+        listUrl: `${api}/api/games/${encodeURIComponent(game.id)}/shares`,
+        createUrl: days => `${api}/api/games/${encodeURIComponent(game.id)}/share?expires_days=${encodeURIComponent(days)}`,
+        notSynced: 'This game hasn\'t synced to the cloud yet — get online, then try again.',
+        notSyncedToast: 'Game isn\'t on the server yet — sync first',
+        qrCaption: 'Scan to watch live',
+        defaultDays: DEFAULT_EXPIRY_DAYS,
+        listedControl: true,
+    };
+}
+
+function eventShareConfig(event) {
+    const api = getApiBaseUrl();
+    return {
+        heading: 'Share Event',
+        intro: `Anyone with a share link can follow
+                    <strong>${esc(event.name || 'this event')}</strong>:
+                    every game's score and play-by-play, and the event's stats — no account needed.
+                    Games added to the event later are included. Copy a link, or show its QR code for someone to scan.`,
+        listUrl: `${api}/api/events/${encodeURIComponent(event.id)}/shares`,
+        createUrl: days => `${api}/api/events/${encodeURIComponent(event.id)}/share?expires_days=${encodeURIComponent(days)}`,
+        notSynced: 'This event hasn\'t synced to the cloud yet — get online, then try again.',
+        notSyncedToast: 'Event isn\'t on the server yet — sync first',
+        qrCaption: 'Scan to follow the event',
+        defaultDays: DEFAULT_EVENT_EXPIRY_DAYS,
+        listedControl: false,
+    };
+}
 
 function esc(s) {
     const div = document.createElement('div');
@@ -102,7 +146,7 @@ function renderShareRow(share) {
  * after the await in createShare. Rendered lazily: a dialog listing several
  * links shouldn't pay for codes nobody opens.
  */
-function toggleQrPanel(row, show) {
+function toggleQrPanel(row, show, caption = 'Scan to watch live') {
     const panel = row.nextElementSibling;
     const btn = row.querySelector('.share-qr-btn');
     if (!panel || !panel.classList.contains('share-qr-panel')) return;
@@ -113,7 +157,7 @@ function toggleQrPanel(row, show) {
             const svg = qrSvg(encodeQr(url), { label: `QR code for ${url}` });
             panel.innerHTML = `
                 ${svg}
-                <span class="share-qr-caption">Scan to watch live</span>
+                <span class="share-qr-caption">${esc(caption)}</span>
                 <span class="share-qr-url">${esc(url)}</span>`;
             panel.dataset.rendered = '1';
         } catch (err) {
@@ -130,15 +174,15 @@ function toggleQrPanel(row, show) {
     }
 }
 
-async function loadShareList(modal, gameId, opts) {
+async function loadShareList(modal, cfg, opts) {
     const openQrFor = opts && opts.openQrFor;
     const listEl = modal.querySelector('#shareLinksList');
     listEl.innerHTML = '<p class="share-list-note">Loading links…</p>';
     try {
-        const response = await authFetch(`${getApiBaseUrl()}/api/games/${gameId}/shares`);
+        const response = await authFetch(cfg.listUrl);
         if (response.status === 404) {
-            // Game not on the server yet (offline-created, never synced).
-            listEl.innerHTML = '<p class="share-list-note">This game hasn\'t synced to the cloud yet — get online, then try again.</p>';
+            // Not on the server yet (offline-created, never synced).
+            listEl.innerHTML = `<p class="share-list-note">${esc(cfg.notSynced)}</p>`;
             modal.querySelector('#createShareLinkBtn').disabled = true;
             return;
         }
@@ -157,13 +201,13 @@ async function loadShareList(modal, gameId, opts) {
         listEl.innerHTML = active.map(renderShareRow).join('');
 
         listEl.querySelectorAll('.share-qr-btn').forEach(btn => {
-            btn.addEventListener('click', () => toggleQrPanel(btn.closest('.share-link-row')));
+            btn.addEventListener('click', () => toggleQrPanel(btn.closest('.share-link-row'), undefined, cfg.qrCaption));
         });
         // A link that was just created opens with its code showing: the
         // coach made it to hand to someone standing right there.
         if (openQrFor) {
             const row = listEl.querySelector(`.share-link-row[data-share-id="${CSS.escape(String(openQrFor))}"]`);
-            if (row) toggleQrPanel(row, true);
+            if (row) toggleQrPanel(row, true, cfg.qrCaption);
         }
 
         listEl.querySelectorAll('.share-copy-btn').forEach(btn => {
@@ -188,7 +232,7 @@ async function loadShareList(modal, gameId, opts) {
                     const r = await authFetch(`${getApiBaseUrl()}/api/shares/${shareId}`, { method: 'DELETE' });
                     if (!r.ok) throw new Error(`HTTP ${r.status}`);
                     showControllerToast('Share link turned off', 'info', 2500);
-                    loadShareList(modal, gameId);
+                    loadShareList(modal, cfg);
                 } catch (err) {
                     btn.disabled = false;
                     log('Share revoke failed:', err);
@@ -202,21 +246,18 @@ async function loadShareList(modal, gameId, opts) {
     }
 }
 
-async function createShare(modal, gameId) {
+async function createShare(modal, cfg) {
     const btn = modal.querySelector('#createShareLinkBtn');
     const days = modal.querySelector('#shareExpirySelect').value;
     const listedBox = modal.querySelector('#shareListedCheckbox');
-    const listed = PUBLIC_LISTING_ENABLED && !!(listedBox && listedBox.checked);
+    const listed = PUBLIC_LISTING_ENABLED && cfg.listedControl && !!(listedBox && listedBox.checked);
     btn.disabled = true;
     btn.textContent = 'Creating…';
     try {
-        const listedParam = PUBLIC_LISTING_ENABLED ? `&listed=${listed}` : '';
-        const response = await authFetch(
-            `${getApiBaseUrl()}/api/games/${gameId}/share?expires_days=${encodeURIComponent(days)}${listedParam}`,
-            { method: 'POST' }
-        );
+        const listedParam = PUBLIC_LISTING_ENABLED && cfg.listedControl ? `&listed=${listed}` : '';
+        const response = await authFetch(cfg.createUrl(days) + listedParam, { method: 'POST' });
         if (response.status === 404) {
-            showControllerToast('Game isn\'t on the server yet — sync first', 'warning');
+            showControllerToast(cfg.notSyncedToast, 'warning');
             return;
         }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -226,7 +267,7 @@ async function createShare(modal, gameId) {
             copied ? 'Share link created and copied' : 'Share link created',
             'success', 3000
         );
-        loadShareList(modal, gameId, { openQrFor: data.id || (data.share && data.share.id) });
+        loadShareList(modal, cfg, { openQrFor: data.id || (data.share && data.share.id) });
     } catch (err) {
         log('Share create failed:', err);
         showControllerToast('Couldn\'t create the link — check your connection', 'error');
@@ -237,22 +278,34 @@ async function createShare(modal, gameId) {
 }
 
 /**
- * Open the Share Game dialog for a game (must have a server id — i.e. any
- * game that has synced at least once; others get a friendly nudge).
+ * Open the Share dialog for a game (must have a server id — i.e. any
+ * synced game; the dialog handles the never-synced case with a nudge).
  */
 function showShareGameDialog(game) {
     if (!game || !game.id) {
         showControllerToast('No game to share yet', 'warning');
         return;
     }
+    showShareDialog(gameShareConfig(game));
+}
 
+/** Open the Share dialog for an event: one link for all its games and stats. */
+function showShareEventDialog(event) {
+    if (!event || !event.id) {
+        showControllerToast('No event to share yet', 'warning');
+        return;
+    }
+    showShareDialog(eventShareConfig(event));
+}
+
+function showShareDialog(cfg) {
     let modal = document.getElementById('shareGameModal');
     if (modal) modal.remove();
 
     const expiryOptions = EXPIRY_CHOICES.map(c =>
-        `<option value="${c.days}"${c.days === DEFAULT_EXPIRY_DAYS ? ' selected' : ''}>${c.label}</option>`
+        `<option value="${c.days}"${c.days === cfg.defaultDays ? ' selected' : ''}>${c.label}</option>`
     ).join('');
-    const listedControl = PUBLIC_LISTING_ENABLED ? `
+    const listedControl = PUBLIC_LISTING_ENABLED && cfg.listedControl ? `
                     <label class="share-listed-label" title="Also show this game in the public games list on breakside.pro">
                         <input type="checkbox" id="shareListedCheckbox"> List publicly
                     </label>` : '';
@@ -273,14 +326,12 @@ function showShareGameDialog(game) {
     modal.innerHTML = `
         <div class="modal-content share-game-content">
             <div class="dialog-header prominent-dialog-header">
-                <h2>Share Game</h2>
+                <h2>${esc(cfg.heading)}</h2>
                 <span class="close">&times;</span>
             </div>
             <div class="share-game-body">
                 <p class="share-intro">
-                    Anyone with a share link can watch
-                    <strong>${esc(game.team || 'this game')} vs ${esc(game.opponent || 'TBD')}</strong>
-                    live — score and play-by-play, no account needed. Copy a link, or show its QR code for someone to scan.
+                    ${cfg.intro}
                 </p>
                 ${statsNote}
                 <div id="shareLinksList"></div>
@@ -296,14 +347,14 @@ ${listedControl}
     document.body.appendChild(modal);
 
     modal.querySelector('#createShareLinkBtn').addEventListener('click',
-        () => createShare(modal, game.id));
+        () => createShare(modal, cfg));
 
     const close = () => modal.remove();
     modal.querySelector('.close').onclick = close;
     modal.onclick = (e) => { if (e.target === modal) close(); };
 
-    loadShareList(modal, game.id);
+    loadShareList(modal, cfg);
 }
 
 // --- ES-module exports ---
-export { showShareGameDialog };
+export { showShareGameDialog, showShareEventDialog };

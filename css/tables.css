@@ -993,6 +993,94 @@ body.share-guest #gameSummaryScreen footer {
     display: none !important;
 }
 
+/* The shared-event screen (teams/shareEventScreen.js) */
+.share-event-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    margin: 10px 10px 0;
+}
+.share-event-team {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.share-event-record {
+    color: var(--text-secondary);
+}
+.share-event-section {
+    margin: 12px 10px 0;
+    text-align: left;
+}
+.share-event-section > h3 {
+    margin: 0 0 6px;
+    font-size: 1em;
+    color: var(--text-strong);
+}
+.share-event-games .event-phase-header {
+    margin: 8px 0 4px;
+}
+.share-event-games-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.share-event-games-list li {
+    margin: 0;
+    padding: 0;
+}
+/* One game: a full-width row, tappable. Date, opponent, score, status. */
+.share-event-game {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 0 0 6px;
+    padding: 10px 12px;
+    text-align: left;
+    font: inherit;
+    color: var(--text-primary);
+    background-color: var(--surface-card);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    box-shadow: var(--shadow-xs);
+    cursor: pointer;
+}
+.share-event-game:hover {
+    background-color: var(--surface-row-hover);
+}
+.share-event-game-when {
+    flex: 0 0 auto;
+    min-width: 5.5em;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+.share-event-game-who {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+.share-event-game-score {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+.share-event-game .share-status-badge {
+    display: inline-block;
+    margin-left: 0;
+}
+.share-event-game-chevron {
+    color: var(--text-faint);
+}
+@media (max-width: 480px) {
+    .share-event-game-when { min-width: 0; }
+    .share-event-game { gap: 8px; padding: 8px 10px; }
+}
+
 /* Only a guest sees the badge / connection state / footer */
 .share-status-badge,
 .share-connection,

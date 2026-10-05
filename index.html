@@ -1188,6 +1188,10 @@
             <button class="title-bar-back-btn" id="backFromSummaryBtn">
                 <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Back</span>
             </button>
+            <!-- An event share's game: back to the event (teams/shareGuest.js) -->
+            <button class="title-bar-back-btn" id="shareEventBackBtn" style="display:none;">
+                <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Event</span>
+            </button>
             <span class="panel-title">Game Summary</span>
             <!-- Share-guest chrome (teams/shareGuest.js): live/final badge and
                  the poll connection state. Only shown under body.share-guest. -->
@@ -1287,6 +1291,55 @@
                 <a href="/privacy.html">What Breakside stores</a></span>
                 <button id="shareNoticeDismiss" class="share-notice-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
             </div>
+        </div>
+    </section>
+
+    <!-- Shared event screen (teams/shareEventScreen.js): where an event share
+         link lands. Games by phase, each opening the Review screen, and the
+         event's stats. Share-guest only; the guest footer moves in here. -->
+    <section id="shareEventScreen" style="display: none;">
+        <div class="panel-title-bar not-draggable screen-title-bar">
+            <span class="panel-title" id="shareEventTitle">Event</span>
+            <span class="share-connection connecting">Connecting…</span>
+            <button id="exportShareEventBtn" class="back-button" title="Export the event's stats to Excel or Google Sheets" style="display:none;">
+                <i class="fas fa-file-export"></i> Export
+            </button>
+        </div>
+        <div id="shareEventExpiredBanner" class="share-expired-banner" style="display:none;">
+            This share link has expired — the scores below are no longer updating.
+        </div>
+        <div class="share-event-header">
+            <span id="shareEventTeam" class="share-event-team"></span>
+            <span id="shareEventRecord" class="share-event-record"></span>
+        </div>
+        <div class="share-event-section">
+            <h3>Games</h3>
+            <div id="shareEventGames" class="share-event-games"></div>
+        </div>
+        <div class="share-event-section">
+            <h3>Player Stats</h3>
+            <div class="stats-filter-row">
+                <span id="shareEventScopeWrap" class="stats-filter-group" style="display:none;">
+                    <label for="shareEventScope">Show:</label>
+                    <select id="shareEventScope" class="event-dialog-select"></select>
+                </span>
+                <span class="stats-filter-group">
+                    <label for="shareEventStatsLevel">Stats:</label>
+                    <select id="shareEventStatsLevel" class="event-dialog-select"></select>
+                </span>
+            </div>
+            <p id="shareEventStatsNote" class="share-list-note" style="display:none;"></p>
+            <div id="shareEventFunStats" class="fun-stats-host" hidden></div>
+            <div class="roster-table-container">
+                <table id="shareEventTable">
+                    <tbody id="shareEventStatsList"></tbody>
+                </table>
+            </div>
+            <div id="shareEventTeamStats" class="team-stats-line" style="display:none;"></div>
+        </div>
+        <div id="shareEventConnectionsSection" class="share-event-section" style="display:none;">
+            <h3 class="event-connections-heading">Connections</h3>
+            <div id="shareEventConnectionsHost" class="gf-host"></div>
         </div>
     </section>
 

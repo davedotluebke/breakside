@@ -59,6 +59,15 @@ function resolve(href) {
     return replacedWith;
 }
 
+// ── /view/<hash>?game=<id> — an event share pointing into one game ──────
+
+test('a share link into one of an event\'s games keeps the game through the bounce', () => {
+    assert.equal(
+        resolve('https://www.breakside.pro/view/a8f3e2b1c9d4?game=2026-07-01_Riverside_vs_Storm_ab12'),
+        '/?game=2026-07-01_Riverside_vs_Storm_ab12&share=a8f3e2b1c9d4'
+    );
+});
+
 // ── /join/<code> — the 2026-07-22 invite-URL fix ────────────────────────
 
 test('invite short link bounces to the canonical join page (same origin)', () => {
