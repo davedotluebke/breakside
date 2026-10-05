@@ -2068,10 +2068,12 @@ Coaches poll the ping endpoint to maintain role claims and detect other coaches.
 | `/view/{game-hash}` | Game share link → the PWA in a read-only guest session (no auth); the head shim boots it as `/?share={hash}` |
 | `/join/{code}` | Invite short link → redirects to `/landing/join.html?code={code}` |
 
-### Share Links (public game viewing)
+### Share Links (public game and event viewing)
 
-A coach mints a share link from the **Share Game** dialog (in-game hamburger
-menu, or the Share button on the game summary). The API returns
+A coach mints a share link from the **Share** dialog (`game/shareGame.js`):
+for a game, from the in-game hamburger menu or the Share button on the game
+summary; for a whole event, from the Share button on the event's header in
+the team list (§ Event share links below). The API returns
 `https://www.breakside.pro/view/{hash}` (12-char hex hash; links expire —
 1 day to 6 months, revocable from the same dialog). The destination is the
 **PWA itself in a read-only guest session** (`teams/shareGuest.js`): no
@@ -2124,6 +2126,55 @@ the viewer's field replay (2026-09-05, § Replay viewer) — each event's
 `startedAt`, and the point's `startingPosition` / `startTimestamp` /
 `endTimestamp`. Still stripped: `description`, `calledBy`/`calledByName`,
 `pullerGender`, roster gender/number/position, and every coaching field.
+
+**Event share links (2026-10).** One link for a whole event: its games and
+its stats. Same URL shape and the same funnel as a game link — the share
+record carries `kind: "event"` and an `eventId` instead of a `gameId`
+(`storage/share_storage.py share_kind`; links written before the field
+existed read as game shares; the index gains a `byEvent` bucket), so nothing
+in the routing table above changes. `POST /api/events/{id}/share` mints one
+(coach of the event's team; default expiry 31 days, since an event is
+reviewed in the weeks after it); `GET /api/events/{id}/shares` lists them;
+revoke is the shared `DELETE /api/shares/{id}`. The team erase cascade
+removes them with the event.
+
+What the public endpoints answer, for an event hash:
+
+| Endpoint | Payload |
+|----------|---------|
+| `GET /api/share/{hash}` | `event` (allowlist `_PUBLIC_TOURNAMENT_FIELDS`: name, phases, status — never the roster, defaults or ids), `games` (one card per listed game: id, phase, both team names, score, start/end timestamps, that game's change stamp as `version`, `updatedAt`; chronological), `version`, `viewerStatsLevel`, `shareInfo` |
+| `GET /api/share/{hash}/poll` | `version` only: a hash over the event file's mtime and every card's (id, stamp), so it moves when the event is renamed, any game changes, or a game joins or leaves the event |
+| `GET /api/share/{hash}/games/{game_id}` (+ `/poll`) | exactly what a game share serves — `_public_game_view`, same allowlist — but only for a game the event lists **now** (`_shared_event_game_or_raise`): a game added later is reachable without a new link, a game removed from the event is 404 through it, and a single-game hash answers 404 here. A card carries the game's id because it is the fetch key; the id is `{date}_{team}_vs_{opponent}_{hash}`, nothing the card doesn't already say |
+
+The guest (`teams/shareGuest.js`) sees `event` in the payload and lands on
+`#shareEventScreen` (`teams/shareEventScreen.js`): the record, the games by
+phase with a Final / Live / In progress chip each (`utils/eventShare.js
+cardStatus`, the game badge's 30-minute rule), and the event's stats —
+built in the browser from the games fetched through the link, so the
+columns, Stats menu, Fun panel, team line, Connections and Export are the
+coach's Event Roster + Stats screen read-only. The public projection strips
+a game's `id` and `phase`; the guest attaches both from the card so the
+scope menu (all games / phase / game) and the export's per-game sheets
+work. The per-game stamps on the cards are what make polling cheap: when
+the event stamp moves, `diffEventGames` refetches only the games whose
+stamp changed and drops the ones no longer listed.
+
+Tapping a game shows it on the Review screen exactly as a game share
+would, with a back button to the event (`#shareEventBackBtn`; the usual
+summary back button stays hidden for guests, it navigates to team
+screens). The URL carries the game as `?game=<id>` through
+`history.pushState`, so the browser's own Back / Forward move between the
+event and its games and the address bar is always a link to what is on
+screen — a cold load of `/?share=<hash>&game=<id>` (or `/view/<hash>?game=…`;
+the CloudFront function and the head shim keep the query) opens that game
+with the event one tap back. While a game is on screen its own stamp is
+polled; returning to the event refetches the event payload to catch up on
+the other games. The one guest footer (the public-page disclosure and the
+theme toggle) moves under whichever screen is showing. Fun stats: the
+event payload carries the team's `viewerStatsLevel` like a game's does,
+and the lock applies to the event screen, every game opened from it, and
+the Export dialog. `test_shares.py::TestEventShares` pins the server
+contract; `tests/unit/eventShare.test.mjs` the pure helpers.
 
 **Public listing exists but is disabled (2026-09-07).** The share flow once
 had a second, separate opt-in: `POST /api/games/{id}/share?listed=true` (a

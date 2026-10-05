@@ -1,8 +1,8 @@
 # Share links
 
-Status: shipped (merged 2026-07-26; the public payload was narrowed to an allowlist 2026-08-23 and widened again for replay positions in 2026-09; the standalone viewer app was retired 2026-09-05 — share links now open inside the PWA). Routing chain and payload in ARCHITECTURE.md § Share Links. This note is the non-obvious infrastructure fact and its corollaries.
+Status: shipped (merged 2026-07-26; the public payload was narrowed to an allowlist 2026-08-23 and widened again for replay positions in 2026-09; the standalone viewer app was retired 2026-09-05 — share links now open inside the PWA; event share links added 2026-10-04, branch `event-share`). Routing chain and payload in ARCHITECTURE.md § Share Links. This note is the non-obvious infrastructure fact and its corollaries.
 
-Last verified: 2026-09-05.
+Last verified: 2026-10-04.
 
 ## A share link is the app, booted from the root
 
@@ -14,6 +14,18 @@ Corollaries:
 - `scripts/dev-server.sh` serves `index.html` for `/join/*` and `/view/*` so both shims are testable locally. `tests/unit/shortLinkShim.test.mjs` pins both by extracting the real shim from `index.html`; `test_shares.py::TestViewShortLink` pins the API host's redirect.
 - There is exactly one renderer for a game: the Review screen. A guest sees `showGameSummaryForShare()`; a poll refresh goes through `refreshGameSummaryForShare()` so the mounted replay keeps its playhead. Event phrasing, dark mode, and stats changes reach share links with no extra work — which is why the separate viewer was retired (it had drifted on all three).
 - The guest theme defaults to the device (`auto`), not the app's dark default. A stored preference on that origin still wins.
+
+## Event share links: the same route, on purpose
+
+An event link is a `/view/<hash>` like any other; what differs is what `GET /api/share/<hash>` answers (`event` + game cards instead of `game`). That choice is what kept the feature off the CloudFront function, the head shim, the API host's redirect and `matchShareRoute()`: none of them changed. The game inside an event is addressed by a query parameter (`?game=<id>`), which every one of those already passes through — the shim test pins it.
+
+Things that are easy to get wrong next time this area is touched:
+
+- `routers/shares.py` has **two** kinds of "event": `_PUBLIC_EVENT_FIELDS` / `_public_event()` are the play-by-play event allowlist (a throw, a D). The tournament allowlist is `_PUBLIC_TOURNAMENT_FIELDS` / `_public_tournament_view()`. Shadowing the first with the second silently dropped every replay field from the game projection during development; the projection tests caught it.
+- A game's `id` and `phase` are deliberately **not** in the public game projection (`test_internal_and_coaching_fields_are_gone`). The event's cards carry both, and `teams/shareGuest.js loadEventGame` attaches them to the hydrated game. Don't "fix" the projection to include them.
+- Event stats are computed client-side from one fetch per game (same as the coach's Event Roster screen). The cards carry each game's stamp so a poll refetches only what moved (`utils/eventShare.js diffEventGames`); the event stamp itself is a hash over the event file's mtime plus every card's stamp, so a rename or a phase change reaches guests too.
+- The guest footer is a single DOM node moved between `#shareEventScreen` and `#gameSummaryScreen` (`placeGuestFooter`); don't duplicate its ids.
+- Verification recipe: `scripts/dev-backend.sh --fresh --label <x> --port <p>`, seed a team/event/games with the storage modules under `BREAKSIDE_DATA_DIR=.dev-data/<x>`, mint with `share_storage.create_event_share_link`, open `http://localhost:<fe>/?share=<hash>&api=http://localhost:<p>`. Bump a game's `current.json` (or re-save it) to watch the poll pick it up.
 
 ## Deploy note
 
