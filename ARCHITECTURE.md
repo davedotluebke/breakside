@@ -893,7 +893,13 @@ the author included, minus opt-outs, paused/alumni and hard-bounced
 addresses.
 Unknown senders are **quarantined, never bounced** (bouncing to unknown
 senders is backscatter); coaches get a rate-limited notice and release or
-discard from the screen. Held mail expires after 14 days.
+discard from the screen. The notice carries the opening of the author's
+own text (`rewrite.excerpt`: quoted lines, the reply's quote header and
+anything after a signature delimiter dropped, 300 characters cut at a
+word) so the coaches can tell whose question it is without opening the
+app, and a deep link that opens the team's Email Lists screen
+(`relay.review_url`, `/?open=mail&team={id}`, § URL Structure). Held mail
+expires after 14 days.
 
 **From rewrite.** Yahoo, AOL and Apple publish DMARC `p=reject`, so a relayed
 message must not keep the author's From. Like Google Groups we send
@@ -2063,8 +2069,9 @@ Coaches poll the ping endpoint to maintain role claims and detect other coaches.
 
 | Path | Purpose |
 |------|---------|
-| `/` | Landing page (intro, login, download instructions) |
-| `/app/` | PWA entry point |
+| `/` | The PWA. Signed out, `main.js` bounces to `/landing/`. (`/app/` was the entry point until 2026-09 and is no longer a route; see docs/dev-notes/password-change.md § Things that bit.) |
+| `/landing/` | Landing page (intro, login, download instructions) |
+| `/?open=mail&team={id}` | Deep link into the signed-in app: the team's Email Lists screen. Minted by the held-mail notice (`mail/relay.py review_url`), read by `utils/deepLink.js` at boot, stashed in sessionStorage across the sign-in round trip, opened by `main.js openPendingDeepLink()` once the team list is up. `open` is an allowlist of screens (only `mail` so far) and `team` must look like an id; anything else is ignored. |
 | `/view/{game-hash}` | Game share link → the PWA in a read-only guest session (no auth); the head shim boots it as `/?share={hash}` |
 | `/join/{code}` | Invite short link → redirects to `/landing/join.html?code={code}` |
 

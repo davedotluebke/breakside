@@ -225,6 +225,24 @@ function recordTeamViewed(teamId) {
     writeTeamListPrefs(localStorage, markTeamViewed(readTeamListPrefs(localStorage), teamId));
 }
 
+/**
+ * One team from the account's cloud list, by id, for a deep link
+ * (main.js openPendingDeepLink). The team object as /api/auth/teams
+ * returns it; null when the account has no such team; undefined when the
+ * list could not be fetched (offline, expired session).
+ */
+async function findCloudTeam(teamId) {
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/auth/teams`);
+        if (!response.ok) return undefined;
+        const data = await response.json();
+        return (data.teams || []).find(({ team }) => team.id === teamId)?.team || null;
+    } catch (error) {
+        log('findCloudTeam failed:', error);
+        return undefined;
+    }
+}
+
 async function populateCloudTeamsAndGames() {
     const listElement = document.getElementById('cloudTeamsList');
     if (!listElement) return;
@@ -2128,7 +2146,7 @@ function renderSquadGameItem(game, squadName, team, role) {
 // --- ES-module exports ---
 // _cloudTeamsCache is a live binding read by teams/activeGamePolling.js.
 export {
-    showSelectTeamScreen, isGameActive, populateCloudTeamsAndGames,
+    showSelectTeamScreen, isGameActive, populateCloudTeamsAndGames, findCloudTeam,
     selectCloudTeam, resumeCloudGame, endOtherScrimmageHalves, _cloudTeamsCache,
 };
 // window survivor: late-bound back-edge hook (called by auth/loginScreen.js,

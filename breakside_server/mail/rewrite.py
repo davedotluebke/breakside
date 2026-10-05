@@ -13,6 +13,7 @@ threads intact in every client, attachments and HTML parts are untouched, and
 the original From is preserved in X-Original-From for the audit trail.
 """
 import email
+import html
 import re
 from email import policy as email_policy
 from email.headerregistry import Address
@@ -53,6 +54,67 @@ _MARKER_RE = re.compile(
 
 def parse_message(raw: bytes) -> EmailMessage:
     return BytesParser(policy=email_policy.default).parsebytes(raw)
+
+
+def body_text(msg: EmailMessage) -> str:
+    """The message's readable text: the text/plain part, else the text/html
+    part with tags stripped and entities decoded, else "". Never raises."""
+    try:
+        body = msg.get_body(preferencelist=("plain", "html"))
+        if body is None:
+            return ""
+        text = body.get_content()
+        if body.get_content_type() == "text/html":
+            text = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", text, flags=re.S | re.I)
+            text = re.sub(r"<[^>]+>", " ", text)
+            text = html.unescape(text)
+            text = re.sub(r"\s+", " ", text)
+        return text.strip()
+    except Exception:  # noqa: BLE001 — a preview must never break the queue view or a notice
+        return ""
+
+
+def text_preview(raw: bytes, limit: int = 2000) -> str:
+    """The first ``limit`` characters of the readable text (the in-app
+    preview of a held message). Never raises."""
+    try:
+        return body_text(parse_message(raw))[:limit]
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+# A line that starts the part of a reply the author did not write: the
+# quote header Gmail and Apple Mail put on one line, Outlook's separators,
+# or a signature delimiter. Matched after rstrip, so "-- " is "--".
+_QUOTE_START = re.compile(r"^(?:On .{0,300}wrote:|-+\s*Original Message\s*-+|_{8,}|--)$")
+
+
+def excerpt(raw: bytes, limit: int = 300) -> str:
+    """The opening of the author's own text, whitespace-collapsed and cut at a
+    word boundary with an ellipsis: what the held-mail notice shows so a
+    coach can tell who the message concerns without opening the app.
+
+    Quoted lines (``> ``) and everything from a reply's quote header or a
+    signature delimiter on are dropped first, so a short reply on top of a
+    long thread yields the reply. Never raises; "" when there is no text.
+    """
+    try:
+        lines = []
+        for line in body_text(parse_message(raw)).splitlines():
+            if _QUOTE_START.match(line.rstrip()):
+                break
+            if line.lstrip().startswith(">"):
+                continue
+            lines.append(line)
+        text = re.sub(r"\s+", " ", " ".join(lines)).strip()
+    except Exception:  # noqa: BLE001
+        return ""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if " " in cut[limit // 2:]:
+        cut = cut[:cut.rfind(" ")]
+    return cut.rstrip(" ,;:.") + "…"
 
 
 def sender_of(msg: EmailMessage) -> Tuple[str, str]:

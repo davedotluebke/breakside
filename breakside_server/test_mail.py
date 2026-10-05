@@ -287,7 +287,10 @@ class TestRelay:
         import config
         from mail import relay
         from storage import mail_storage as ms
-        results = relay.process_inbound(raw_mail("Stranger <stranger@x.test>", f"parents-cudo@{DOMAIN}", subject="Buy stuff"),
+        body = ("Hi Coach Pat, can you call me about Saturday's carpool?\r\n\r\n"
+                "On Mon, Sep 1, 2026 at 9:00 AM Coach Pat <coach@x.test> wrote:\r\n"
+                "> Carpool list attached, please reply with your slot.\r\n")
+        results = relay.process_inbound(raw_mail("Stranger <stranger@x.test>", f"parents-cudo@{DOMAIN}", subject="Buy stuff", body=body),
                                         envelope_recipients=[f"parents-cudo@{DOMAIN}"])
         assert (results[0].action, results[0].reason) == ("quarantine", "unknown-sender")
         held = ms.list_mail_quarantine(configured["team_id"])
@@ -298,12 +301,31 @@ class TestRelay:
         assert "Subject: [Held] Buy stuff" in notice and "not in the team directory" in notice
         assert 'From: "Breakside (CUDO)" <coaches-cudo@' in notice     # parentheses force a quoted display name
         assert "Auto-Submitted: auto-generated" in notice
-        # The review link is the app root. /app/ is not a route on the S3
-        # deployment (tests/unit/noAppPathRedirect.test.mjs pins the frontend).
-        assert config.MAIL_APP_URL in notice and "/app/" not in notice
+        # The review link opens the team's Email Lists screen (utils/deepLink.js)
+        # off the app root: /app/ is not a route on the S3 deployment
+        # (tests/unit/noAppPathRedirect.test.mjs pins the frontend).
+        assert f"{config.MAIL_APP_URL}?open=mail&team={configured['team_id']}" in notice and "/app/" not in notice
+        # The opening of the author's own text, without the quoted thread, so
+        # the coaches can tell from the notice alone whose question it is.
+        assert "It begins:\n\n    Hi Coach Pat, can you call me about Saturday's carpool?\n" in notice
+        assert "wrote:" not in notice and "Carpool list attached" not in notice
         # Feeding the notice back in must never relay it (loop guard).
         back = relay.process_inbound(sends[0]["raw"], envelope_recipients=[f"coaches-cudo@{DOMAIN}"])
         assert back[0].action == "drop" and back[0].reason.startswith("loop")
+
+    def test_notice_without_readable_text(self, configured):
+        from mail import relay
+        raw = raw_mail("Stranger <stranger@x.test>", f"parents-cudo@{DOMAIN}", subject="Photo", body="")
+        relay.process_inbound(raw, envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+        notice = configured["outbox"].sent()[-1]["raw"].decode()
+        assert "It has no readable text" in notice and "It begins:" not in notice
+
+    def test_review_url_appends_to_a_base_with_a_query(self, configured, monkeypatch):
+        import config
+        from mail import relay
+        assert relay.review_url("Team-ab12") == "https://www.breakside.pro/?open=mail&team=Team-ab12"
+        monkeypatch.setattr(config, "MAIL_APP_URL", "http://localhost:3000/?api=http://localhost:8000")
+        assert relay.review_url("Team-ab12") == "http://localhost:3000/?api=http://localhost:8000&open=mail&team=Team-ab12"
 
     def test_notification_rate_limit(self, configured):
         from mail import relay

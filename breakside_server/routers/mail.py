@@ -188,22 +188,6 @@ async def sync_player_aliases(team_id: str, user: dict = Depends(require_team_co
 # Quarantine
 # =============================================================================
 
-def _preview(raw: bytes, limit: int = 2000) -> str:
-    try:
-        msg = rewrite.parse_message(raw)
-        body = msg.get_body(preferencelist=("plain", "html"))
-        if body is None:
-            return ""
-        text = body.get_content()
-        if body.get_content_type() == "text/html":
-            import re
-            text = re.sub(r"<[^>]+>", " ", text)
-            text = re.sub(r"\s+", " ", text)
-        return text.strip()[:limit]
-    except Exception:  # noqa: BLE001 — a preview must never 500 the queue view
-        return ""
-
-
 @router.get("/api/teams/{team_id}/mail/quarantine")
 async def list_quarantine(team_id: str, user: dict = Depends(require_team_coach("team_id"))):
     _require_team(team_id)
@@ -219,7 +203,7 @@ async def get_quarantine_item(team_id: str, item_id: str, user: dict = Depends(r
     if found is None:
         raise HTTPException(status_code=404, detail="Held message not found")
     item, raw = found
-    return {**item, "preview": _preview(raw)}
+    return {**item, "preview": rewrite.text_preview(raw)}
 
 
 @router.post("/api/teams/{team_id}/mail/quarantine/{item_id}/release")

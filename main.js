@@ -134,7 +134,7 @@ import { updateTeamRosterDisplay } from './teams/rosterManagement.js';
 import { showChangePasswordDialog } from './teams/accountPassword.js';
 import './teams/accountDeletion.js';
 import './teams/erasure.js';
-import { showSelectTeamScreen } from './teams/teamList.js';
+import { showSelectTeamScreen, findCloudTeam, selectCloudTeam } from './teams/teamList.js';
 import './teams/eventDialogs.js';
 import './teams/scrimmageDialogs.js';
 import './teams/scrimmageStats.js';
@@ -142,12 +142,14 @@ import { showConnectionInfo } from './teams/syncStatusUI.js';
 import './teams/activeGamePolling.js';
 import { showTeamSettingsScreen } from './teams/teamSettings.js';
 import './teams/mailAddressInput.js';
-import './teams/teamMail.js';
+import { showTeamMailScreen } from './teams/teamMail.js';
 import './teams/eventRoster.js';
 import { getGameSummaryBackTarget } from './teams/gameSummary.js';
 // Share-link guest sessions (/view/<hash>): checked first in initializeApp.
 import './teams/shareEventScreen.js';
 import { matchShareRoute, startShareGuest } from './teams/shareGuest.js';
+// Deep links into the signed-in app (/?open=mail&team=<id>, from the held-mail notice).
+import { parseDeepLink, stripDeepLink } from './utils/deepLink.js';
 import './game/genderRatioDropdown.js';
 import './game/pointStats.js';
 import './game/undoLogic.js';
@@ -382,6 +384,57 @@ function isTestModeAllowed() {
     return ['localhost', '127.0.0.1'].includes(location.hostname);
 }
 
+/******************************************************************************/
+/********************************** Deep links ********************************/
+/******************************************************************************/
+
+// A /?open=<screen>&team=<id> link (utils/deepLink.js) is read once at boot
+// and kept here and in sessionStorage: a signed-out coach bounces through
+// /landing/ and comes back to a bare /, and sessionStorage is what carries
+// the link across that round trip (per tab, so it never leaks to another).
+const DEEP_LINK_KEY = 'breakside_deep_link';
+let pendingDeepLink = null;
+
+function stashDeepLink() {
+    const link = parseDeepLink(window.location.search);
+    if (!link) return;
+    pendingDeepLink = link;
+    try { sessionStorage.setItem(DEEP_LINK_KEY, JSON.stringify(link)); } catch (_) { /* storage off: this load only */ }
+    // Out of the address bar (a reload must not re-open it), other keys kept.
+    history.replaceState(null, '', window.location.pathname + stripDeepLink(window.location.search) + window.location.hash);
+}
+
+/**
+ * Open the stashed link, if any, now that the team list is up: load the
+ * team and land on its screen. Each link is consumed once.
+ */
+async function openPendingDeepLink() {
+    let link = pendingDeepLink;
+    pendingDeepLink = null;
+    try {
+        const stored = sessionStorage.getItem(DEEP_LINK_KEY);
+        if (stored) {
+            sessionStorage.removeItem(DEEP_LINK_KEY);
+            link = link || JSON.parse(stored);
+        }
+    } catch (_) { /* storage off */ }
+    if (!link?.teamId) return;
+    log('[DeepLink] opening', link);
+    const team = await findCloudTeam(link.teamId);
+    if (team === undefined) return;           // could not fetch: the Teams screen is already up
+    if (team === null) {
+        alert('That team is not on your account.');
+        return;
+    }
+    await selectCloudTeam(team, { landOn: 'none' });
+    if (link.screen === 'mail') {
+        // Email Lists sits under Team Settings; set the back chain up the
+        // same way (Email Lists → Team Settings → Teams).
+        showTeamSettingsScreen('selectTeamScreen');
+        showTeamMailScreen();
+    }
+}
+
 // Initialize authentication
 async function initializeApp() {
     // Share link (/view/<hash>): a read-only guest session for one shared
@@ -394,6 +447,8 @@ async function initializeApp() {
         return;
     }
 
+    stashDeepLink();
+
     // Test mode: skip Supabase auth and inject a fake session.
     // Activated via ?testMode=true URL parameter (localhost only).
     // Optional ?testUserId=<id> sets the user identity (for multi-coach tests).
@@ -405,6 +460,7 @@ async function initializeApp() {
             window.breakside.auth.enableTestMode(testUserId);
         }
         showSelectTeamScreen(true);
+        openPendingDeepLink().catch(e => console.warn('[DeepLink]', e));
         return;
     }
 
@@ -535,6 +591,7 @@ function hideAuthScreenAndShowApp() {
     }
     appShownForUserId = window.breakside?.auth?.getCurrentUser?.()?.id || null;
     showSelectTeamScreen(true);
+    openPendingDeepLink().catch(e => console.warn('[DeepLink]', e));
 }
 
 /**

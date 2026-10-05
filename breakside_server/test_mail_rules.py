@@ -411,3 +411,39 @@ class TestRewrite:
         assert out["Auto-Submitted"] == "auto-generated" and out["X-Breakside-List"] == "coaches-cudo"
         assert out.get_content().startswith("line1")
         assert policy.loop_reason(rewrite.header_map(out), "team.breakside.pro") is not None
+
+
+class TestExcerpt:
+    """rewrite.excerpt: the opening of the author's own text for the notice."""
+
+    @staticmethod
+    def _raw(body, ctype="text/plain; charset=utf-8"):
+        return ("From: a@x.test\r\nTo: b@x.test\r\nSubject: s\r\n"
+                f"Content-Type: {ctype}\r\n\r\n{body}").encode()
+
+    def test_reply_keeps_only_the_new_text(self):
+        body = ("Yes, 8 works.\n\nThanks!\n\nOn Mon, Sep 1, 2026 at 9:00 AM Coach <c@x.test> wrote:\n"
+                "> Does 8 work for everyone?\n> Please reply.\n")
+        assert rewrite.excerpt(self._raw(body)) == "Yes, 8 works. Thanks!"
+
+    def test_outlook_separator_and_signature_cut(self):
+        assert rewrite.excerpt(self._raw("Running late.\n-----Original Message-----\nFrom: x\n")) == "Running late."
+        assert rewrite.excerpt(self._raw("Running late.\n-- \nPat\n555-0100\n")) == "Running late."
+
+    def test_html_is_stripped_and_unescaped(self):
+        body = "<html><body><p>Tom &amp; Jerry<br>are <b>in</b>.</p><style>p{}</style></body></html>"
+        assert rewrite.excerpt(self._raw(body, "text/html; charset=utf-8")) == "Tom & Jerry are in ."
+
+    def test_truncates_at_a_word_with_an_ellipsis(self):
+        text = " ".join(f"word{i}" for i in range(100))
+        out = rewrite.excerpt(self._raw(text), limit=50)
+        assert out.endswith("\u2026") and len(out) <= 51 and not out[:-1].endswith("word")  # cut on a boundary
+        assert out[:-1] == text[:len(out) - 1]
+
+    def test_empty_and_garbage(self):
+        assert rewrite.excerpt(self._raw("")) == ""
+        # Headerless bytes parse as a body (the stdlib parser never fails);
+        # what matters is that neither helper raises on them.
+        assert isinstance(rewrite.excerpt(b"\xff\xfe not mail at all"), str)
+        assert isinstance(rewrite.text_preview(b"\xff\xfe not mail at all"), str)
+

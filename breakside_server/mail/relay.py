@@ -7,11 +7,13 @@ and rewrite.py; this module wires them to storage and the transport.
 """
 import logging
 import re
+import textwrap
 import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
 from email.utils import getaddresses
+from urllib.parse import quote
 from typing import Any, Deque, Dict, List, Optional, Sequence
 
 from ._shared import config, storage
@@ -243,7 +245,7 @@ def _quarantine(raw, team_id, directory, decision, local, domain, contacts, base
     log_id = _log(team_id, {**base_entry, "action": "quarantined", "recipients": 0,
                             "reason": decision.reason, "quarantineId": item["id"]})
     logger.info("mail: held message to %s from %s (%s)", address, addresses.mask_address(base_entry["from"]), decision.reason)
-    _notify_quarantine(team_id, directory, contacts, item, domain)
+    _notify_quarantine(team_id, directory, contacts, item, domain, excerpt=rewrite.excerpt(raw))
     return RelayResult(address, team_id, "quarantine", decision.reason, quarantine_id=item["id"], log_id=log_id)
 
 
@@ -258,7 +260,15 @@ REASON_TEXT = {
 }
 
 
-def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: Dict[str, Any], domain: str) -> None:
+def review_url(team_id: str) -> str:
+    """Where a held-mail notice sends the coach: the app, opening the team's
+    Email Lists screen (utils/deepLink.js reads ``open`` and ``team``)."""
+    base = config.MAIL_APP_URL
+    return f"{base}{'&' if '?' in base else '?'}open=mail&team={quote(team_id, safe='')}"
+
+
+def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: Dict[str, Any], domain: str,
+                       *, excerpt: str = "") -> None:
     coach_addresses = [a for c in contacts if c.get("kind") == "coach" for a in policy.deliverable_addresses(c)]
     if not coach_addresses:
         return
@@ -274,12 +284,17 @@ def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: 
 
     coaches_address = addresses.address("coaches", directory["slug"], domain)
     why = REASON_TEXT.get(item.get("reason") or "", item.get("reason") or "held for review")
+    # The opening of the message, so the coaches can tell whose question it
+    # is (and whether it is for them at all) from the notice alone.
+    begins = (f"It begins:\n\n{textwrap.fill(excerpt, 72, initial_indent='    ', subsequent_indent='    ')}\n\n"
+              if excerpt else "It has no readable text (an attachment or image only, perhaps).\n\n")
     body = (
         f"A message to {item['list']}@{domain} was held and not delivered.\n\n"
         f"From:    {item.get('fromName') or ''} <{item.get('from') or 'unknown'}>\n"
         f"Subject: {item.get('subject') or '(no subject)'}\n"
         f"Reason:  {why}\n\n"
-        f"Review it under Team Settings → Email Lists in Breakside:\n{config.MAIL_APP_URL}\n\n"
+        f"{begins}"
+        f"Review it in Breakside (this link opens the team's Email Lists):\n{review_url(team_id)}\n\n"
         f"Held messages are discarded automatically after {storage.mail_storage.QUARANTINE_TTL_DAYS} days.\n"
     )
     raw = rewrite.build_notice(
