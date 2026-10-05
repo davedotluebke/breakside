@@ -128,8 +128,11 @@ MAIL_REGION = os.getenv("BREAKSIDE_MAIL_REGION", "us-east-1")
 MAIL_INBOUND_BUCKET = os.getenv("BREAKSIDE_MAIL_INBOUND_BUCKET", "")
 MAIL_QUEUE_URL = os.getenv("BREAKSIDE_MAIL_QUEUE_URL", "")
 MAIL_CONFIGURATION_SET = os.getenv("BREAKSIDE_MAIL_CONFIGURATION_SET", "")
-# Where the coach-facing admin screen lives; quarantine digests link here.
-MAIL_APP_URL = os.getenv("BREAKSIDE_MAIL_APP_URL", "https://www.breakside.pro/app/")
+# Where the PWA lives; quarantine notices link here. The app root, not
+# ``/app/``: that path is not a route on the S3/CloudFront deployment (its
+# 404 fallback serves an index.html whose relative assets then 404 too), see
+# docs/dev-notes/password-change.md § Things that bit.
+MAIL_APP_URL = os.getenv("BREAKSIDE_MAIL_APP_URL", "https://www.breakside.pro/")
 MAIL_DIR = DATA_DIR / "mail"
 MAIL_OUTBOX_DIR = Path(os.getenv("BREAKSIDE_MAIL_OUTBOX_DIR", str(MAIL_DIR / "_outbox")))
 

@@ -284,6 +284,7 @@ class TestRelay:
         assert (results[0].action, results[0].reason) == ("quarantine", "not-allowed-to-post")
 
     def test_unknown_sender_quarantined_and_coaches_notified(self, configured):
+        import config
         from mail import relay
         from storage import mail_storage as ms
         results = relay.process_inbound(raw_mail("Stranger <stranger@x.test>", f"parents-cudo@{DOMAIN}", subject="Buy stuff"),
@@ -297,6 +298,9 @@ class TestRelay:
         assert "Subject: [Held] Buy stuff" in notice and "not in the team directory" in notice
         assert 'From: "Breakside (CUDO)" <coaches-cudo@' in notice     # parentheses force a quoted display name
         assert "Auto-Submitted: auto-generated" in notice
+        # The review link is the app root. /app/ is not a route on the S3
+        # deployment (tests/unit/noAppPathRedirect.test.mjs pins the frontend).
+        assert config.MAIL_APP_URL in notice and "/app/" not in notice
         # Feeding the notice back in must never relay it (loop guard).
         back = relay.process_inbound(sends[0]["raw"], envelope_recipients=[f"coaches-cudo@{DOMAIN}"])
         assert back[0].action == "drop" and back[0].reason.startswith("loop")
