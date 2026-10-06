@@ -132,7 +132,10 @@ def merge_pending_next_line(existing: Optional[dict], incoming: Optional[dict]) 
 # syncing the whole game, with the snapshot their phone held when they last
 # pulled; without a rule that copy would revert the edit on the next sync.
 # So the merge keeps the newer squad definition whoever wrote it. A real game
-# never rewrites its snapshot, so for one the stamps are always equal and the
+# rewrites its snapshot only to add players — the event roster edited from
+# the in-game menu (client: teams/eventRoster.js, store/models.js
+# mergeRosterSnapshot), stamped fresh when it grew — so the same rule keeps
+# that addition whoever syncs next; otherwise the stamps are equal and the
 # writer's own copy stands, exactly as before.
 _SQUAD_NAME_KEYS = ("team", "opponent", "scrimmageName")
 

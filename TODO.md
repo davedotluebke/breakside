@@ -111,6 +111,33 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
+### 🧾 Event roster during an event (branch `event-roster-ingame`, 2026-10-05)
+
+Weekend bug: players unchecked from the event roster on Day 1 and re-checked on
+Day 2 never appeared on the Line tab; the coach started points with someone
+else and used Correct Lineup (which offers the whole team roster) to fix them.
+Root cause and fixes in ARCHITECTURE.md § Tournament Events and Phases,
+"Editing the event roster during an event": games and event edits were seeded
+from the team list's copy of the event (a refresh interval stale after a save),
+and game entry kept a same-id `currentEvent` for the whole game. Shipped:
+every event edit and every game entry starts from the stored event, and the
+in-game menu has **Event Roster + Stats** for an event game.
+
+- [ ] **Live propagation to the other coaches in the game.** A coach who edits the
+      event roster in-game (or from another device) changes `currentEvent` only on
+      their own phone; the others pick it up on their next game entry. The cheap
+      signal is already there — the grown snapshot's fresh `capturedAt` reaches the
+      server on the next sync — so the in-game refresh could refetch the event when
+      it sees a newer stamp on an event game (today `adoptServerSquadDefinition`
+      only acts on scrimmage halves). Unchecks don't bump the stamp, so that signal
+      is one-way unless every in-game save re-stamps.
+- [ ] **Last weekend's games.** Their snapshots never listed the Day-2 arrivals,
+      so Review and the per-game export omit their rows (the event roster screen
+      still shows them: it lists the team roster, not the snapshot). A one-off
+      `scripts/` fix-up that adds a game's point players to its snapshot would
+      cover it, or `resolveSummaryPlayers` could union the snapshot with whoever
+      has stats (it does so only when the snapshot is empty today).
+
 ### 🥏 Intrasquad scrimmages (merged 2026-09-27; field-tested 2026-09-28)
 
 **New Scrimmage** on a team card deals the roster onto two squads and starts
