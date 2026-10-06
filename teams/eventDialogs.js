@@ -4,7 +4,7 @@
  */
 import {
     authFetch, API_BASE_URL, updateEventOnCloud, deleteEventFromCloud,
-    listServerGames, updateGamePhase,
+    listServerGames, updateGamePhase, getEventFromCloud,
 } from '../store/sync.js';
 import { setCurrentEvent, deserializeTournamentEvent } from '../store/storage.js';
 import { showScreen } from '../screens/navigation.js';
@@ -373,8 +373,12 @@ function showEventSettingsDialog(event, team) {
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 
     document.getElementById('saveEventSettingsBtn').onclick = async () => {
+        // The body replaces the whole stored event, roster included, so it
+        // starts from the server's copy: the card's `event` can predate a
+        // roster edit, and would put the old roster back.
+        const latest = await freshEvent(event);
         const updatedData = {
-            ...event,
+            ...latest,
             name: document.getElementById('editEventName').value.trim() || event.name,
             status: document.getElementById('editEventStatus').value,
             defaults: {
@@ -407,17 +411,36 @@ function showEventSettingsDialog(event, team) {
 }
 
 /**
+ * The server's copy of an event, or the given one when the server is out of
+ * reach. The team list hands its buttons the event from its last draw, up to
+ * a refresh interval behind an edit made on the Event Roster screen or on
+ * another device; a game seeded from that copy fielded the old roster for
+ * its whole life (ARCHITECTURE.md § Tournament Events and Phases, "Editing
+ * the event roster during an event").
+ */
+async function freshEvent(event) {
+    try {
+        return await getEventFromCloud(event.id);
+    } catch (error) {
+        console.warn('Could not refresh event; using the team list copy:', error);
+        return event;
+    }
+}
+
+/**
  * Start a new game within an event — pre-fills defaults from the event
  */
 async function startNewEventGame(event, team) {
     // Select the team first (ensures currentTeam is set)
     await selectCloudTeam(team);
 
-    // Set the current event
-    setCurrentEvent(deserializeTournamentEvent(event));
+    // Set the current event — the stored one: this is what the game's
+    // roster snapshot and its Line tab are built from.
+    const latest = await freshEvent(event);
+    setCurrentEvent(deserializeTournamentEvent(latest));
 
     // Pre-fill game settings from event defaults
-    const defaults = event.defaults || {};
+    const defaults = latest.defaults || {};
     const enforceSelect = document.getElementById('enforceGenderRatioSelect');
     if (enforceSelect && defaults.alternateGenderRatio) {
         enforceSelect.value = defaults.alternateGenderRatio;
@@ -439,8 +462,10 @@ async function startNewEventGame(event, team) {
  * Navigate to event roster screen
  */
 function showEventRosterScreen(event, team) {
-    selectCloudTeam(team).then(() => {
-        showEventRosterUI(event);
+    // The editor starts from the stored event, so a save never writes a
+    // roster that another device has since replaced.
+    Promise.all([selectCloudTeam(team), freshEvent(event)]).then(([, latest]) => {
+        showEventRosterUI(latest);
     });
 }
 

@@ -3,11 +3,15 @@
  * Manages the roster for a TournamentEvent: select attending players and add pickups.
  * Table-based layout matching team roster UI pattern.
  */
-import { Gender, generateShortId } from '../store/models.js';
+import {
+    Gender, generateShortId, eventSnapshotPlayers, mergeRosterSnapshot,
+} from '../store/models.js';
 import {
     currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
+    saveAllTeamsData,
 } from '../store/storage.js';
-import { formatPlayerName } from '../utils/helpers.js';
+import { pruneLinesToSquad } from '../store/scrimmage.js';
+import { formatPlayerName, currentGame } from '../utils/helpers.js';
 import {
     loadEventGames, filterGames, getGamesPlayerStats, getGamesRecord,
     getGamesTeamStats, formatGameLabel, sumPlayerStats, formatTeamStatsLine,
@@ -23,9 +27,11 @@ import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildEventWorkbook, buildGameWorkbook } from '../utils/exportWorkbook.js';
 import { openExportDialog } from '../ui/exportDialog.js';
 import { gameLogText } from './gameSummary.js';
-import { updateEventOnCloud } from '../store/sync.js';
+import { updateEventOnCloud, syncEventToCloud } from '../store/sync.js';
 import { mountConnections } from '../ui/gameFlowChart.js';
-import { showScreen } from '../screens/navigation.js';
+import { showScreen, returnToGameFromRoster } from '../screens/navigation.js';
+import { showControllerToast } from '../game/controllerState.js';
+import { log } from '../utils/logger.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
 import {
     showEditPlayerDialog, closeEditPlayerDialog, validateJerseyNumber,
@@ -46,6 +52,9 @@ let eventRosterSortController = null;
 let eventRosterSortState = null; // persists sort across re-renders
 // Current scope: {} = everything, {phase} = one phase, {gameId} = one game.
 let eventRosterFilter = {};
+// Where Back and Save go: the team list, or the live game this screen was
+// opened from (the in-game menu's Event Roster + Stats, game/gameScreenEvents.js).
+let eventRosterReturnTo = 'selectTeamScreen';
 
 /**
  * The stats columns the active Stats level shows. The column set itself lives
@@ -69,9 +78,14 @@ function attendingEventPlayers() {
 /**
  * Show the event roster UI for editing an event's roster
  * @param {object} event - The event data object from the server
+ * @param {object} [options]
+ * @param {string} [options.returnTo='selectTeamScreen'] - 'gameScreen' when
+ *   opened from a live game's menu: Back and Save return to the game, and
+ *   Save also applies the roster to that game (applyEventRosterToLiveGame).
  */
-function showEventRosterUI(event) {
+function showEventRosterUI(event, { returnTo = 'selectTeamScreen' } = {}) {
     currentEventRosterEvent = event;
+    eventRosterReturnTo = returnTo;
     cachedEventGames = null; // clear cache for fresh load
     eventRosterSortState = null; // reset sort for new event
     eventRosterFilter = {}; // reset to "All games" when opening a new event
@@ -576,18 +590,81 @@ async function persistEventRoster() {
 
 async function saveEventRoster() {
     if (!currentEventRosterEvent) return;
+    if (eventRosterReturnTo === 'gameScreen') {
+        await saveEventRosterFromGame();
+        return;
+    }
     try {
         await persistEventRoster();
-        showScreen('selectTeamScreen');
+        // Back to a freshly drawn team list, not the one left behind: an
+        // event card's buttons close over the event from the last draw, so a
+        // New Event Game tapped before the next auto-refresh would seed the
+        // game (currentEvent, its snapshot) from the roster just replaced.
+        backToTeamList();
     } catch (error) {
         alert('Failed to save roster: ' + error.message);
     }
 }
 
 /**
+ * Save from a live game (opened by the in-game menu): persist, apply the
+ * roster to the game, return to it. A sideline has no reliable signal, so a
+ * save the server cannot be reached for is kept on this device —
+ * persistEventRoster has already put it in currentEvent, which is what the
+ * Line tab reads — and queued (syncEventToCloud) to land when the signal
+ * returns; the refetch on game entry leaves a queued edit alone
+ * (game/gameScreenSync.js enterGameScreen).
+ */
+async function saveEventRosterFromGame() {
+    try {
+        await persistEventRoster();
+    } catch (error) {
+        log('Event roster save failed; kept on this device and queued', error);
+        if (currentEventRosterEvent) syncEventToCloud(currentEventRosterEvent);
+        showControllerToast('Roster saved on this device — it reaches the server when you are back online', 'warning', 6000);
+    }
+    applyEventRosterToLiveGame();
+    returnToGameFromRoster();
+}
+
+/**
+ * Apply the saved event roster to the game this screen was opened from. The
+ * Line tab reads currentEvent through getActiveRoster(), so it offers the
+ * new roster as soon as the game screen redraws on return; what the game
+ * itself carries is updated here: its snapshot grows to list a late arrival
+ * (mergeRosterSnapshot — Review and the per-game export list the snapshot),
+ * and the planned lines drop anyone taken off the roster (pruneLinesToSquad;
+ * the Line tab would otherwise start a point with a player it no longer
+ * shows). A point already on the field keeps its line, as it does when a
+ * scrimmage squad changes mid-point.
+ */
+function applyEventRosterToLiveGame() {
+    const game = currentGame();
+    if (!game || !currentEvent || !currentTeam || game.eventId !== currentEvent.id) return;
+    const players = eventSnapshotPlayers(currentTeam, currentEvent);
+    const added = mergeRosterSnapshot(game, players);
+    const removed = pruneLinesToSquad(game.pendingNextLine, { players });
+    if (added.length === 0 && removed.length === 0) return;
+    log('📋 Event roster applied to the live game', {
+        added: added.map(p => p.name), removedFromPlannedLines: removed,
+    });
+    // Persists, and syncs the game so the grown snapshot and the pruned
+    // lines reach the server and the other coaches in this game.
+    saveAllTeamsData();
+}
+
+/**
  * Navigate back from event roster without saving
  */
 function backFromEventRoster() {
+    if (eventRosterReturnTo === 'gameScreen') {
+        returnToGameFromRoster();
+        return;
+    }
+    backToTeamList();
+}
+
+function backToTeamList() {
     // Rebuild the list like every other "back to teams" path does.
     // late-bound back-edge (teams/teamList lives "above" this module); see
     // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.

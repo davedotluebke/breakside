@@ -237,32 +237,7 @@ function createRosterSnapshot(team, event) {
 
     let players;
     if (event && event.roster) {
-        // Build from event roster: team players filtered by event playerIds + pickups
-        const eventPlayerIds = event.roster.playerIds || [];
-        const overrides = event.roster.overrides || {};
-        const teamPlayers = team.teamRoster.filter(p => eventPlayerIds.includes(p.id));
-        const pickups = (event.roster.pickupPlayers || []).map(p => ({
-            id: p.id,
-            name: p.name,
-            nickname: '',
-            number: p.number || null,
-            gender: p.gender || Gender.UNKNOWN,
-            position: p.position || null,
-            defaultLine: p.defaultLine || null
-        }));
-        players = teamPlayers.map(player => {
-            // Snapshot the EFFECTIVE position/line (per-event override wins).
-            const ov = overrides[player.id] || {};
-            return {
-                id: player.id,
-                name: player.name,
-                nickname: player.nickname || '',
-                number: player.number || null,
-                gender: player.gender || Gender.UNKNOWN,
-                position: ov.position || player.position || null,
-                defaultLine: ov.defaultLine || player.defaultLine || null
-            };
-        }).concat(pickups);
+        players = eventSnapshotPlayers(team, event);
     } else {
         players = team.teamRoster.map(player => ({
             id: player.id,
@@ -289,6 +264,81 @@ function createRosterSnapshot(team, event) {
         players: players,
         capturedAt: new Date().toISOString()
     };
+}
+
+/**
+ * The snapshot entries an event game captures: the team players the event
+ * roster checks, with their EFFECTIVE position/line (the per-event override
+ * wins), then the event's pickups. Shared by createRosterSnapshot at game
+ * start and by the in-game event roster save, which merges them into the
+ * running game's snapshot (mergeRosterSnapshot).
+ * @param {Team} team
+ * @param {TournamentEvent} event
+ * @returns {Array<object>} [{id, name, nickname, number, gender, position, defaultLine}]
+ */
+function eventSnapshotPlayers(team, event) {
+    const roster = (team && team.teamRoster) || [];
+    const eventRoster = (event && event.roster) || {};
+    const eventPlayerIds = eventRoster.playerIds || [];
+    const overrides = eventRoster.overrides || {};
+    const teamPlayers = roster.filter(p => eventPlayerIds.includes(p.id)).map(player => {
+        const ov = overrides[player.id] || {};
+        return {
+            id: player.id,
+            name: player.name,
+            nickname: player.nickname || '',
+            number: player.number || null,
+            gender: player.gender || Gender.UNKNOWN,
+            position: ov.position || player.position || null,
+            defaultLine: ov.defaultLine || player.defaultLine || null
+        };
+    });
+    const pickups = (eventRoster.pickupPlayers || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        nickname: '',
+        number: p.number || null,
+        gender: p.gender || Gender.UNKNOWN,
+        position: p.position || null,
+        defaultLine: p.defaultLine || null
+    }));
+    return teamPlayers.concat(pickups);
+}
+
+/**
+ * Grow a game's roster snapshot to include `players`, the roster as the
+ * game is being played: the event roster was edited during the game and the
+ * snapshot, captured at game start, would otherwise never list the late
+ * arrival who then played (Review and the per-game export list the snapshot,
+ * teams/gameSummary.js resolveSummaryPlayers). Additive only — a player
+ * taken off the event roster stays listed, since they may already have been
+ * on the field. When anything is added the snapshot gets a fresh capturedAt:
+ * the server keeps the newer snapshot whoever syncs it
+ * (breakside_server/storage/game_storage.py _adopt_newer_squad), so the
+ * addition survives the Active Coach's next sync of the copy their phone
+ * held when a Line Coach made the edit. A game with no snapshot (none was
+ * captured at start — the roster was empty then) gets one now.
+ * @param {Game} game - mutated in place
+ * @param {Array<object>} players - snapshot entries (eventSnapshotPlayers)
+ * @param {Date} [now]
+ * @returns {Array<object>} the entries added (empty when nothing changed)
+ */
+function mergeRosterSnapshot(game, players, now = new Date()) {
+    if (!game || !Array.isArray(players) || players.length === 0) return [];
+    if (!game.rosterSnapshot || !Array.isArray(game.rosterSnapshot.players)) {
+        game.rosterSnapshot = { players: [], capturedAt: now.toISOString() };
+    }
+    const have = new Set(game.rosterSnapshot.players.map(p => p && p.id).filter(Boolean));
+    const added = [];
+    players.forEach(p => {
+        if (!p || !p.id || have.has(p.id)) return;
+        have.add(p.id);
+        added.push({ ...p });
+    });
+    if (added.length === 0) return [];
+    game.rosterSnapshot.players.push(...added);
+    game.rosterSnapshot.capturedAt = now.toISOString();
+    return added;
 }
 
 // Team data structure
@@ -906,7 +956,7 @@ export {
     Player, Game, Team, TournamentEvent,
     Event, Throw, Turnover, Violation, Defense, Other, Pull, Pickup,
     Possession, Point,
-    createRosterSnapshot, captureCurrentMode,
+    createRosterSnapshot, eventSnapshotPlayers, mergeRosterSnapshot, captureCurrentMode,
     generateShortId, generatePlayerId, generateTeamId, generateEventId,
     isTestName, isTestTeam, isTestGame,
     hydrateEvent, hydrateGame,

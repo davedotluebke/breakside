@@ -1137,6 +1137,27 @@ async function listTeamEvents(teamId) {
     return result.events || [];
 }
 
+/**
+ * One event as the server holds it now. Anything that writes a whole event
+ * back (the Event Settings dialog, the event roster save) or hands a game its
+ * roster (New Event Game, game entry) starts from this, not from the team
+ * list's copy: the list gives its buttons the event from its last draw,
+ * which can be a refresh interval behind an edit made on the Event Roster
+ * screen or on another device (ARCHITECTURE.md § Tournament Events and
+ * Phases, "Editing the event roster during an event").
+ * @param {string} eventId
+ * @returns {Promise<object>} the stored event
+ * @throws when the server cannot be reached or refuses: callers fall back to
+ *   the copy they hold
+ */
+async function getEventFromCloud(eventId) {
+    const response = await authFetch(`${API_BASE_URL}/api/events/${eventId}`);
+    if (!response.ok) {
+        throw new Error(`Failed to load event: ${response.status} ${response.statusText}`);
+    }
+    return await response.json();
+}
+
 
 /**
  * Update only a game's phase label (retroactive labeling).
@@ -2328,7 +2349,7 @@ export {
     createTeamOffline, syncTeamToCloud, loadTeamFromCloud, listCloudTeams,
     deleteTeamFromCloud,
     syncEventToCloud, createEventOnCloud, updateEventOnCloud,
-    deleteEventFromCloud, listTeamEvents, updateGamePhase,
+    deleteEventFromCloud, listTeamEvents, getEventFromCloud, updateGamePhase,
     generateGameId, createGameOffline, prepareGameForSync, syncGameToCloud,
     listServerGames, loadGameFromCloud,
     fetchGameStamp,

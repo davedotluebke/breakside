@@ -926,12 +926,20 @@ function hideGameScreen() {
  * Hide all legacy screens to prevent them from showing under the panel UI
  */
 function hideLegacyScreens() {
-    // Hide all non-game screens
+    // Hide all non-game screens — the same set screens/navigation.js manages,
+    // since any of them can be the one left showing when a game is entered
+    // (the Event Roster screen opened from the in-game menu returns here;
+    // it used to stay display:block under the game container).
     const screenIds = [
         'selectTeamScreen',
         'teamRosterScreen',
         'teamSettingsScreen',
-        'gameSummaryScreen'
+        'teamMailScreen',
+        'eventRosterScreen',
+        'scrimmageStatsScreen',
+        'gameSummaryScreen',
+        'shareEventScreen',
+        'shareErrorScreen',
     ];
 
     screenIds.forEach(id => {

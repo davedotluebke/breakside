@@ -6,14 +6,17 @@
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
 import { Role, Gender, Other, Possession, isTestGame, stampEvent } from '../store/models.js';
-import { teams, currentTeam, saveAllTeamsData, getActiveRoster } from '../store/storage.js';
+import {
+    teams, currentTeam, currentEvent, saveAllTeamsData, getActiveRoster,
+    serializeTournamentEvent,
+} from '../store/storage.js';
 import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     currentGame, getLatestPoint, isPointInProgress,
     determineStartingPosition, formatPlayerName,
     buildPlayerNameResolver, buildPointMembership, buildPointPlayerLookup,
 } from '../utils/helpers.js';
-import { refreshPendingLineFromCloud } from '../store/sync.js';
+import { refreshPendingLineFromCloud, getEventFromCloud } from '../store/sync.js';
 import { resetPendingLinesAtPointEnd } from '../store/pendingLineLogic.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import {
@@ -26,6 +29,7 @@ import {
 } from '../screens/navigation.js';
 import { showSelectTeamScreen, endOtherScrimmageHalves } from '../teams/teamList.js';
 import { showEditSquadsDialog } from '../teams/scrimmageDialogs.js';
+import { showEventRosterUI } from '../teams/eventRoster.js';
 import { showTeamSettingsScreen } from '../teams/teamSettings.js';
 import { showGameSummaryPostGame } from '../teams/gameSummary.js';
 import { showShareGameDialog } from './shareGame.js';
@@ -136,6 +140,15 @@ function wireGameScreenEvents() {
             if (typeof showStartGameScreen === 'function') {
                 showStartGameScreen('gameScreen');
             }
+        });
+    }
+
+    // Event Roster + Stats (event games only; shown by handleGameMenuClick).
+    const eventRosterBtn = document.getElementById('menuEventRoster');
+    if (eventRosterBtn) {
+        eventRosterBtn.addEventListener('click', () => {
+            closeGameMenu();
+            openEventRosterFromGame();
         });
     }
 
@@ -367,11 +380,19 @@ function handleGameMenuClick(e) {
         }
 
         // Edit Squads: a scrimmage half only, and not for viewers.
+        // Event Roster + Stats: an event game only, and not for viewers.
         const editSquadsBtn = document.getElementById('menuEditSquads');
-        if (editSquadsBtn) {
+        const eventRosterBtn = document.getElementById('menuEventRoster');
+        if (editSquadsBtn || eventRosterBtn) {
             const game = typeof currentGame === 'function' ? currentGame() : null;
             const viewerMode = typeof window.isViewer === 'function' && window.isViewer();
-            editSquadsBtn.style.display = (isScrimmageGame(game) && !viewerMode) ? '' : 'none';
+            if (editSquadsBtn) {
+                editSquadsBtn.style.display = (isScrimmageGame(game) && !viewerMode) ? '' : 'none';
+            }
+            if (eventRosterBtn) {
+                const inEvent = !!(game && game.eventId) && !isScrimmageGame(game);
+                eventRosterBtn.style.display = (inEvent && !viewerMode) ? '' : 'none';
+            }
         }
 
         // Field orientation flips only make sense on the Field tab — show them
@@ -407,6 +428,38 @@ function handleGameMenuClick(e) {
             }
         }
     }
+}
+
+/**
+ * Event Roster + Stats from the in-game menu: the screen an event card's
+ * button opens, returning to this game (teams/eventRoster.js, returnTo
+ * 'gameScreen'). It edits the server's copy of the event — another coach
+ * may have changed it since this device entered the game — and falls back
+ * to the copy this device holds when the server is out of reach, so the
+ * roster can still be fixed from a sideline with no signal. Why this exists:
+ * a late arrival re-checked on the event roster used to be reachable only by
+ * leaving the game, and a game started from a stale event copy never showed
+ * them on the Line tab at all (ARCHITECTURE.md § Tournament Events and
+ * Phases, "Editing the event roster during an event").
+ */
+async function openEventRosterFromGame() {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    if (!game || !game.eventId) return;
+    let event = null;
+    try {
+        event = await getEventFromCloud(game.eventId);
+    } catch (error) {
+        log('Event fetch failed; editing the copy this device holds', error);
+        if (currentEvent && currentEvent.id === game.eventId) {
+            event = serializeTournamentEvent(currentEvent);
+        }
+    }
+    if (!event) {
+        showControllerToast('Could not load the event roster — check your connection', 'error', 5000);
+        return;
+    }
+    hideGameScreen();
+    showEventRosterUI(event, { returnTo: 'gameScreen' });
 }
 
 /**

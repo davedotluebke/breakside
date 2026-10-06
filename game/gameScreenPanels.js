@@ -82,6 +82,9 @@ function createHeaderContent() {
                 <button class="menu-item" id="menuRoster">
                     <i class="fas fa-users"></i> Roster + Stats
                 </button>
+                <button class="menu-item" id="menuEventRoster" style="display: none;">
+                    <i class="fas fa-user-check"></i> Event Roster + Stats
+                </button>
                 <button class="menu-item" id="menuEditSquads" style="display: none;">
                     <i class="fas fa-people-arrows"></i> Edit Squads
                 </button>

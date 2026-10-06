@@ -15,8 +15,8 @@ import { isScrimmageGame, describeSquadChange, pruneLinesToSquad } from '../stor
 import { currentGame, isPointInProgress } from '../utils/helpers.js';
 import { normalizeStamp, stampSaysChanged } from '../utils/changeStamp.js';
 import {
-    listTeamEvents, refreshPendingLineFromCloud, refreshGameStateFromCloud,
-    fetchGameStamp,
+    getEventFromCloud, hasPendingSync, refreshPendingLineFromCloud,
+    refreshGameStateFromCloud, fetchGameStamp,
 } from '../store/sync.js';
 import {
     isGameScreenVisible, showGameScreen, hideGameScreen, resetAllPanelStates,
@@ -384,25 +384,37 @@ function enterGameScreen(options = {}) {
     setPanelShowingTotalStats(false);
     setCachedPanelEventStats(null);
 
-    // Set currentEvent if game is part of an event. Refetch when it's missing
-    // OR points at a different event than this game, so the Line tab always
-    // reflects the latest per-event position/line overrides (getEffective*
-    // read currentEvent). Same-event edits are also pushed into currentEvent
-    // synchronously by saveEventRoster, so this best-effort async fetch is a
-    // backstop rather than the only path.
+    // An event game refreshes its event on every entry. The Line tab offers
+    // getActiveRoster(), which reads currentEvent.roster (and getEffective*
+    // read its overrides), so currentEvent has to be the stored event, not
+    // whatever copy this device last held: a copy that predated an edit —
+    // made on another device, or on the Event Roster screen a moment before
+    // New Event Game was tapped — used to be kept for the whole game, with
+    // the Line tab missing the players re-checked for the day. Same-event
+    // edits made in-game are pushed into currentEvent synchronously
+    // (teams/eventRoster.js persistEventRoster), so this is the backstop for
+    // the rest; an edit still on the sync queue (saved offline) is left
+    // alone, since the stored copy predates it. Best effort: offline, the
+    // copy this device holds stands.
     const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
-    if (currentGameObj && currentGameObj.eventId
-        && (!currentEvent || currentEvent.id !== currentGameObj.eventId)) {
-        // Try to fetch event data (best effort — will be null if not loaded)
-        if (typeof listTeamEvents === 'function' && currentGameObj.teamId) {
-            listTeamEvents(currentGameObj.teamId).then(events => {
-                const ev = events.find(e => e.id === currentGameObj.eventId);
-                if (ev) {
-                    setCurrentEvent(typeof deserializeTournamentEvent === 'function'
-                        ? deserializeTournamentEvent(ev) : ev);
-                }
-            }).catch(() => {});
-        }
+    if (currentGameObj && currentGameObj.eventId) {
+        const gameId = currentGameObj.id;
+        const eventId = currentGameObj.eventId;
+        getEventFromCloud(eventId).then(ev => {
+            const live = typeof currentGame === 'function' ? currentGame() : null;
+            if (!ev || !live || live.id !== gameId) return;   // left for another game meanwhile
+            if (hasPendingSync('event', eventId)) return;
+            const before = currentEvent && currentEvent.id === eventId
+                ? JSON.stringify(currentEvent.roster || null) : null;
+            setCurrentEvent(deserializeTournamentEvent(ev));
+            const changed = before !== JSON.stringify(currentEvent.roster || null);
+            if (changed && isGameScreenVisible()) {
+                log('📋 Event roster refreshed from the server; redrawing the Line tab');
+                updateSelectLinePanel();
+            }
+        }).catch(error => {
+            log('Event refresh failed; keeping the copy this device holds', error);
+        });
     }
 
     // Stop active-game polling while in a game
