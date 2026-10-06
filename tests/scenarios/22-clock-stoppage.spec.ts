@@ -47,9 +47,15 @@ async function clock(page: Page) {
   });
 }
 
-/** Record a timeout from the Game Events modal, attributed to us. */
+/**
+ * Record a timeout from the Game Events modal, attributed to us. The modal
+ * opens from the Line tab's own Events button (where the app sits between
+ * points) or the Simple / All panel's, whichever is showing.
+ */
 async function callTimeout(page: Page) {
-  await page.click('#pbpGameEventsBtn');
+  const lineTabBtn = page.locator('#lineTabGameEventsBtn');
+  const btn = (await lineTabBtn.isVisible()) ? lineTabBtn : page.locator('#pbpGameEventsBtn');
+  await btn.click();
   await expect(page.locator('#gameEventsModal')).toBeVisible({ timeout: 5_000 });
   await page.click('#geTimeoutBtn');
   await expect(page.locator('#timeoutWhoModal')).toBeVisible({ timeout: 5_000 });

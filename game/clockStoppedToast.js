@@ -57,7 +57,15 @@ function formatStopped(ms) {
     return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
+// What the standby screen last reported (its change event fires at the
+// start of a fade, in both directions). Until it has reported, fall back to
+// the body class it keeps. The event is read rather than the class because
+// on the way out the class stays on through the 180 ms leaving fade, and
+// the toast should be back as the fade starts, not a tick later.
+let standbyReported = null;   // { active, entering } | null
+
 function standbyUp() {
+    if (standbyReported) return !!(standbyReported.active || standbyReported.entering);
     return !!(document.body && document.body.classList.contains('standby-active'));
 }
 
@@ -139,7 +147,11 @@ export function refreshClockStoppedToast() {
 // Standby: hide on the way in, rebuild on the way out. The event fires at
 // the start of the leaving fade (the overlay still swallows taps until it
 // finishes), so the toast is back before the coach can reach for it.
-document.addEventListener('breakside:standby-changed', () => refreshClockStoppedToast());
+document.addEventListener('breakside:standby-changed', (e) => {
+    const d = e.detail || {};
+    standbyReported = { active: !!d.active, entering: !!d.entering };
+    refreshClockStoppedToast();
+});
 
 // Leaving the game screen: nothing to tell anyone. The power plan's inGame
 // context flag is the game screen's own lifecycle signal (ui/standbyScreen.js
