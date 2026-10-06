@@ -3,6 +3,7 @@
  * interval. Split out of teamSelection.js (D2 refactor).
  */
 import { listServerGames } from '../store/sync.js';
+import { currentGame } from '../utils/helpers.js';
 import { _cloudTeamsCache, isGameActive, resumeCloudGame } from './teamList.js';
 import { doFullRefresh } from './syncStatusUI.js';
 import { showControllerToast } from '../game/controllerState.js';
@@ -53,9 +54,18 @@ async function checkForActiveGames() {
         const activeGames = allGames.filter(g => isGameActive(g) && !g.game_end_timestamp);
         const currentActiveIds = new Set(activeGames.map(g => g.game_id));
 
+        // The game this device is in the middle of is not news: a sub-screen
+        // reached from the in-game menu (the roster, Team Settings, the event
+        // roster) stops the in-game loops and starts this one, and the
+        // coach's own game, unseen by the previous poll, toasted them to
+        // "tap to join" it.
+        const own = typeof currentGame === 'function' ? currentGame() : null;
+        const ownActiveId = own && own.id && !own.gameEndTimestamp ? own.id : null;
+
         for (const game of activeGames) {
             if (_previousActiveGameIds.has(game.game_id)) continue; // not new
             if (_dismissedActiveGames.has(game.game_id)) continue;  // user dismissed
+            if (ownActiveId && game.game_id === ownActiveId) continue; // this device's own game
 
             // Find the team from our cache
             const teamEntry = _cloudTeamsCache.find(t => t.team.id === game.teamId);
