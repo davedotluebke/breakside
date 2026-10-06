@@ -30,6 +30,9 @@
  * only: it has no marker to judge staleness by, and it inflates nothing (it
  * reads 0:00 until touched), so an abandoned pending point is merely the
  * game's live last point, as any untouched in-progress point already is.
+ * A stopped clock (`clockStopped`, a timeout / injury sub / manual pause
+ * mid-point) is cleared under the same two rules, for the same reason: it
+ * accrues nothing, and only the live last point can be mid-stoppage.
  */
 
 export const STALE_RUNNING_TIMER_MS = 12 * 60 * 60 * 1000;
@@ -51,6 +54,10 @@ export function normalizePointTimers(points, now = Date.now()) {
         const hasLaterPoint = index < points.length - 1;
         if (point.clockPending && (concluded || hasLaterPoint)) {
             point.clockPending = false;
+            repaired += 1;
+        }
+        if (point.clockStopped && (concluded || hasLaterPoint)) {
+            point.clockStopped = null;
             repaired += 1;
         }
         if (!point.startTimestamp) { return; }

@@ -43,8 +43,9 @@ import {
 } from './controllerState.js';
 import { WHOLESALE_ICON_SVG, AUTO_ICON_SVG } from './gameScreenPanels.js';
 import {
-    autoResumePointTimer, handleTimerToggle, handleTimerPauseClick,
+    handleTimerToggle, handleTimerPauseClick, updateTimerDisplay,
 } from './gameTimer.js';
+import { stopPointClock } from '../store/pointClock.js';
 import {
     wireSelectLineEvents, handlePanelStartPoint, clearLineSelection,
     autoFillLineSelection, checkPanelGenderRatio, getEffectiveLineForNextPoint,
@@ -787,9 +788,9 @@ function handlePbpWeScore() {
         return;
     }
     
-    // Auto-resume timer if paused
-    autoResumePointTimer();
-
+    // A stopped clock (timeout / injury sub / pause) stays stopped here:
+    // updateScore clears it when the score commits, and a cancelled
+    // attribution leaves the stoppage — and its toast — in place.
     stopPointTimeAccrual();
 
     // Ensure the dialog is visible by moving it to body if needed
@@ -817,9 +818,9 @@ function handlePbpTheyScore() {
         return;
     }
     
-    // Auto-resume timer if paused
-    autoResumePointTimer();
-
+    // A stopped clock (timeout / injury sub / pause) stays stopped here:
+    // updateScore clears it when the score commits, and a cancelled
+    // attribution leaves the stoppage — and its toast — in place.
     stopPointTimeAccrual();
 
     // Update score and move to next point
@@ -1218,6 +1219,14 @@ function confirmSubstitution() {
 
     currentPossession.events.push(stampEvent(subEvent));
 
+    // An injury sub is a stoppage: the point clock stops until the next
+    // recorded play (store/pointClock.js § Stoppages; the toast comes from
+    // game/clockStoppedToast.js via the repaint). A no-op unless the clock
+    // was running.
+    if (stopPointClock(point, 'injury')) {
+        if (typeof logEvent === 'function') logEvent('Point clock stopped — injury sub');
+        updateTimerDisplay();
+    }
 
     // Log to event log
     if (typeof logEvent === 'function') {
@@ -1889,6 +1898,15 @@ function recordTimeout(calledBy) {
         betweenPoints: point.winner ? true : null,
     });
     poss.events.push(stampEvent(timeoutEvent));
+
+    // Mid-point, a timeout — ours, theirs or neither — stops the point clock
+    // until the next recorded play (store/pointClock.js § Stoppages; the
+    // toast comes from game/clockStoppedToast.js via the repaint). Between
+    // points nothing is running and this is a no-op.
+    if (stopPointClock(point, 'timeout')) {
+        if (typeof logEvent === 'function') logEvent('Point clock stopped — timeout');
+        updateTimerDisplay();
+    }
 
     const summary = timeoutEvent.summarize().trim();
     if (typeof logEvent === 'function') logEvent(summary);

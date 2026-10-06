@@ -102,3 +102,28 @@ test('legacy JSON without timestamps deserializes to null, never to load time', 
     assert.equal(back.points[0].possessions[0].startedAt, null);
     assert.equal(back.points[0].possessions[0].events[0].at, null);
 });
+
+test('a stopped point clock (clockStopped + lastPauseTime) round-trips; the key is written only while set', () => {
+    const poss = new Possession(true);
+    poss.addEvent(new Throw({}));
+    const game = gameWith([poss]);
+    const point = game.points[0];
+    point.totalPointTime = 32000;
+    point.lastPauseTime = new Date('2026-10-05T18:00:30.000Z');
+    point.clockStopped = 'timeout';
+
+    const data = serializeGame(game);
+    assert.equal(data.points[0].clockStopped, 'timeout');
+    assert.equal(data.points[0].lastPauseTime, '2026-10-05T18:00:30.000Z');
+
+    const back = deserializeGame(data);
+    assert.equal(back.points[0].clockStopped, 'timeout');
+    assert.equal(back.points[0].lastPauseTime.toISOString(), '2026-10-05T18:00:30.000Z');
+    assert.equal(back.points[0].totalPointTime, 32000);
+
+    // Running (or legacy) points carry no key, and deserialize to null.
+    point.clockStopped = null;
+    const running = serializeGame(game);
+    assert.equal('clockStopped' in running.points[0], false);
+    assert.equal(deserializeGame(running).points[0].clockStopped, null);
+});

@@ -162,6 +162,7 @@ import './ui/standbyScreen.js';
 import './ui/standbyTimer.js';
 import './game/gameScreenPanels.js';
 import './game/gameScreenEvents.js';
+import './game/clockStoppedToast.js';
 import './game/gameTimer.js';
 import './game/selectLine.js';
 import './game/gameScreenSync.js';

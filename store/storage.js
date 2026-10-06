@@ -177,6 +177,8 @@ function serializeGame(game) {
             // Clock armed, waiting for the first touch (store/pointClock.js).
             // Written only while true so stored games stay byte-identical.
             ...(point.clockPending ? { clockPending: true } : {}),
+            // Clock stopped for a stoppage (timeout / injury / manual); same rule.
+            ...(point.clockStopped ? { clockStopped: point.clockStopped } : {}),
             substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
             substitutedInPlayers: point.substitutedInPlayers || [],    // Players subbed in mid-point
             playerStatsCounted: !!point.playerStatsCounted,  // live counters applied id-aware (pointStats.js)
@@ -496,6 +498,7 @@ function deserializePointsFromServer(pointsData) {
         point.totalPointTime = pointData.totalPointTime || 0;
         point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
         point.clockPending = pointData.clockPending === true;  // absent on legacy data
+        point.clockStopped = typeof pointData.clockStopped === 'string' ? pointData.clockStopped : null;
         point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
         point.substitutedInPlayers = pointData.substitutedInPlayers || [];    // Players subbed in mid-point
         point.playerStatsCounted = !!pointData.playerStatsCounted;  // absent on pre-fix data → legacy revert path

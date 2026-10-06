@@ -208,3 +208,20 @@ test('an armed clock (clockPending) survives on the live last point, is cleared 
     // Legacy data carries no flag at all — nothing to repair.
     assert.equal(normalizePointTimers([makePoint({})], NOW), 0);
 });
+
+test('a stopped clock (clockStopped) survives on the live last point, is cleared on concluded and non-last points', () => {
+    const stopAt = new Date(NOW - 2 * MINUTES);
+    const points = [
+        makePoint({ winner: 'team', endTimestamp: new Date(NOW - 30 * MINUTES), totalPointTime: 65000, clockStopped: 'timeout', lastPauseTime: stopAt }),
+        makePoint({ clockStopped: 'injury', lastPauseTime: stopAt, totalPointTime: 40000 }),
+        makePoint({ clockStopped: 'timeout', lastPauseTime: stopAt, totalPointTime: 12000 }),
+    ];
+    assert.equal(normalizePointTimers(points, NOW), 2);
+    assert.equal(points[0].clockStopped, null, 'concluded');
+    assert.equal(points[0].totalPointTime, 65000, 'banked time untouched');
+    assert.equal(points[1].clockStopped, null, 'a later point exists');
+    assert.equal(points[1].totalPointTime, 40000);
+    assert.equal(points[2].clockStopped, 'timeout', 'the live last point is still mid-stoppage');
+    assert.equal(points[2].startTimestamp, null);
+    assert.equal(points[2].totalPointTime, 12000);
+});

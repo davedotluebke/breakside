@@ -143,17 +143,18 @@ function getPointOf(targetEvent) {
 /**
  * Check if a point is currently in progress
  * A point is in progress if it has been started (has startTimestamp, an
- * armed clock waiting for the first touch — store/pointClock.js — or
- * possessions) and hasn't ended (winner is empty)
+ * armed or stopped clock — store/pointClock.js — or possessions) and
+ * hasn't ended (winner is empty)
  */
 function isPointInProgress() {
     const latestPoint = getLatestPoint();
     if (!latestPoint) { return false; }
     // Point hasn't ended yet
     if (latestPoint.winner !== "") { return false; }
-    // Point has been started (timestamp, armed clock, or possessions)
+    // Point has been started (timestamp, armed / stopped clock, or possessions)
     const hasStarted = latestPoint.startTimestamp !== null
         || latestPoint.clockPending === true
+        || !!latestPoint.clockStopped
         || latestPoint.possessions.length > 0;
     return hasStarted;
 }
@@ -323,7 +324,6 @@ function buildPointPlayerLookup(game) {
  * Helper function to calculate player's time in current game
  * Accepts a Player object (preferred — survives mid-game renames) or a
  * player name string.
- * Note: This function references isPaused which is defined in main.js
  */
 function getPlayerGameTime(playerOrName) {
     let totalTime = 0;
@@ -346,20 +346,13 @@ function getPlayerGameTime(playerOrName) {
                     // For completed points, just use the totalPointTime
                     totalTime += point.totalPointTime;
                 } else if (!point.winner) {
-                    // For the current point (in progress), handle paused state.
-                    // late-bound state read (isPaused lives in
-                    // game/pointManagement.js, "above" this layer — its window
-                    // accessor is kept deliberately; see ARCHITECTURE.md § ES modules).
-                    if (typeof window.isPaused !== 'undefined' && window.isPaused) {
-                        // If paused, just use the accumulated time
-                        totalTime += point.totalPointTime;
-                    } else if (point.startTimestamp) {
-                        // If running, calculate current running time and update totalPointTime
-                        const currentRunningTime = new Date() - point.startTimestamp;
-                        totalTime += currentRunningTime;
-                    } else {
-                        // Point not started yet
-                        totalTime += 0;
+                    // The point in progress: the play time banked so far
+                    // (segments before a stoppage — store/pointClock.js) plus
+                    // the running segment, if the clock is running. An armed
+                    // or stopped clock has no segment and adds nothing.
+                    totalTime += point.totalPointTime || 0;
+                    if (point.startTimestamp) {
+                        totalTime += Date.now() - new Date(point.startTimestamp).getTime();
                     }
                 } else {
                     // This shouldn't happen, but if it does, just use totalPointTime

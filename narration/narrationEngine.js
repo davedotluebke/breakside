@@ -30,7 +30,7 @@ import { updateScore } from '../game/gameLogic.js';
 import { moveToNextPoint } from '../game/pointManagement.js';
 import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
 import { closePullDialog } from '../playByPlay/pullDialog.js';
-import { startPointClock } from '../store/pointClock.js';
+import { touchPointClock } from '../store/pointClock.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { summarizeDrops } from './dropReasons.js';
 import { narrationEventBus } from './eventBus.js';
@@ -53,6 +53,16 @@ const narrationEngine = (function() {
     // being heard; events are produced by the slow pass on stop (Claude via
     // /api/narration/finalize), whose ADD operation routes through the
     // shared apply* functions below.
+
+    /**
+     * A narrated touch: starts an armed point clock, or restarts one
+     * stopped for a stoppage (store/pointClock.js), and repaints the header
+     * chip now rather than on its next tick (late-bound back-edge:
+     * game/gameTimer.js keeps the window survivor).
+     */
+    function touchClock() {
+        if (touchPointClock(getLatestPoint())) window.updateTimerDisplay?.();
+    }
 
     // -----------------------------------------------------------------
     // State
@@ -290,7 +300,7 @@ Just listen. Transcription happens automatically.`;
         });
         const possession = ensurePossessionExists(true);
         possession.addEvent(evt);
-        startPointClock(getLatestPoint());   // first touch starts an armed point clock
+        touchClock();   // first touch starts an armed point clock; a touch after a stoppage restarts it
 
         // Stats updates — match keyPlayDialog behaviour
         if (thrower) thrower.completedPasses = (thrower.completedPasses || 0) + 1;
@@ -334,7 +344,7 @@ Just listen. Transcription happens automatically.`;
         });
         const possession = ensurePossessionExists(true);
         possession.addEvent(evt);
-        startPointClock(getLatestPoint());   // first touch starts an armed point clock
+        touchClock();   // first touch starts an armed point clock; a touch after a stoppage restarts it
 
         const provId = nextProvisionalId();
         provisionalEvents.push({ id: provId, event: evt, possession });
@@ -360,7 +370,7 @@ Just listen. Transcription happens automatically.`;
         });
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
-        startPointClock(getLatestPoint());   // first touch starts an armed point clock
+        touchClock();   // first touch starts an armed point clock; a touch after a stoppage restarts it
 
         const provId = nextProvisionalId();
         provisionalEvents.push({ id: provId, event: evt, possession, isCallahan: !!args.callahan });
@@ -421,7 +431,7 @@ Just listen. Transcription happens automatically.`;
         // opponent has the disc.
         const possession = ensurePossessionExists(false);
         possession.addEvent(evt);
-        startPointClock(getLatestPoint());   // first touch starts an armed point clock
+        touchClock();   // first touch starts an armed point clock; a touch after a stoppage restarts it
 
         const provId = nextProvisionalId();
         provisionalEvents.push({ id: provId, event: evt, possession });

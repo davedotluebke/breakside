@@ -157,6 +157,13 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* The stopped-clock toast (game/clockStoppedToast.js): the "stopped for"
+   counter ticks once a second, so it must not jitter either. */
+.toast.toast-clock-stopped .clock-stopped-for {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
 .toast.toast-success {
     background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
     color: var(--white);

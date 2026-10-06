@@ -42,7 +42,7 @@ import {
 } from './gameScreenEvents.js';
 import {
     updateTimerDisplay, updateTimerPauseButton, startGameScreenTimerLoop,
-    stopGameScreenTimerLoop, setPointTimerPaused,
+    stopGameScreenTimerLoop,
 } from './gameTimer.js';
 import {
     updateSelectLinePanel, updateSelectLinePanelState, updateSelectLineTable,
@@ -444,10 +444,9 @@ function enterGameScreen(options = {}) {
     // Reset the "no roles" warning toast reference so it can show again for this game session
     noRolesWarningToast = null;
     gameScreenEnteredAt = Date.now();
-    
-    // Reset timer pause state when entering (state owned by game/gameTimer.js)
-    setPointTimerPaused(false);
-    
+    // (The clock's stopped / armed state is the point's own, persisted —
+    // store/pointClock.js — so there is nothing to reset on entry.)
+
     // Update displays
     let game;
     if (typeof currentGame === 'function') {

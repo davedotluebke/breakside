@@ -17,6 +17,8 @@ import {
     TOUCH_EVENT_TYPES, isTouchEvent, pointHasTouch, awaitingPull,
     clockWaitsForFirstTouch, armPointClock, startPointClock, rearmPointClockIfUntouched,
     startPointClockOnSurface,
+    isPointClockStopped, stopReasonOf, stopPointClock, restartPointClock,
+    touchPointClock, resumePointClockFromStop, clockStoppedForMs,
 } from '../../store/pointClock.js';
 import {
     Point, Possession, Throw, Turnover, Defense, Pull, Pickup, Other, Violation, UNKNOWN_PLAYER,
@@ -186,4 +188,123 @@ test('a drop with no thrower is a dropped pull; a drop from Unknown Player is an
     assert.equal(drop.isPullDrop(), false);
     assert.match(drop.summarize(), /^Cara misses the catch from Unknown Player/);
     assert.equal(new Turnover({ thrower: null, throwaway: true }).isPullDrop(), false, 'not a drop');
+});
+
+// ─── Stoppages (timeout / injury sub / pause) ───────────────────────────────
+
+const T = (secs) => new Date(Date.parse('2026-10-05T18:00:00Z') + secs * 1000);
+/** Date-valued fields compared by instant: T(n) returns a fresh Date each call. */
+const at = (d) => (d ? new Date(d).getTime() : d);
+
+test('stopReasonOf: a timeout or injury sub is a stoppage; a lineup correction, a period break or a touch is not', () => {
+    assert.equal(stopReasonOf(new Other({ timeout: true, calledBy: 'them' })), 'timeout');
+    assert.equal(stopReasonOf(new Other({ injury: true, description: 'Sub: Bob in for Alice' })), 'injury');
+    assert.equal(stopReasonOf(new Other({ lineupCorrection: true })), null);
+    assert.equal(stopReasonOf(new Other({ halftime: true, betweenPoints: true })), null);
+    assert.equal(stopReasonOf(new Throw({ thrower: P.Alice, receiver: P.Bob })), null);
+    assert.equal(stopReasonOf(new Violation({ pick: true })), null);
+    assert.equal(stopReasonOf(null), null);
+});
+
+test('stop banks the running segment, keeps the stop moment and the reason; restart opens a fresh segment', () => {
+    const point = makePoint('offense', [new Pickup({ receiver: P.Bob })], { startTimestamp: T(0), totalPointTime: 2000 });
+    assert.equal(isPointClockStopped(point), false);
+
+    assert.equal(stopPointClock(point, 'timeout', T(30)), true);
+    assert.equal(point.totalPointTime, 32000, '2 s banked before + 30 s of this segment');
+    assert.equal(point.startTimestamp, null);
+    assert.equal(at(point.lastPauseTime), at(T(30)), 'the stop moment');
+    assert.equal(point.clockStopped, 'timeout');
+    assert.equal(isPointClockStopped(point), true);
+    assert.equal(clockStoppedForMs(point, T(75).getTime()), 45000);
+
+    assert.equal(restartPointClock(point, T(75)), true);
+    assert.equal(point.clockStopped, null);
+    assert.equal(at(point.startTimestamp), at(T(75)), 'a fresh segment from the restart');
+    assert.equal(point.lastPauseTime, null);
+    assert.equal(point.totalPointTime, 32000, 'the 45 s stoppage is not play');
+    assert.equal(clockStoppedForMs(point), 0);
+    assert.equal(restartPointClock(point, T(80)), false, 'already running');
+    assert.equal(at(point.startTimestamp), at(T(75)));
+});
+
+test('stop is a no-op unless the clock is running: armed, already stopped, idle, concluded', () => {
+    const armed = makePoint('offense');
+    armPointClock(armed);
+    assert.equal(stopPointClock(armed, 'timeout', T(5)), false, 'a timeout before the first touch leaves the clock armed');
+    assert.equal(armed.clockPending, true);
+    assert.equal(armed.clockStopped, null);
+
+    const stopped = makePoint('offense', [], { startTimestamp: T(0) });
+    assert.equal(stopPointClock(stopped, 'manual', T(10)), true);
+    assert.equal(stopPointClock(stopped, 'timeout', T(20)), false, 'the first stop wins');
+    assert.equal(stopped.clockStopped, 'manual', 'its reason stands');
+    assert.equal(at(stopped.lastPauseTime), at(T(10)), 'and so does its moment');
+    assert.equal(stopped.totalPointTime, 10000);
+
+    const idle = makePoint('offense', [], { startTimestamp: null, totalPointTime: 7000 });
+    assert.equal(stopPointClock(idle, 'timeout', T(5)), false, 'no running segment');
+    assert.equal(idle.clockStopped, null);
+
+    const scored = makePoint('offense', [], { startTimestamp: T(0), winner: 'team', endTimestamp: T(40) });
+    assert.equal(stopPointClock(scored, 'timeout', T(50)), false, 'a between-points timeout stops nothing');
+    assert.equal(at(scored.startTimestamp), at(T(0)), 'and touches nothing');
+    assert.equal(stopPointClock(null, 'timeout'), false);
+
+    const unknownReason = makePoint('offense', [], { startTimestamp: T(0) });
+    assert.equal(stopPointClock(unknownReason, 'weather', T(1)), true);
+    assert.equal(unknownReason.clockStopped, 'manual', 'an unknown reason is recorded as a manual stop');
+});
+
+test('isPointClockStopped is false once the point is over, whatever the flag says', () => {
+    const point = makePoint('offense', [], { clockStopped: 'timeout', winner: 'team', endTimestamp: T(1) });
+    assert.equal(isPointClockStopped(point), false);
+    assert.equal(restartPointClock(point, T(2)), false);
+    assert.equal(point.startTimestamp, null);
+    assert.equal(isPointClockStopped(null), false);
+});
+
+test('touchPointClock: starts an armed clock, restarts a stopped one, else nothing', () => {
+    const armed = makePoint('offense');
+    armPointClock(armed);
+    assert.equal(touchPointClock(armed, T(3)), 'started');
+    assert.equal(at(armed.startTimestamp), at(T(3)));
+    assert.equal(touchPointClock(armed, T(4)), null, 'a running clock is left alone');
+    assert.equal(at(armed.startTimestamp), at(T(3)));
+
+    assert.equal(stopPointClock(armed, 'injury', T(60)), true);
+    assert.equal(touchPointClock(armed, T(130)), 'restarted');
+    assert.equal(at(armed.startTimestamp), at(T(130)));
+    assert.equal(armed.clockStopped, null);
+    assert.equal(armed.totalPointTime, 57000, '3 s → 60 s banked; the 70 s stoppage is not');
+    assert.equal(touchPointClock(null), null);
+});
+
+test('undoing the stop event resumes the clock from the moment it stopped — only for that event\'s reason', () => {
+    const point = makePoint('offense', [], { startTimestamp: T(0) });
+    stopPointClock(point, 'timeout', T(20));
+    assert.equal(resumePointClockFromStop(point, 'injury'), false, 'an injury sub undone does not restart a timeout stop');
+    assert.equal(point.clockStopped, 'timeout');
+    assert.equal(resumePointClockFromStop(point, null), false);
+    assert.equal(resumePointClockFromStop(point, 'timeout'), true);
+    assert.equal(point.clockStopped, null);
+    assert.equal(at(point.startTimestamp), at(T(20)), 'the segment runs from the stop, so the mis-tap cost no time');
+    assert.equal(point.lastPauseTime, null);
+    assert.equal(point.totalPointTime, 20000);
+    assert.equal(resumePointClockFromStop(point, 'timeout'), false, 'not stopped any more');
+
+    const manual = makePoint('offense', [], { startTimestamp: T(0) });
+    stopPointClock(manual, 'manual', T(5));
+    assert.equal(resumePointClockFromStop(manual, 'timeout'), false, 'a timeout recorded on top of a manual stop, then undone, leaves the manual stop');
+    assert.equal(manual.clockStopped, 'manual');
+});
+
+test('arming (an undo of the first touch) clears a stopped state too', () => {
+    const point = makePoint('offense', [], { startTimestamp: T(0) });
+    stopPointClock(point, 'timeout', T(9));
+    armPointClock(point);
+    assert.equal(point.clockPending, true);
+    assert.equal(point.clockStopped, null);
+    assert.equal(point.lastPauseTime, null);
+    assert.equal(point.totalPointTime, 0);
 });

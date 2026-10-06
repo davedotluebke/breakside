@@ -36,7 +36,7 @@ import {
     Throw, Turnover, Defense, Pull, Pickup, Role, UNKNOWN_PLAYER,
 } from '../store/models.js';
 import { saveAllTeamsData } from '../store/storage.js';
-import { startPointClock, awaitingPull } from '../store/pointClock.js';
+import { touchPointClock, awaitingPull } from '../store/pointClock.js';
 import { getLatestPoint, getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { updateScore } from '../game/gameLogic.js';
@@ -139,19 +139,27 @@ const pbpPossession = (function() {
     }
 
     /**
-     * First touch: an armed point clock (offense waiting for the pull to be
-     * caught / picked up / dropped, defense waiting for the pull) starts on
-     * the first recorded touch of any kind. Every creator below calls this
-     * right after appending its event.
+     * A recorded touch: an armed point clock (offense waiting for the pull
+     * to be caught / picked up / dropped, defense waiting for the pull)
+     * starts on the first touch of any kind, and a clock stopped for a
+     * stoppage (timeout, injury sub, pause) restarts on the next one
+     * (store/pointClock.js). Every creator below calls this right after
+     * appending its event.
      * @param atMs epoch ms the touch actually happened, when the caller knows
      *   it (a pull's stopwatch release tap); else now
      */
     function touch(atMs) {
         const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
         const when = (typeof atMs === 'number' && atMs > 0) ? new Date(atMs) : new Date();
-        if (startPointClock(point, when)) {
-            if (typeof logEvent === 'function') logEvent('Point clock started');
+        const result = touchPointClock(point, when);
+        if (!result) return;
+        if (typeof logEvent === 'function') {
+            logEvent(result === 'started' ? 'Point clock started' : 'Point clock restarted');
         }
+        // Repaint the header chip (and clear the stopped-clock toast) now,
+        // not on the next 1 s tick. Late-bound back-edge: game/gameTimer.js
+        // lives above this layer and keeps the window survivor.
+        window.updateTimerDisplay?.();
     }
 
     function publishAdded(evt, source) {

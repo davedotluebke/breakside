@@ -791,6 +791,10 @@ class Point {
         // start the clock (store/pointClock.js). Persisted; absent/false on
         // points recorded before the field existed.
         this.clockPending = false;
+        // Why the clock is stopped mid-point ('timeout' | 'injury' | 'manual'),
+        // null while it runs (store/pointClock.js § Stoppages). Persisted;
+        // absent on points recorded before the field existed.
+        this.clockStopped = null;
         this.substitutedOutPlayers = [];  // Players who were subbed out mid-point (for injury/fatigue)
         this.substitutedInPlayers = [];   // Players who came in mid-point (partial point, like subbed-out)
         // True once updateScore applied per-player live counters via id-aware

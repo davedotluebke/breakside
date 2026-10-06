@@ -26,7 +26,9 @@ import {
 } from './pointManagement.js';
 import { showControllerToast } from './controllerState.js';
 import { applyUndoToGame } from './undoLogic.js';
-import { rearmPointClockIfUntouched } from '../store/pointClock.js';
+import {
+    rearmPointClockIfUntouched, resumePointClockFromStop, stopReasonOf,
+} from '../store/pointClock.js';
 import { log } from '../utils/logger.js';
 
 let appVersion = null;
@@ -217,8 +219,11 @@ function updateScore(winner) {
     }
     // A clock still armed at the score (nobody touched the pull — a
     // mis-entry, or Simple-mode recording after a Full/Field start) has
-    // nothing to bank; the point just ends untimed.
+    // nothing to bank; the point just ends untimed. A clock still stopped at
+    // the score (a timeout with no play recorded after it) has its play
+    // time banked already; the stoppage simply ends with the point.
     point.clockPending = false;
+    point.clockStopped = null;
     point.endTimestamp = new Date();
     point.winner = winner; // Setting the winning team for the current point
     currentGame().scores[winner]++;
@@ -445,6 +450,14 @@ function undoEvent() {
         const mode = (typeof window.getCurrentMode === 'function') ? window.getCurrentMode() : 'simple';
         if (rearmPointClockIfUntouched(getLatestPoint(), mode)) {
             log('⏱ Point clock re-armed — first touch undone');
+        }
+        // Undoing the timeout or injury sub that stopped the clock: it runs
+        // again from the moment it stopped, as if the stoppage had never
+        // been recorded, so a mis-tap costs no time. Undoing a play leaves a
+        // running clock running.
+        if (resumePointClockFromStop(getLatestPoint(), stopReasonOf(result.undoneEvent))) {
+            log('⏱ Point clock resumed from the stop — stoppage undone');
+            logEvent('Point clock restarted');
         }
     }
 
