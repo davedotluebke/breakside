@@ -207,6 +207,49 @@ test.describe('point clock stoppages', () => {
     await expect(chip(page)).not.toHaveClass(/timer-paused/);
   });
 
+  test('an injury sub stops the clock and stamps the play clock on the sub event', async ({ page }) => {
+    await startFirstPoint(page);
+    await page.waitForTimeout(1_500);
+
+    // Take the first player on the line off, nobody on (an injury with no
+    // replacement is a sub too).
+    await page.click('#pbpSubPlayersBtn');
+    await expect(page.locator('#subPlayersModal')).toBeVisible({ timeout: 5_000 });
+    const boxes = page.locator('#subPlayersTable tbody input[type="checkbox"]');
+    await boxes.first().uncheck();
+    await page.click('#subPlayersConfirmBtn');
+    await expect(page.locator('#subPlayersModal')).not.toBeVisible({ timeout: 5_000 });
+
+    const c = await clock(page);
+    expect(c.stopped).toBe('injury');
+    expect(c.start).toBeNull();
+    await expect(toast(page)).toBeVisible({ timeout: 5_000 });
+    await expect(toast(page)).toContainText('injury sub');
+
+    // The sub event carries the play clock at the sub: the banked time,
+    // which is what splits the point between the outgoing and incoming
+    // players (store/pointPlayTime.js).
+    const sub = await page.evaluate(() => {
+      const p = (window as any).currentGame().points.at(-1);
+      const events = p.possessions.flatMap((poss: any) => poss.events || []);
+      const e = events.find((ev: any) => ev.type === 'Other' && ev.injury_flag);
+      return e ? { playTimeAtSub: e.playTimeAtSub, playersBefore: e.playersBefore?.length ?? null, players: p.players.length, out: p.substitutedOutPlayers.length } : null;
+    });
+    expect(sub).not.toBeNull();
+    expect(sub!.playTimeAtSub).toBe(c.banked);
+    expect(sub!.playTimeAtSub).toBeGreaterThan(0);
+    expect(sub!.playersBefore).toBe(sub!.players + 1);
+    expect(sub!.out).toBe(1);
+
+    // The next play restarts the clock; the stoppage stays unbanked.
+    await recordThrow(page);
+    await expect(toast(page)).toHaveCount(0, { timeout: 5_000 });
+    const after = await clock(page);
+    expect(after.stopped).toBeNull();
+    expect(after.start).not.toBeNull();
+    expect(after.banked).toBe(c.banked);
+  });
+
   test('a timeout between points stops nothing and shows nothing', async ({ page }) => {
     await startFirstPoint(page);
     await theyScore(page);

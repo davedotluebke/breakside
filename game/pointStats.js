@@ -24,12 +24,25 @@
  * (utils/eventStats.js), which already resolves ids.
  */
 import { Role } from '../store/models.js';
+import { playTimeFor } from '../store/pointPlayTime.js';
+
+/**
+ * The play time this point credits to the player: their stretch of it when
+ * an injury sub split the line (store/pointPlayTime.js), else the whole
+ * point. A membership without onList (older callers, tests) credits the
+ * whole point, as before.
+ */
+function timeCredited(point, player, membership) {
+    if (typeof membership.onList !== 'function') return point.totalPointTime || 0;
+    return playTimeFor(point, point.totalPointTime || 0, list => membership.onList(list, player));
+}
 
 /**
  * Increment per-player counters for a just-scored point and stamp the point
  * `playerStatsCounted`. Call with point.winner already set.
  * "Played" = on the line at any moment, including substituted-out players —
- * same semantics as getPlayerGameTime (utils/helpers.js).
+ * same semantics as getPlayerGameTime (utils/helpers.js); time is the
+ * player's own stretch of the point.
  * @param {object} point - the scored Point (winner set)
  * @param {Array} roster - currentTeam.teamRoster Player objects
  * @param {object} membership - buildPointMembership(game) for the point's game
@@ -39,7 +52,7 @@ function applyPointPlayerStats(point, roster, membership) {
         if (membership.played(point, player)) {
             player.totalPointsPlayed++;
             player.consecutivePointsPlayed++;
-            player.totalTimePlayed += point.totalPointTime;
+            player.totalTimePlayed += timeCredited(point, player, membership);
             if (point.winner === Role.TEAM) {
                 player.pointsWon++;
             } else {
@@ -71,7 +84,9 @@ function revertPointPlayerStats(point, roster, membership) {
             if (player.totalPointsPlayed < 0) player.totalPointsPlayed = 0;
             player.consecutivePointsPlayed--;
             if (player.consecutivePointsPlayed < 0) player.consecutivePointsPlayed = 0;
-            player.totalTimePlayed -= point.totalPointTime;
+            // The sub events are still on the point when a score is reverted
+            // (the score event alone was popped), so the same split applies.
+            player.totalTimePlayed -= counted ? timeCredited(point, player, membership) : point.totalPointTime;
             if (player.totalTimePlayed < 0) player.totalTimePlayed = 0;
             if (point.winner === Role.TEAM) {
                 player.pointsWon--;

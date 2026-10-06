@@ -580,7 +580,7 @@ class Defense extends Event {
 
 // Other event class
 class Other extends Event {
-    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, forceswap = null, lineupCorrection = null, description = null, calledBy = null, calledByName = null, betweenPoints = null, playersBefore = null, subbedOutBefore = null, subbedInBefore = null}) {
+    constructor({timeout = null, injury = null, timecap = null, switchsides = null, halftime = null, forceswap = null, lineupCorrection = null, description = null, calledBy = null, calledByName = null, betweenPoints = null, playersBefore = null, subbedOutBefore = null, subbedInBefore = null, playTimeAtSub = null}) {
         super('Other');
         this.timeout_flag = timeout;
         this.injury_flag = injury;
@@ -614,6 +614,13 @@ class Other extends Event {
         this.playersBefore = playersBefore;
         this.subbedOutBefore = subbedOutBefore;
         this.subbedInBefore = subbedInBefore;
+        // The point's play clock (ms of totalPointTime) when the sub was
+        // recorded — the clock has stopped for the sub by then, so this is
+        // the play time up to the stoppage. store/pointPlayTime.js splits
+        // the point's time between the outgoing and incoming players at it.
+        // null on non-sub events and on sub events recorded before the field
+        // existed (such a point is credited in full to everyone on it).
+        this.playTimeAtSub = playTimeAtSub;
     }
 
     // Override summarize for Other events

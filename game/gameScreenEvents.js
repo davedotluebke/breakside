@@ -1207,23 +1207,29 @@ function confirmSubstitution() {
         subDescription = `Sub: ${outNames} removed`;
     }
     
-    // Create an Other event with the injury flag, description, and the
-    // pre-sub roster snapshots undoEvent needs to reverse the sub.
+    // An injury sub is a stoppage: the point clock stops until the next
+    // recorded play (store/pointClock.js § Stoppages; the toast comes from
+    // game/clockStoppedToast.js via the repaint). A no-op unless the clock
+    // was running. Stopped first so the banked play time below is the play
+    // clock at the sub.
+    const clockStopped = stopPointClock(point, 'injury');
+
+    // Create an Other event with the injury flag, description, the pre-sub
+    // roster snapshots undoEvent needs to reverse the sub, and the play
+    // clock at the sub, which splits the point's time between the outgoing
+    // and incoming players (store/pointPlayTime.js).
     const subEvent = new Other({
         injury: true,
         description: subDescription,
         playersBefore: playersBefore,
         subbedOutBefore: subbedOutBefore,
         subbedInBefore: subbedInBefore,
+        playTimeAtSub: point.totalPointTime || 0,
     });
 
     currentPossession.events.push(stampEvent(subEvent));
 
-    // An injury sub is a stoppage: the point clock stops until the next
-    // recorded play (store/pointClock.js § Stoppages; the toast comes from
-    // game/clockStoppedToast.js via the repaint). A no-op unless the clock
-    // was running.
-    if (stopPointClock(point, 'injury')) {
+    if (clockStopped) {
         if (typeof logEvent === 'function') logEvent('Point clock stopped — injury sub');
         updateTimerDisplay();
     }

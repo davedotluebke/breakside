@@ -10,6 +10,7 @@
  */
 
 import { Role } from '../store/models.js';
+import { everyoneOn, playTimeFor } from '../store/pointPlayTime.js';
 import { buildPlayerNameResolver } from './helpers.js';
 
 /**
@@ -90,18 +91,26 @@ function accumulateGameStats(game, stats) {
     points.forEach(point => {
         if (!point.winner) return; // skip in-progress points
 
-        const pointPlayers = point.players || [];
         const pointDuration = point.totalPointTime || 0;
         const isWin = point.winner === 'team' || point.winner === Role.TEAM;
         const startedOnO = point.startingPosition === 'offense';
 
-        pointPlayers.forEach(playerName => {
+        // Everyone on the field at any moment of the point counts as having
+        // played it — a player substituted out after an injury included, as
+        // the live counters (game/pointStats.js) have always done — and is
+        // credited with their own stretch of its play time
+        // (store/pointPlayTime.js: up to the sub, or from it on).
+        const counted = new Set();
+        everyoneOn(point).forEach(playerName => {
             const id = resolveName(playerName);
+            if (counted.has(id)) return;
+            counted.add(id);
             // playerName may itself be an id (id-era games) — prefer the
             // resolver's known display name so stats-only rows stay readable.
             const s = ensurePlayer(id, resolveName.nameOf(id) || playerName);
             s.pointsPlayed++;
-            s.timePlayed += pointDuration;
+            s.timePlayed += playTimeFor(point, pointDuration,
+                list => (list || []).some(entry => resolveName(entry) === id));
             if (startedOnO) s.pointsPlayedO++;
             else s.pointsPlayedD++;
             if (isWin) {

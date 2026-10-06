@@ -4,6 +4,7 @@
  */
 import { Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER } from '../store/models.js';
 import { UNKNOWN_PLAYER_OBJ, currentTeam } from '../store/storage.js';
+import { playTimeFor } from '../store/pointPlayTime.js';
 import { log } from './logger.js';
 
 /**
@@ -321,9 +322,24 @@ function buildPointPlayerLookup(game) {
 }
 
 /**
+ * A point's play time so far: totalPointTime for a concluded point; for the
+ * point in progress, the play time banked (segments before a stoppage —
+ * store/pointClock.js) plus the running segment, if the clock is running.
+ * An armed or stopped clock has no segment and adds nothing.
+ */
+function pointPlayTimeSoFar(point) {
+    let total = point.totalPointTime || 0;
+    if (!point.winner && !point.endTimestamp && point.startTimestamp) {
+        total += Date.now() - new Date(point.startTimestamp).getTime();
+    }
+    return total;
+}
+
+/**
  * Helper function to calculate player's time in current game
  * Accepts a Player object (preferred — survives mid-game renames) or a
- * player name string.
+ * player name string. A player substituted out (or in) mid-point is
+ * credited with their stretch of the point (store/pointPlayTime.js).
  */
 function getPlayerGameTime(playerOrName) {
     let totalTime = 0;
@@ -333,32 +349,13 @@ function getPlayerGameTime(playerOrName) {
             ? playerOrName
             : getPlayerFromName(playerOrName);
         const membership = buildPointMembership(game);
+        // Id-based matching where possible; raw-string fallback when the name
+        // no longer maps to a roster player.
+        const onList = player
+            ? (list) => membership.onList(list, player)
+            : (list) => (list || []).includes(playerOrName);
         game.points.forEach(point => {
-            // Include players who were substituted out mid-point. Id-based
-            // matching where possible; raw-string fallback when the name no
-            // longer maps to a roster player.
-            const playedPoint = player
-                ? membership.played(point, player)
-                : (point.players.includes(playerOrName) ||
-                    (point.substitutedOutPlayers && point.substitutedOutPlayers.includes(playerOrName)));
-            if (playedPoint) {
-                if (point.endTimestamp) {
-                    // For completed points, just use the totalPointTime
-                    totalTime += point.totalPointTime;
-                } else if (!point.winner) {
-                    // The point in progress: the play time banked so far
-                    // (segments before a stoppage — store/pointClock.js) plus
-                    // the running segment, if the clock is running. An armed
-                    // or stopped clock has no segment and adds nothing.
-                    totalTime += point.totalPointTime || 0;
-                    if (point.startTimestamp) {
-                        totalTime += Date.now() - new Date(point.startTimestamp).getTime();
-                    }
-                } else {
-                    // This shouldn't happen, but if it does, just use totalPointTime
-                    totalTime += point.totalPointTime;
-                }
-            }
+            totalTime += playTimeFor(point, pointPlayTimeSoFar(point), onList);
         });
     }
     return totalTime;
