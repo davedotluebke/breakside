@@ -123,20 +123,19 @@ and game entry kept a same-id `currentEvent` for the whole game. Shipped:
 every event edit and every game entry starts from the stored event, and the
 in-game menu has **Event Roster + Stats** for an event game.
 
-- [ ] **Live propagation to the other coaches in the game.** A coach who edits the
-      event roster in-game (or from another device) changes `currentEvent` only on
-      their own phone; the others pick it up on their next game entry. The cheap
-      signal is already there — the grown snapshot's fresh `capturedAt` reaches the
-      server on the next sync — so the in-game refresh could refetch the event when
-      it sees a newer stamp on an event game (today `adoptServerSquadDefinition`
-      only acts on scrimmage halves). Unchecks don't bump the stamp, so that signal
-      is one-way unless every in-game save re-stamps.
-- [ ] **Last weekend's games.** Their snapshots never listed the Day-2 arrivals,
-      so Review and the per-game export omit their rows (the event roster screen
-      still shows them: it lists the team roster, not the snapshot). A one-off
-      `scripts/` fix-up that adds a game's point players to its snapshot would
-      cover it, or `resolveSummaryPlayers` could union the snapshot with whoever
-      has stats (it does so only when the snapshot is empty today).
+- [x] **Live propagation to the other coaches in the game** (branch
+      `event-roster-followups`, 2026-10-06). The ping carries the stored event's
+      stamp (`eventStamp`, beside `gameStamp`); a move has every coach in the game
+      refetch the event, redraw the Line tab and see who was added or removed.
+      ARCHITECTURE.md § Tournament Events and Phases.
+- [x] **Last weekend's games** — checked on the box 2026-10-06. Of the three Day 2
+      games, two captured the full team roster and list everyone; the first Day 2
+      game was started from the Day 1 copy, captured 19 players, and two of the
+      Day 2 arrivals played it without being in its snapshot, so its Review table
+      and export omitted them. Rather than edit a stored snapshot, Review and the
+      per-game export now list the snapshot plus anyone with stats it lacks
+      (`summaryRosterPlayers`, `utils/gameRoster.js`), which also covers a mid-game
+      team add and a Correct Lineup name in any game.
 
 ### 🥏 Intrasquad scrimmages (merged 2026-09-27; field-tested 2026-09-28)
 
