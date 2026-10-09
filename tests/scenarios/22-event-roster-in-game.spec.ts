@@ -218,4 +218,56 @@ test.describe('event roster from the in-game menu', () => {
     await expect(page.locator('#menuRoster')).toBeVisible();
     await expect(page.locator('#menuEventRoster')).toBeHidden();
   });
+
+  test("another coach's roster edit reaches a coach already in the game", async ({ page }) => {
+    TEAM = uniqueTeamName('Event Roster Test Team');
+    await goToTeams(page);
+    await createTeam(page, TEAM);
+    await openEditRoster(page);
+    await addPlayer(page, 'Alice', '7', 'FMP');
+    await addPlayer(page, 'Bob', '11', 'MMP');
+    await backToStartGame(page);
+    await page.click('#backFromStartGameBtn');
+    await expect(page.locator('#selectTeamScreen')).toBeVisible({ timeout: 10_000 });
+
+    await expandCard(page);
+    await card(page).locator('.new-event-btn').click();
+    await expect(page.locator('#createEventModal')).toBeVisible();
+    await page.fill('#newEventName', EVENT);
+    await page.click('#createEventBtn');
+    await expect(page.locator('#createEventModal')).toHaveCount(0, { timeout: 10_000 });
+    const ev = await eventCard(page);
+    await ev.locator('.event-new-game-btn').click();
+    await expect(page.locator('#startGameSubscreen')).toBeVisible({ timeout: 10_000 });
+    await startGame(page, 'offense');
+    expect(await lineTabNames(page)).toEqual(['Alice', 'Bob']);
+    const ids = await page.evaluate(() => {
+      const g = (window as any).currentGame();
+      return { gameId: g.id as string, eventId: g.eventId as string };
+    });
+
+    // A second coach, on their own phone, takes Bob off the event roster and
+    // adds Zed as a pickup — the same PUT the app's save makes.
+    const stored = await serverEvent(page, ids.eventId);
+    const edited = {
+      ...stored,
+      roster: {
+        playerIds: (stored.roster.playerIds as string[]).filter(id => !id.startsWith('Bob')),
+        pickupPlayers: [{ id: 'Zed-9999', name: 'Zed', gender: 'FMP', number: '99' }],
+        overrides: {},
+      },
+    };
+    const put = await page.request.put(`${BACKEND_URL}/api/events/${ids.eventId}`, {
+      headers: coachHeaders('event-roster-coach-b'), data: edited,
+    });
+    expect(put.ok(), 'coach B saves the event').toBeTruthy();
+
+    // The ping carries the event's stamp; the first one after the write has
+    // this phone refetch the event and redraw the Line tab, no leaving the
+    // game — and say what changed.
+    await expect
+      .poll(() => lineTabNames(page), { message: 'the Line tab never followed the edit', timeout: 20_000, intervals: [500] })
+      .toEqual(['Alice', 'Zed']);
+    await expect(page.locator('#toastContainer')).toContainText('Event roster updated: Zed added; Bob removed', { timeout: 5_000 });
+  });
 });

@@ -14,6 +14,7 @@ import {
 import { isScrimmageGame, describeSquadChange, pruneLinesToSquad } from '../store/scrimmage.js';
 import { currentGame, isPointInProgress } from '../utils/helpers.js';
 import { normalizeStamp, stampSaysChanged } from '../utils/changeStamp.js';
+import { eventRosterDiffers, describeEventRosterChange } from '../utils/gameRoster.js';
 import {
     getEventFromCloud, hasPendingSync, refreshPendingLineFromCloud,
     refreshGameStateFromCloud, fetchGameStamp,
@@ -384,37 +385,10 @@ function enterGameScreen(options = {}) {
     setPanelShowingTotalStats(false);
     setCachedPanelEventStats(null);
 
-    // An event game refreshes its event on every entry. The Line tab offers
-    // getActiveRoster(), which reads currentEvent.roster (and getEffective*
-    // read its overrides), so currentEvent has to be the stored event, not
-    // whatever copy this device last held: a copy that predated an edit —
-    // made on another device, or on the Event Roster screen a moment before
-    // New Event Game was tapped — used to be kept for the whole game, with
-    // the Line tab missing the players re-checked for the day. Same-event
-    // edits made in-game are pushed into currentEvent synchronously
-    // (teams/eventRoster.js persistEventRoster), so this is the backstop for
-    // the rest; an edit still on the sync queue (saved offline) is left
-    // alone, since the stored copy predates it. Best effort: offline, the
-    // copy this device holds stands.
+    // An event game refreshes its event on every entry (refreshCurrentEvent).
     const currentGameObj = typeof currentGame === 'function' ? currentGame() : null;
     if (currentGameObj && currentGameObj.eventId) {
-        const gameId = currentGameObj.id;
-        const eventId = currentGameObj.eventId;
-        getEventFromCloud(eventId).then(ev => {
-            const live = typeof currentGame === 'function' ? currentGame() : null;
-            if (!ev || !live || live.id !== gameId) return;   // left for another game meanwhile
-            if (hasPendingSync('event', eventId)) return;
-            const before = currentEvent && currentEvent.id === eventId
-                ? JSON.stringify(currentEvent.roster || null) : null;
-            setCurrentEvent(deserializeTournamentEvent(ev));
-            const changed = before !== JSON.stringify(currentEvent.roster || null);
-            if (changed && isGameScreenVisible()) {
-                log('📋 Event roster refreshed from the server; redrawing the Line tab');
-                updateSelectLinePanel();
-            }
-        }).catch(error => {
-            log('Event refresh failed; keeping the copy this device holds', error);
-        });
+        refreshCurrentEvent(currentGameObj, { source: 'entry' });
     }
 
     // Stop active-game polling while in a game
@@ -521,6 +495,62 @@ function enterGameScreen(options = {}) {
 
     log('🎮 Entered game screen');
 }
+
+/**
+ * Fetch the stored event of an event game and make it currentEvent, which is
+ * what the Line tab offers (getActiveRoster(), store/storage.js) and what
+ * getEffective* read. Called on every game entry — the backstop that keeps
+ * a device from fielding a copy it held before an edit made on another
+ * device, or on the Event Roster screen a moment before New Event Game was
+ * tapped; before 2.13.0 such a copy was kept for the whole game, with the
+ * Line tab missing the players re-checked for the day — and whenever the
+ * ping reports the stored event moved (breakside:event-stamp-changed:
+ * another coach edited the roster, in-game or from their team list), so the
+ * other coaches' Line tabs follow without leaving the game. Same-event edits
+ * made on this device are pushed into currentEvent synchronously
+ * (teams/eventRoster.js persistEventRoster), and an edit still on the sync
+ * queue (saved offline) is left alone, since the stored copy predates it.
+ * The Line tab is redrawn only when the roster actually differs, and a
+ * change that came from the server is announced (utils/gameRoster.js
+ * describeEventRosterChange). Best effort: offline, the copy this device
+ * holds stands. A point already on the field keeps its line either way.
+ * @param {object} game - the game being entered or played
+ * @param {{source?: 'entry'|'server'}} [opts]
+ */
+async function refreshCurrentEvent(game, { source = 'entry' } = {}) {
+    if (!game || !game.eventId) return;
+    const gameId = game.id;
+    const eventId = game.eventId;
+    let ev = null;
+    try {
+        ev = await getEventFromCloud(eventId);
+    } catch (error) {
+        log('Event refresh failed; keeping the copy this device holds', error);
+        return;
+    }
+    const live = typeof currentGame === 'function' ? currentGame() : null;
+    if (!ev || !live || live.id !== gameId) return;   // left for another game meanwhile
+    if (hasPendingSync('event', eventId)) return;
+    const before = currentEvent && currentEvent.id === eventId ? currentEvent.roster : null;
+    setCurrentEvent(deserializeTournamentEvent(ev));
+    if (!eventRosterDiffers(before, currentEvent.roster)) return;
+    log('📋 Event roster refreshed from the server; redrawing the Line tab', { source });
+    if (isGameScreenVisible()) updateSelectLinePanel();
+    if (source === 'server' && before) {
+        const text = describeEventRosterChange(before, currentEvent.roster,
+            currentTeam ? currentTeam.teamRoster : []);
+        if (text) showControllerToast(text, 'info', 8000);
+    }
+}
+
+// The ping saw the stored event move: another coach edited the event roster.
+// Refetch it so this Line tab offers the same roster they see. A stamp for
+// some other game says nothing about ours.
+document.addEventListener('breakside:event-stamp-changed', (e) => {
+    const game = currentGameFn();
+    if (!game || !isGameScreenVisible() || e.detail?.gameId !== game.id) return;
+    refreshCurrentEvent(game, { source: 'server' });
+});
 
 /**
  * Exit the game screen UI

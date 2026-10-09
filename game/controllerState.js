@@ -291,6 +291,10 @@ async function respondToHandoff(gameId, accept) {
  * @type {{gameId: string, stamp: string|null}|null}
  */
 let lastPingGameStamp = null;
+// The event's change stamp from the last ping (an event game only), compared
+// ping to ping so a move — another coach edited the event roster — can tell
+// the game screen to refetch the event (breakside:event-stamp-changed).
+let lastPingEventStamp = null;
 
 /**
  * The change stamp from the last ping, for a specific game.
@@ -422,6 +426,22 @@ async function pingController(gameId) {
             if (moved) {
                 document.dispatchEvent(new CustomEvent('breakside:game-stamp-changed', {
                     detail: { gameId, stamp }
+                }));
+            }
+
+            // The event's stamp travels the same way, for an event game: the
+            // stored event's mtime, which a PUT from any device moves. The
+            // first ping for a game sets the baseline; a later move tells
+            // game/gameScreenSync.js to refetch the event, so the other
+            // coaches' Line tabs follow an in-game roster edit without
+            // leaving the game. Null on a standalone game or an old server.
+            const eventStamp = normalizeStamp(data.eventStamp);
+            const eventMoved = eventStamp !== null && sameGame && lastPingEventStamp !== null
+                && stampSaysChanged(lastPingEventStamp, eventStamp);
+            lastPingEventStamp = eventStamp;
+            if (eventMoved) {
+                document.dispatchEvent(new CustomEvent('breakside:event-stamp-changed', {
+                    detail: { gameId, stamp: eventStamp }
                 }));
             }
 

@@ -101,6 +101,7 @@ import './utils/powerLog.js';
 import './utils/wakeLockManager.js';
 import './utils/statAccumulator.js';
 import './utils/eventStats.js';
+import './utils/gameRoster.js';
 import './utils/gameFlow.js';
 import './utils/connections.js';
 import './utils/gameLogRenderer.js';

@@ -26,6 +26,8 @@ VIEWER = {"id": "poll-viewer", "email": "viewer@test", "role": "authenticated"}
 OUTSIDER = {"id": "poll-outsider", "email": "nobody@test", "role": "authenticated"}
 
 GAME_ID = "2026-08-01_Poll-Test-Team_vs_Rivals_p0ll"
+# A second game inside an event, for the ping's `eventStamp`.
+EVENT_GAME_ID = "2026-08-02_Poll-Test-Team_vs_Rivals_ev3nt"
 
 
 @pytest.fixture(scope="module")
@@ -36,7 +38,7 @@ def seeded(tmp_path_factory):
     import config
     from storage import (
         game_storage, team_storage, player_storage, membership_storage,
-        index_storage,
+        index_storage, event_storage,
     )
 
     patches = [
@@ -46,7 +48,9 @@ def seeded(tmp_path_factory):
         (config, "PLAYERS_DIR", data_dir / "players"),
         (config, "USERS_DIR", data_dir / "users"),
         (config, "MEMBERSHIPS_DIR", data_dir / "memberships"),
+        (config, "EVENTS_DIR", data_dir / "events"),
         (config, "INDEX_FILE", data_dir / "index.json"),
+        (event_storage, "EVENTS_DIR", data_dir / "events"),
         (game_storage, "GAMES_DIR", data_dir / "games"),
         (team_storage, "TEAMS_DIR", data_dir / "teams"),
         (player_storage, "PLAYERS_DIR", data_dir / "players"),
@@ -78,9 +82,20 @@ def seeded(tmp_path_factory):
         "gameStartTimestamp": "2026-08-01T18:00:00Z",
         "points": [],
     })
+    event_id = event_storage.save_event({"name": "Poll Cup", "teamId": team_id})
+    game_storage.save_game_version(EVENT_GAME_ID, {
+        "id": EVENT_GAME_ID,
+        "teamId": team_id,
+        "team": "Poll Test Team",
+        "opponent": "Rivals",
+        "eventId": event_id,
+        "scores": {"team": 0, "opponent": 0},
+        "gameStartTimestamp": "2026-08-02T18:00:00Z",
+        "points": [],
+    })
     index_storage.rebuild_index()
 
-    yield {"data_dir": data_dir, "team_id": team_id}
+    yield {"data_dir": data_dir, "team_id": team_id, "event_id": event_id}
 
     for mod, name, original in saved:
         setattr(mod, name, original)
@@ -128,6 +143,56 @@ def _touch_game():
     current = game_storage.GAMES_DIR / GAME_ID / "current.json"
     st = current.stat()
     os.utime(current, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+
+
+def _touch_event(event_id):
+    """Bump the event file's mtime deterministically (see _touch_game)."""
+    from storage import event_storage
+    path = event_storage._store._file(event_id)
+    st = path.stat()
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+
+
+class TestPingCarriesEventStamp:
+    """An event game's ping also carries the stored event's stamp, so a
+    coach in the game learns of an event roster edit (in-game by another
+    coach, or from a team list) without leaving the game."""
+
+    def _ping(self, client, game_id=EVENT_GAME_ID):
+        r = client.post(f"/api/games/{game_id}/ping")
+        assert r.status_code == 200
+        return r.json()
+
+    def test_standalone_game_has_no_event_stamp(self, client, seeded):
+        _as(COACH)
+        assert self._ping(client, GAME_ID)["eventStamp"] is None
+
+    def test_event_game_carries_its_event_stamp(self, client, seeded):
+        _as(COACH)
+        assert self._ping(client)["eventStamp"]
+
+    def test_event_stamp_is_stable_across_pings(self, client, seeded):
+        _as(COACH)
+        assert self._ping(client)["eventStamp"] == self._ping(client)["eventStamp"]
+
+    def test_event_stamp_follows_an_event_write(self, client, seeded):
+        _as(COACH)
+        before = self._ping(client)["eventStamp"]
+        _touch_event(seeded["event_id"])
+        assert self._ping(client)["eventStamp"] != before
+
+    def test_event_stamp_follows_a_roster_put(self, client, seeded):
+        """The app's own save path: PUT the whole event back."""
+        _as(COACH)
+        eid = seeded["event_id"]
+        before = self._ping(client)["eventStamp"]
+        event = client.get(f"/api/events/{eid}").json()
+        event["roster"] = {"playerIds": ["Alice-0001"], "pickupPlayers": []}
+        assert client.put(f"/api/events/{eid}", json=event).status_code == 200
+        after = self._ping(client)["eventStamp"]
+        assert after != before
+        # A game's own stamp is untouched by an event write.
+        assert self._ping(client)["gameStamp"] == self._ping(client)["gameStamp"]
 
 
 class TestGamePoll:
