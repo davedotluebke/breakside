@@ -19,7 +19,7 @@ import { TEST_PARAMS, BACKEND_URL } from '../helpers/constants';
 import {
   createTeam, openEditRoster, addPlayer, backToStartGame, startGame,
 } from '../helpers/app';
-import { coachHeaders } from '../helpers/controllerApi';
+import { coachHeaders, waitForGameOnServer } from '../helpers/controllerApi';
 
 // Own test user, so other specs' teams never show up in this list. "Test" in
 // the team name makes the app skip its leave / delete confirms (isTestTeam).
@@ -245,6 +245,13 @@ test.describe('event roster from the in-game menu', () => {
       const g = (window as any).currentGame();
       return { gameId: g.id as string, eventId: g.eventId as string };
     });
+
+    // The edit must come after this phone is settled in the game: the game's
+    // first sync has landed (it rewrites the event's gameIds, moving the
+    // stamp) and a ping has recorded the event's stamp as the baseline. Game
+    // creation is offline-first, so the server can lag the screen by seconds.
+    await waitForGameOnServer(page.request, ids.gameId, COACH);
+    await page.waitForResponse(r => r.url().includes('/ping') && r.status() === 200, { timeout: 15_000 });
 
     // A second coach, on their own phone, takes Bob off the event roster and
     // adds Zed as a pickup — the same PUT the app's save makes.
