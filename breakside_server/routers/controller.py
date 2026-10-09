@@ -4,7 +4,7 @@ Game Controller endpoints (Active Coach / Line Coach roles).
 from datetime import datetime
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 
 from ._shared import (
     HANDOFF_EXPIRY_SECONDS,
@@ -13,6 +13,8 @@ from ._shared import (
     game_exists,
     get_connected_coaches,
     get_controller_state,
+    get_event_mtime_ns,
+    get_game_current,
     get_game_current_mtime_ns,
     get_user,
     ping_role,
@@ -236,6 +238,7 @@ async def respond_handoff(
 
 @router.post("/api/games/{game_id}/ping")
 async def ping_controller(
+    request: Request,
     game_id: str,
     user: dict = Depends(require_game_team_coach),
     instance_id: Optional[str] = Header(None, alias="X-Breakside-Instance"),
@@ -257,6 +260,11 @@ async def ping_controller(
     downloading the game when nothing has changed. This ping is already the
     most frequent call a coach makes, so folding change detection into it
     removes the separate 3s full-game poll entirely rather than shrinking it.
+
+    Carries an `eventStamp` too, for a game inside an event: the stored
+    event's mtime, which any PUT moves. The client refetches the event when
+    it moves, so an event roster edited in-game by one coach reaches the
+    others' Line tabs without leaving the game. Null for a standalone game.
 
     Requires: Coach access to the game's team.
     """
@@ -301,6 +309,15 @@ async def ping_controller(
     # poll's `version`, so both sides of the app detect change the same way.
     stamp = get_game_current_mtime_ns(game_id)
 
+    # The event's stamp needs the game's eventId. The auth dependency already
+    # parsed the game to find its team (and left it on request.state); only
+    # an auth-disabled dev server pays for the parse here.
+    game = getattr(request.state, "game", None)
+    if not isinstance(game, dict):
+        game = get_game_current(game_id)
+    event_id = game.get("eventId") if isinstance(game, dict) else None
+    event_stamp = get_event_mtime_ns(event_id) if event_id else None
+
     return {
         "status": "ok",
         "pinged": pinged,
@@ -311,5 +328,6 @@ async def ping_controller(
         "pingInterval": ping["pingIntervalMs"],
         "duplicateInstance": ping["duplicateInstance"],
         "gameStamp": str(stamp) if stamp is not None else None,
+        "eventStamp": str(event_stamp) if event_stamp is not None else None,
         "serverTime": datetime.now().isoformat()
     }

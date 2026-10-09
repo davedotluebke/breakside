@@ -33,6 +33,7 @@ import { renderFunStats, clearFunStats } from '../ui/funStatsView.js';
 import { screenStatsColumns } from '../utils/statsColumns.js';
 import { buildRosterRow } from './rosterRowHelpers.js';
 import { buildGameWorkbook } from '../utils/exportWorkbook.js';
+import { summaryRosterPlayers } from '../utils/gameRoster.js';
 import { openExportDialog } from '../ui/exportDialog.js';
 import { showScreen } from '../screens/navigation.js';
 import { showShareGameDialog } from '../game/shareGame.js';
@@ -260,29 +261,21 @@ function renderGameSummaryStatsTable(game) {
 }
 
 /**
- * The roster this game's table and export both list: rosterSnapshot for
- * historical accuracy. Some games saved an *empty* rosterSnapshot.players (the
- * snapshot object exists but captured nobody); guard on length so we don't
- * render a blank table when getGamePlayerStats actually has data. When the
- * snapshot is empty, show the live team roster (so bench players still appear
- * as zeros) unioned with anyone who actually has stats — so whoever played is
- * always listed even if currentTeam isn't this game's team.
+ * The roster this game's table and export both list: the snapshot for
+ * historical accuracy (the live team roster when the game captured none, so
+ * bench players still appear as zeros), plus anyone who has stats in this
+ * game but is on neither — a late arrival checked onto the event roster
+ * after the game started, a mid-game team add, a Correct Lineup name. The
+ * rule is utils/gameRoster.js summaryRosterPlayers; this binds it to the
+ * live team, which may not be this game's team (the share viewer).
  * @param {object} game
  * @param {object} playerStats - map of playerId → ps for this game
  * @returns {Array<object>}
  */
 function resolveSummaryPlayers(game, playerStats) {
-    if (game.rosterSnapshot && game.rosterSnapshot.players
-            && game.rosterSnapshot.players.length > 0) {
-        return game.rosterSnapshot.players;
-    }
-    const base = (typeof currentTeam !== 'undefined' && currentTeam
+    const roster = (typeof currentTeam !== 'undefined' && currentTeam
         && currentTeam.teamRoster) ? currentTeam.teamRoster : [];
-    const haveIds = new Set(base.map(p => p.id));
-    const fromStats = Object.entries(playerStats || {})
-        .filter(([id]) => !haveIds.has(id))
-        .map(([id, s]) => ({ id, name: s.name || id }));
-    return [...base, ...fromStats];
+    return summaryRosterPlayers(game, playerStats, roster);
 }
 
 /**

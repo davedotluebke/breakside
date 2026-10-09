@@ -255,7 +255,11 @@ async def require_game_team_coach(
             detail=f"Game {game_id} not found"
         )
 
-    team_id = get_game_current(game_id).get("teamId")
+    game = get_game_current(game_id)
+    # Left for the handler, so one that needs a field of the stored game
+    # (the ping's eventStamp) does not parse it a second time.
+    request.state.game = game
+    team_id = game.get("teamId")
     if not team_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
