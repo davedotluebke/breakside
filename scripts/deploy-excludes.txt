@@ -40,6 +40,7 @@ tests/*
 # Session scratch files (gitignored; a staging deploy syncs the working
 # directory, so exclude them here too)
 scratchpad/*
+mockups/commentator/audio/*
 
 # Docs and license
 *.md

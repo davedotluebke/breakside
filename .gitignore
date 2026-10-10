@@ -74,3 +74,6 @@ scratchpad/
 
 # Local Python venvs (e.g. the 3.12 venv used to validate requirements.lock)
 .venv*/
+
+# Commentator TTS mockup audio (regenerate with mockups/commentator/generate.py)
+mockups/commentator/audio/

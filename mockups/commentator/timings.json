@@ -1,0 +1,843 @@
+{
+  "gapMs": 450,
+  "approaches": {
+    "a-verbatim-generative": {
+      "title": "Verbatim log, generative voice",
+      "engine": "generative",
+      "voice": "Matthew",
+      "ssml": false,
+      "textSource": "raw",
+      "clips": 32,
+      "characters": 828,
+      "latencyMs": {
+        "median": 1129,
+        "p90": 1594,
+        "max": 1849
+      },
+      "trackS": 78.0,
+      "lines": [
+        {
+          "index": 0,
+          "kind": "header",
+          "text": "Game Summary: Breakside versus Riverside.",
+          "latencyMs": 1849,
+          "audioS": 2.95
+        },
+        {
+          "index": 1,
+          "kind": "roster",
+          "text": "Point 1 roster: Alice Bob Cara Dev Eve Finn Gia",
+          "latencyMs": 1825,
+          "audioS": 3.86
+        },
+        {
+          "index": 2,
+          "kind": "pullnote",
+          "text": "Breakside pulls to Riverside.",
+          "latencyMs": 1141,
+          "audioS": 1.85
+        },
+        {
+          "index": 3,
+          "kind": "possession",
+          "text": "Breakside on defense",
+          "latencyMs": 1041,
+          "audioS": 1.51
+        },
+        {
+          "index": 4,
+          "kind": "event",
+          "text": "Pull by Alice , good pull",
+          "latencyMs": 1122,
+          "audioS": 1.85
+        },
+        {
+          "index": 5,
+          "kind": "event",
+          "text": "Block by Bob",
+          "latencyMs": 1042,
+          "audioS": 1.18
+        },
+        {
+          "index": 6,
+          "kind": "possession",
+          "text": "Breakside on offense",
+          "latencyMs": 1041,
+          "audioS": 1.46
+        },
+        {
+          "index": 7,
+          "kind": "event",
+          "text": "Bob throws a reset to Cara",
+          "latencyMs": 1129,
+          "audioS": 1.9
+        },
+        {
+          "index": 8,
+          "kind": "event",
+          "text": "Cara hucks to Dev",
+          "latencyMs": 1025,
+          "audioS": 1.37
+        },
+        {
+          "index": 9,
+          "kind": "event",
+          "text": "Dev throws to Alice for the score!",
+          "latencyMs": 1579,
+          "audioS": 1.97
+        },
+        {
+          "index": 10,
+          "kind": "score",
+          "text": "Breakside scores!",
+          "latencyMs": 1013,
+          "audioS": 1.34
+        },
+        {
+          "index": 11,
+          "kind": "currentscore",
+          "text": "Current score: Breakside 1, Riverside 0",
+          "latencyMs": 1452,
+          "audioS": 3.48
+        },
+        {
+          "index": 12,
+          "kind": "roster",
+          "text": "Point 2 roster: Alice Bob Cara Dev Eve Finn Gia",
+          "latencyMs": 1676,
+          "audioS": 3.82
+        },
+        {
+          "index": 13,
+          "kind": "pullnote",
+          "text": "Riverside pulls to Breakside.",
+          "latencyMs": 1119,
+          "audioS": 1.9
+        },
+        {
+          "index": 14,
+          "kind": "possession",
+          "text": "Breakside on offense",
+          "latencyMs": 1008,
+          "audioS": 1.46
+        },
+        {
+          "index": 15,
+          "kind": "event",
+          "text": "Eve catches the pull",
+          "latencyMs": 1008,
+          "audioS": 1.37
+        },
+        {
+          "index": 16,
+          "kind": "event",
+          "text": "Eve throws to Finn",
+          "latencyMs": 1201,
+          "audioS": 1.42
+        },
+        {
+          "index": 17,
+          "kind": "event",
+          "text": "Finn throws to Gia",
+          "latencyMs": 1008,
+          "audioS": 1.37
+        },
+        {
+          "index": 18,
+          "kind": "event",
+          "text": "Turnover by Gia",
+          "latencyMs": 1000,
+          "audioS": 1.46
+        },
+        {
+          "index": 19,
+          "kind": "possession",
+          "text": "Breakside on defense",
+          "latencyMs": 1204,
+          "audioS": 1.51
+        },
+        {
+          "index": 20,
+          "kind": "score",
+          "text": "Riverside scores!",
+          "latencyMs": 1116,
+          "audioS": 1.37
+        },
+        {
+          "index": 21,
+          "kind": "currentscore",
+          "text": "Current score: Breakside 1, Riverside 1",
+          "latencyMs": 1594,
+          "audioS": 3.38
+        },
+        {
+          "index": 22,
+          "kind": "roster",
+          "text": "Point 3 roster: Alice Bob Cara Dev Eve Finn Gia",
+          "latencyMs": 1510,
+          "audioS": 3.67
+        },
+        {
+          "index": 23,
+          "kind": "pullnote",
+          "text": "Breakside pulls to Riverside.",
+          "latencyMs": 1305,
+          "audioS": 1.85
+        },
+        {
+          "index": 24,
+          "kind": "possession",
+          "text": "Breakside on defense",
+          "latencyMs": 1105,
+          "audioS": 1.51
+        },
+        {
+          "index": 25,
+          "kind": "event",
+          "text": "Pull by Cara , good pull",
+          "latencyMs": 1362,
+          "audioS": 1.94
+        },
+        {
+          "index": 26,
+          "kind": "event",
+          "text": "Block by Dev",
+          "latencyMs": 1037,
+          "audioS": 1.25
+        },
+        {
+          "index": 27,
+          "kind": "possession",
+          "text": "Breakside on offense",
+          "latencyMs": 1069,
+          "audioS": 1.46
+        },
+        {
+          "index": 28,
+          "kind": "event",
+          "text": "Dev throws to Bob",
+          "latencyMs": 1120,
+          "audioS": 1.34
+        },
+        {
+          "index": 29,
+          "kind": "event",
+          "text": "Bob hucks to Alice for the score!",
+          "latencyMs": 1178,
+          "audioS": 1.9
+        },
+        {
+          "index": 30,
+          "kind": "score",
+          "text": "Breakside scores!",
+          "latencyMs": 1131,
+          "audioS": 1.34
+        },
+        {
+          "index": 31,
+          "kind": "currentscore",
+          "text": "Current score: Breakside 2, Riverside 1",
+          "latencyMs": 1458,
+          "audioS": 3.48
+        }
+      ]
+    },
+    "b-commentator-generative": {
+      "title": "Commentator rewrite, generative voice",
+      "engine": "generative",
+      "voice": "Stephen",
+      "ssml": false,
+      "textSource": "say",
+      "clips": 26,
+      "characters": 1219,
+      "latencyMs": {
+        "median": 1296,
+        "p90": 1989,
+        "max": 2448
+      },
+      "trackS": 99.5,
+      "lines": [
+        {
+          "index": 0,
+          "kind": "header",
+          "text": "Welcome to Breakside against Riverside. Breakside will start the game on defense.",
+          "latencyMs": 1850,
+          "audioS": 5.14
+        },
+        {
+          "index": 1,
+          "kind": "roster",
+          "text": "Point one. On the line for Breakside: Alice, Bob, Cara, Dev, Eve, Finn, and Gia.",
+          "latencyMs": 2216,
+          "audioS": 6.79
+        },
+        {
+          "index": 2,
+          "kind": "pullnote",
+          "text": "Breakside to pull.",
+          "latencyMs": 1143,
+          "audioS": 1.63
+        },
+        {
+          "index": 4,
+          "kind": "event",
+          "text": "Alice with the pull, and it's a good one, deep into Riverside territory.",
+          "latencyMs": 1548,
+          "audioS": 4.46
+        },
+        {
+          "index": 5,
+          "kind": "event",
+          "text": "Riverside working it up the field... and Bob gets a hand on it! Block by Bob!",
+          "latencyMs": 1988,
+          "audioS": 5.47
+        },
+        {
+          "index": 7,
+          "kind": "event",
+          "text": "Bob picks it up and dumps it back to Cara.",
+          "latencyMs": 1217,
+          "audioS": 2.62
+        },
+        {
+          "index": 8,
+          "kind": "event",
+          "text": "Cara winds up and hucks it! Dev comes down with it just short of the goal line.",
+          "latencyMs": 1693,
+          "audioS": 4.66
+        },
+        {
+          "index": 9,
+          "kind": "event",
+          "text": "Dev to Alice in the end zone. Goal!",
+          "latencyMs": 1274,
+          "audioS": 2.78
+        },
+        {
+          "index": 10,
+          "kind": "score",
+          "text": "That's the break for Breakside.",
+          "latencyMs": 1062,
+          "audioS": 1.94
+        },
+        {
+          "index": 11,
+          "kind": "currentscore",
+          "text": "Breakside leads it, one to nothing.",
+          "latencyMs": 1285,
+          "audioS": 2.57
+        },
+        {
+          "index": 12,
+          "kind": "roster",
+          "text": "Point two. Same seven for Breakside.",
+          "latencyMs": 1508,
+          "audioS": 3.31
+        },
+        {
+          "index": 13,
+          "kind": "pullnote",
+          "text": "Riverside will pull this time.",
+          "latencyMs": 1272,
+          "audioS": 2.11
+        },
+        {
+          "index": 15,
+          "kind": "event",
+          "text": "Eve catches the pull cleanly.",
+          "latencyMs": 1238,
+          "audioS": 2.18
+        },
+        {
+          "index": 16,
+          "kind": "event",
+          "text": "Eve swings it over to Finn.",
+          "latencyMs": 1312,
+          "audioS": 1.94
+        },
+        {
+          "index": 17,
+          "kind": "event",
+          "text": "Finn across to Gia on the break side.",
+          "latencyMs": 1215,
+          "audioS": 2.4
+        },
+        {
+          "index": 18,
+          "kind": "event",
+          "text": "Gia puts it up for Eve... and it hits the turf. Turnover. Riverside ball.",
+          "latencyMs": 1989,
+          "audioS": 5.81
+        },
+        {
+          "index": 20,
+          "kind": "score",
+          "text": "Riverside works it in and punches it home.",
+          "latencyMs": 1296,
+          "audioS": 2.66
+        },
+        {
+          "index": 21,
+          "kind": "currentscore",
+          "text": "We're all tied up at one.",
+          "latencyMs": 1091,
+          "audioS": 1.94
+        },
+        {
+          "index": 22,
+          "kind": "roster",
+          "text": "Point three. Breakside sends out the same line.",
+          "latencyMs": 1565,
+          "audioS": 3.5
+        },
+        {
+          "index": 23,
+          "kind": "pullnote",
+          "text": "Breakside pulling.",
+          "latencyMs": 1098,
+          "audioS": 1.56
+        },
+        {
+          "index": 25,
+          "kind": "event",
+          "text": "Cara's pull hangs forever and lands right at the goal line.",
+          "latencyMs": 1416,
+          "audioS": 3.55
+        },
+        {
+          "index": 26,
+          "kind": "event",
+          "text": "Dev reads the throw... layout block! Dev comes up with it!",
+          "latencyMs": 1837,
+          "audioS": 4.85
+        },
+        {
+          "index": 28,
+          "kind": "event",
+          "text": "Dev gets it moving to Bob.",
+          "latencyMs": 1228,
+          "audioS": 1.85
+        },
+        {
+          "index": 29,
+          "kind": "event",
+          "text": "Bob sees Alice streaking deep. He puts it up... Alice catches it in the end zone! Goal, Breakside!",
+          "latencyMs": 2448,
+          "audioS": 7.56
+        },
+        {
+          "index": 30,
+          "kind": "score",
+          "text": "Another break for Breakside.",
+          "latencyMs": 1163,
+          "audioS": 1.94
+        },
+        {
+          "index": 31,
+          "kind": "currentscore",
+          "text": "Breakside back in front, two to one.",
+          "latencyMs": 1250,
+          "audioS": 2.5
+        }
+      ]
+    },
+    "c-commentator-neural-ssml": {
+      "title": "Commentator rewrite, neural voice with SSML emphasis",
+      "engine": "neural",
+      "voice": "Matthew",
+      "ssml": true,
+      "textSource": "say",
+      "clips": 26,
+      "characters": 1219,
+      "latencyMs": {
+        "median": 893,
+        "p90": 995,
+        "max": 1075
+      },
+      "trackS": 86.2,
+      "lines": [
+        {
+          "index": 0,
+          "kind": "header",
+          "text": "Welcome to Breakside against Riverside. Breakside will start the game on defense.",
+          "latencyMs": 854,
+          "audioS": 4.63
+        },
+        {
+          "index": 1,
+          "kind": "roster",
+          "text": "Point one. On the line for Breakside: Alice, Bob, Cara, Dev, Eve, Finn, and Gia.",
+          "latencyMs": 910,
+          "audioS": 6.12
+        },
+        {
+          "index": 2,
+          "kind": "pullnote",
+          "text": "Breakside to pull.",
+          "latencyMs": 795,
+          "audioS": 1.06
+        },
+        {
+          "index": 4,
+          "kind": "event",
+          "text": "Alice with the pull, and it's a good one, deep into Riverside territory.",
+          "latencyMs": 954,
+          "audioS": 4.25
+        },
+        {
+          "index": 5,
+          "kind": "event",
+          "text": "Riverside working it up the field... and Bob gets a hand on it! Block by Bob!",
+          "latencyMs": 995,
+          "audioS": 4.54
+        },
+        {
+          "index": 7,
+          "kind": "event",
+          "text": "Bob picks it up and dumps it back to Cara.",
+          "latencyMs": 814,
+          "audioS": 2.18
+        },
+        {
+          "index": 8,
+          "kind": "event",
+          "text": "Cara winds up and hucks it! Dev comes down with it just short of the goal line.",
+          "latencyMs": 999,
+          "audioS": 4.37
+        },
+        {
+          "index": 9,
+          "kind": "event",
+          "text": "Dev to Alice in the end zone. Goal!",
+          "latencyMs": 749,
+          "audioS": 2.33
+        },
+        {
+          "index": 10,
+          "kind": "score",
+          "text": "That's the break for Breakside.",
+          "latencyMs": 923,
+          "audioS": 1.39
+        },
+        {
+          "index": 11,
+          "kind": "currentscore",
+          "text": "Breakside leads it, one to nothing.",
+          "latencyMs": 1075,
+          "audioS": 2.18
+        },
+        {
+          "index": 12,
+          "kind": "roster",
+          "text": "Point two. Same seven for Breakside.",
+          "latencyMs": 893,
+          "audioS": 2.76
+        },
+        {
+          "index": 13,
+          "kind": "pullnote",
+          "text": "Riverside will pull this time.",
+          "latencyMs": 892,
+          "audioS": 1.8
+        },
+        {
+          "index": 15,
+          "kind": "event",
+          "text": "Eve catches the pull cleanly.",
+          "latencyMs": 755,
+          "audioS": 1.68
+        },
+        {
+          "index": 16,
+          "kind": "event",
+          "text": "Eve swings it over to Finn.",
+          "latencyMs": 837,
+          "audioS": 1.63
+        },
+        {
+          "index": 17,
+          "kind": "event",
+          "text": "Finn across to Gia on the break side.",
+          "latencyMs": 925,
+          "audioS": 2.06
+        },
+        {
+          "index": 18,
+          "kind": "event",
+          "text": "Gia puts it up for Eve... and it hits the turf. Turnover. Riverside ball.",
+          "latencyMs": 994,
+          "audioS": 5.02
+        },
+        {
+          "index": 20,
+          "kind": "score",
+          "text": "Riverside works it in and punches it home.",
+          "latencyMs": 924,
+          "audioS": 2.11
+        },
+        {
+          "index": 21,
+          "kind": "currentscore",
+          "text": "We're all tied up at one.",
+          "latencyMs": 857,
+          "audioS": 1.49
+        },
+        {
+          "index": 22,
+          "kind": "roster",
+          "text": "Point three. Breakside sends out the same line.",
+          "latencyMs": 963,
+          "audioS": 3.31
+        },
+        {
+          "index": 23,
+          "kind": "pullnote",
+          "text": "Breakside pulling.",
+          "latencyMs": 793,
+          "audioS": 1.01
+        },
+        {
+          "index": 25,
+          "kind": "event",
+          "text": "Cara's pull hangs forever and lands right at the goal line.",
+          "latencyMs": 918,
+          "audioS": 3.31
+        },
+        {
+          "index": 26,
+          "kind": "event",
+          "text": "Dev reads the throw... layout block! Dev comes up with it!",
+          "latencyMs": 912,
+          "audioS": 3.72
+        },
+        {
+          "index": 28,
+          "kind": "event",
+          "text": "Dev gets it moving to Bob.",
+          "latencyMs": 730,
+          "audioS": 1.63
+        },
+        {
+          "index": 29,
+          "kind": "event",
+          "text": "Bob sees Alice streaking deep. He puts it up... Alice catches it in the end zone! Goal, Breakside!",
+          "latencyMs": 871,
+          "audioS": 6.46
+        },
+        {
+          "index": 30,
+          "kind": "score",
+          "text": "Another break for Breakside.",
+          "latencyMs": 775,
+          "audioS": 1.37
+        },
+        {
+          "index": 31,
+          "kind": "currentscore",
+          "text": "Breakside back in front, two to one.",
+          "latencyMs": 837,
+          "audioS": 2.06
+        }
+      ]
+    },
+    "d-commentator-longform": {
+      "title": "Commentator rewrite, long-form voice",
+      "engine": "long-form",
+      "voice": "Ruth",
+      "ssml": false,
+      "textSource": "say",
+      "clips": 26,
+      "characters": 1219,
+      "latencyMs": {
+        "median": 2122,
+        "p90": 3136,
+        "max": 4030
+      },
+      "trackS": 107.9,
+      "lines": [
+        {
+          "index": 0,
+          "kind": "header",
+          "text": "Welcome to Breakside against Riverside. Breakside will start the game on defense.",
+          "latencyMs": 3436,
+          "audioS": 5.59
+        },
+        {
+          "index": 1,
+          "kind": "roster",
+          "text": "Point one. On the line for Breakside: Alice, Bob, Cara, Dev, Eve, Finn, and Gia.",
+          "latencyMs": 4030,
+          "audioS": 8.09
+        },
+        {
+          "index": 2,
+          "kind": "pullnote",
+          "text": "Breakside to pull.",
+          "latencyMs": 1497,
+          "audioS": 1.87
+        },
+        {
+          "index": 4,
+          "kind": "event",
+          "text": "Alice with the pull, and it's a good one, deep into Riverside territory.",
+          "latencyMs": 3136,
+          "audioS": 4.66
+        },
+        {
+          "index": 5,
+          "kind": "event",
+          "text": "Riverside working it up the field... and Bob gets a hand on it! Block by Bob!",
+          "latencyMs": 2263,
+          "audioS": 5.59
+        },
+        {
+          "index": 7,
+          "kind": "event",
+          "text": "Bob picks it up and dumps it back to Cara.",
+          "latencyMs": 2262,
+          "audioS": 3.17
+        },
+        {
+          "index": 8,
+          "kind": "event",
+          "text": "Cara winds up and hucks it! Dev comes down with it just short of the goal line.",
+          "latencyMs": 2393,
+          "audioS": 5.45
+        },
+        {
+          "index": 9,
+          "kind": "event",
+          "text": "Dev to Alice in the end zone. Goal!",
+          "latencyMs": 2059,
+          "audioS": 2.83
+        },
+        {
+          "index": 10,
+          "kind": "score",
+          "text": "That's the break for Breakside.",
+          "latencyMs": 1811,
+          "audioS": 2.45
+        },
+        {
+          "index": 11,
+          "kind": "currentscore",
+          "text": "Breakside leads it, one to nothing.",
+          "latencyMs": 1974,
+          "audioS": 2.93
+        },
+        {
+          "index": 12,
+          "kind": "roster",
+          "text": "Point two. Same seven for Breakside.",
+          "latencyMs": 2052,
+          "audioS": 3.05
+        },
+        {
+          "index": 13,
+          "kind": "pullnote",
+          "text": "Riverside will pull this time.",
+          "latencyMs": 1764,
+          "audioS": 2.33
+        },
+        {
+          "index": 15,
+          "kind": "event",
+          "text": "Eve catches the pull cleanly.",
+          "latencyMs": 1863,
+          "audioS": 2.33
+        },
+        {
+          "index": 16,
+          "kind": "event",
+          "text": "Eve swings it over to Finn.",
+          "latencyMs": 1768,
+          "audioS": 2.3
+        },
+        {
+          "index": 17,
+          "kind": "event",
+          "text": "Finn across to Gia on the break side.",
+          "latencyMs": 2122,
+          "audioS": 2.74
+        },
+        {
+          "index": 18,
+          "kind": "event",
+          "text": "Gia puts it up for Eve... and it hits the turf. Turnover. Riverside ball.",
+          "latencyMs": 2531,
+          "audioS": 6.26
+        },
+        {
+          "index": 20,
+          "kind": "score",
+          "text": "Riverside works it in and punches it home.",
+          "latencyMs": 2159,
+          "audioS": 2.9
+        },
+        {
+          "index": 21,
+          "kind": "currentscore",
+          "text": "We're all tied up at one.",
+          "latencyMs": 1577,
+          "audioS": 1.9
+        },
+        {
+          "index": 22,
+          "kind": "roster",
+          "text": "Point three. Breakside sends out the same line.",
+          "latencyMs": 2474,
+          "audioS": 3.84
+        },
+        {
+          "index": 23,
+          "kind": "pullnote",
+          "text": "Breakside pulling.",
+          "latencyMs": 1576,
+          "audioS": 2.09
+        },
+        {
+          "index": 25,
+          "kind": "event",
+          "text": "Cara's pull hangs forever and lands right at the goal line.",
+          "latencyMs": 2833,
+          "audioS": 4.1
+        },
+        {
+          "index": 26,
+          "kind": "event",
+          "text": "Dev reads the throw... layout block! Dev comes up with it!",
+          "latencyMs": 2814,
+          "audioS": 4.58
+        },
+        {
+          "index": 28,
+          "kind": "event",
+          "text": "Dev gets it moving to Bob.",
+          "latencyMs": 1831,
+          "audioS": 2.06
+        },
+        {
+          "index": 29,
+          "kind": "event",
+          "text": "Bob sees Alice streaking deep. He puts it up... Alice catches it in the end zone! Goal, Breakside!",
+          "latencyMs": 2523,
+          "audioS": 7.56
+        },
+        {
+          "index": 30,
+          "kind": "score",
+          "text": "Another break for Breakside.",
+          "latencyMs": 1817,
+          "audioS": 2.54
+        },
+        {
+          "index": 31,
+          "kind": "currentscore",
+          "text": "Breakside back in front, two to one.",
+          "latencyMs": 1973,
+          "audioS": 2.93
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,231 @@
+<meta charset="utf-8">
+<title>Commentator Voice Mockups</title>
+<style>
+/* Layout: one column review memo, each approach a card with its player on top and the numbers beneath; palette matches mockups/replay-viewer. */
+:root {
+  --bg: #f1f0ec; --panel: #ffffff; --panel2: #f7f6f2; --ink: #1d1d1b; --muted: #6d6b64; --line: #dedbd2;
+  --accent: #e8792b; --accent-ink: #fff; --us: #2563eb; --opp: #b91c1c; --score: #059669;
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.06);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131415; --panel: #1d1f21; --panel2: #232527; --ink: #ecebe5; --muted: #9b998f; --line: #2e3134;
+    --us: #60a5fa; --opp: #f87171; --score: #34d399;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131415; --panel: #1d1f21; --panel2: #232527; --ink: #ecebe5; --muted: #9b998f; --line: #2e3134;
+  --us: #60a5fa; --opp: #f87171; --score: #34d399;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 28px; }
+h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 6px; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 1.15rem; margin: 0; text-wrap: balance; }
+h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+p { margin: 0; max-width: 65ch; }
+.lede { color: var(--muted); }
+.intro { display: grid; gap: 10px; }
+code { font: .88em var(--mono); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.card header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.tag { font: 600 .72rem/1 var(--font); letter-spacing: .05em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 5px 9px; }
+.tag.alt { background: var(--panel2); color: var(--muted); border: 1px solid var(--line); }
+.voice { color: var(--muted); font-size: .9rem; }
+audio { width: 100%; display: block; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.stat { background: var(--panel2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.stat b { display: block; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.stat span { font-size: .78rem; color: var(--muted); }
+.notes { display: grid; gap: 6px; font-size: .95rem; }
+.notes p::before { content: "·"; color: var(--accent); margin-right: 8px; font-weight: 700; }
+details { border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; font-size: .9rem; color: var(--muted); }
+summary:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lines { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .86rem; margin-top: 8px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.excite td:first-child { border-left: 3px solid var(--score); }
+.compare { overflow-x: auto; }
+.compare td:first-child { font-weight: 600; white-space: nowrap; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button { font: 600 .95rem var(--font); color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+button.quiet { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); }
+button:disabled { opacity: .5; cursor: default; }
+select { font: .95rem var(--font); color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-width: 100%; }
+.now { min-height: 1.5em; color: var(--muted); font-size: .95rem; }
+.rec { border-left: 4px solid var(--accent); }
+.rec ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>Commentator voice mockups</h1>
+    <p class="lede">Four ways the replay viewer could speak a game, on the same three-point sample (Breakside vs. Riverside, our names only). Every track was built one log entry at a time, exactly as the controller's <code>entry</code> hook would deliver them, with a 450 ms gap between clips to stand in for play-after-play pacing.</p>
+    <p>Approaches A and B differ in <em>what</em> is said. B, C and D say the same commentator script and differ in <em>who says it</em>. E uses no server at all. All Amazon Polly voices were synthesized from this session with the deploy credentials; the two candidates that need keys we do not hold here are listed at the end.</p>
+  </div>
+
+  <section class="card" id="a">
+    <header><span class="tag">A</span><h2>Verbatim log lines</h2><span class="voice">Polly generative · Matthew</span></header>
+    <audio controls preload="metadata" src="audio/a-verbatim-generative.mp3"></audio>
+    <div class="stats" data-stats="a-verbatim-generative"></div>
+    <div class="notes">
+      <p>The baseline: the entry text read as written, with only the parentheses and dashes tidied. No model call in the loop, so it is the cheapest and simplest pipeline.</p>
+      <p>Listen for the stiffness. "Breakside on offense" and "Current score" lines are log furniture, not commentary, and the voice cannot know a block is exciting.</p>
+    </div>
+    <details><summary>Per-line text and latency</summary><div class="lines" data-lines="a-verbatim-generative"></div></details>
+  </section>
+
+  <section class="card" id="b">
+    <header><span class="tag">B</span><h2>Commentator rewrite</h2><span class="voice">Polly generative · Stephen</span></header>
+    <audio controls preload="metadata" src="audio/b-commentator-generative.mp3"></audio>
+    <div class="stats" data-stats="b-commentator-generative"></div>
+    <div class="notes">
+      <p>Each entry rewritten into a commentator's line, using the entries already spoken for context (plan Decision 12). Possession delimiters go silent; roster lines become "On the line for Breakside"; a block becomes "Bob gets a hand on it!".</p>
+      <p>The rewrite here was written by hand to show the ceiling. In the product it is one short model call per entry, which adds its own latency on top of the synthesis numbers below.</p>
+    </div>
+    <details><summary>Per-line text and latency</summary><div class="lines" data-lines="b-commentator-generative"></div></details>
+  </section>
+
+  <section class="card" id="c">
+    <header><span class="tag">C</span><h2>Rewrite plus SSML emphasis</h2><span class="voice">Polly neural · Matthew</span></header>
+    <audio controls preload="metadata" src="audio/c-commentator-neural-ssml.mp3"></audio>
+    <div class="stats" data-stats="c-commentator-neural-ssml"></div>
+    <div class="notes">
+      <p>Same script as B on the older neural engine, which accepts SSML the generative engine refuses: calm lines use the newscaster style, and blocks, turnovers and goals (green edge in the table) get a faster, louder read with a pause at every ellipsis.</p>
+      <p>Fastest and about half the price of generative. The trade is a flatter, more synthetic timbre; judge whether the emphasis control earns that back.</p>
+    </div>
+    <details><summary>Per-line text and latency</summary><div class="lines" data-lines="c-commentator-neural-ssml"></div></details>
+  </section>
+
+  <section class="card" id="d">
+    <header><span class="tag">D</span><h2>Rewrite, long-form voice</h2><span class="voice">Polly long-form · Ruth</span></header>
+    <audio controls preload="metadata" src="audio/d-commentator-longform.mp3"></audio>
+    <div class="stats" data-stats="d-commentator-longform"></div>
+    <div class="notes">
+      <p>Polly's long-form engine is tuned for narration and audiobooks: the most natural phrasing of the four and the only female voice in the set. It is also the slowest per call and over three times the price of generative.</p>
+      <p>Its strength is sustained reading, which a play-by-play of two-second lines never gives it. Included so the quality ceiling of Polly is on the table.</p>
+    </div>
+    <details><summary>Per-line text and latency</summary><div class="lines" data-lines="d-commentator-longform"></div></details>
+  </section>
+
+  <section class="card" id="e">
+    <header><span class="tag alt">E</span><h2>Your browser's own voice</h2><span class="voice">Web Speech API · no server, no cost</span></header>
+    <div class="row">
+      <button id="speak" type="button">Play the commentator script</button>
+      <button id="stop" type="button" class="quiet" disabled>Stop</button>
+      <select id="voices" aria-label="Browser voice"></select>
+    </div>
+    <div class="now" id="now">Uses whatever English voice this device offers. Quality varies a lot: iOS Safari and macOS ship good ones, Android and Windows are more mixed.</div>
+    <div class="notes">
+      <p>The zero-cost control. Works offline, which fits Breakside's offline-first design, and needs nothing on the backend. The voice is whatever the device has, so coaches on different phones hear different things and we cannot tune it.</p>
+      <p>A reasonable fallback tier: if a Polly fetch fails or the viewer is offline, speak the line this way rather than go silent.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3>Side by side</h3>
+    <div class="compare" id="compare"></div>
+    <p class="lede" style="font-size:.85rem; margin-top:4px">Latency is the wall-clock time of one synthesis call from this container to Polly in us-east-1, per line, over the lines above. Cost per game assumes about 180 spoken entries at the commentator script's average line length (roughly 8,000 characters), at Polly's published per-character list prices; the rewrite model call is extra and small.</p>
+  </section>
+
+  <section class="card rec">
+    <h3>Recommendation</h3>
+    <ol>
+      <li><b>Ship the rewrite, not the raw lines.</b> A and B make the clearest difference of anything here. The voice engine matters less than the words.</li>
+      <li><b>Start with Polly generative (B).</b> It is already inside the AWS account the app deploys to, costs cents per game, and its latency fits play-after-play if the next line is synthesized while the current one plays. The IAM policy needs one <code>polly:SynthesizeSpeech</code> grant.</li>
+      <li><b>Keep E as the fallback</b> for offline viewers and failed fetches; the hook already caps how long replay waits for audio.</li>
+      <li><b>Revisit C only if emphasis control proves necessary.</b> The generative engine honours punctuation and exclamation marks well enough that the SSML gain is modest.</li>
+      <li><b>If the ceiling matters more than cost</b>, the two candidates below are the ones to render next.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h3>Not rendered here</h3>
+    <div class="notes">
+      <p><b>OpenAI gpt-4o-mini-tts</b> takes a free-text style instruction ("an excited ultimate frisbee play-by-play announcer") and is widely rated the most natural low-latency option. The backend already holds an OpenAI key for narration, so a sample needs one server-side call. The key does not reach this container.</p>
+      <p><b>ElevenLabs</b> remains the quality benchmark for character voices and supports streaming; it would be a new vendor, a new key and the highest per-character price of the set.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+const TIMINGS = {"gapMs": 450, "approaches": {"a-verbatim-generative": {"title": "Verbatim log, generative voice", "engine": "generative", "voice": "Matthew", "ssml": false, "textSource": "raw", "clips": 32, "characters": 828, "latencyMs": {"median": 1129, "p90": 1594, "max": 1849}, "trackS": 78.0, "lines": [{"index": 0, "kind": "header", "text": "Game Summary: Breakside versus Riverside.", "latencyMs": 1849, "audioS": 2.95}, {"index": 1, "kind": "roster", "text": "Point 1 roster: Alice Bob Cara Dev Eve Finn Gia", "latencyMs": 1825, "audioS": 3.86}, {"index": 2, "kind": "pullnote", "text": "Breakside pulls to Riverside.", "latencyMs": 1141, "audioS": 1.85}, {"index": 3, "kind": "possession", "text": "Breakside on defense", "latencyMs": 1041, "audioS": 1.51}, {"index": 4, "kind": "event", "text": "Pull by Alice , good pull", "latencyMs": 1122, "audioS": 1.85}, {"index": 5, "kind": "event", "text": "Block by Bob", "latencyMs": 1042, "audioS": 1.18}, {"index": 6, "kind": "possession", "text": "Breakside on offense", "latencyMs": 1041, "audioS": 1.46}, {"index": 7, "kind": "event", "text": "Bob throws a reset to Cara", "latencyMs": 1129, "audioS": 1.9}, {"index": 8, "kind": "event", "text": "Cara hucks to Dev", "latencyMs": 1025, "audioS": 1.37}, {"index": 9, "kind": "event", "text": "Dev throws to Alice for the score!", "latencyMs": 1579, "audioS": 1.97}, {"index": 10, "kind": "score", "text": "Breakside scores!", "latencyMs": 1013, "audioS": 1.34}, {"index": 11, "kind": "currentscore", "text": "Current score: Breakside 1, Riverside 0", "latencyMs": 1452, "audioS": 3.48}, {"index": 12, "kind": "roster", "text": "Point 2 roster: Alice Bob Cara Dev Eve Finn Gia", "latencyMs": 1676, "audioS": 3.82}, {"index": 13, "kind": "pullnote", "text": "Riverside pulls to Breakside.", "latencyMs": 1119, "audioS": 1.9}, {"index": 14, "kind": "possession", "text": "Breakside on offense", "latencyMs": 1008, "audioS": 1.46}, {"index": 15, "kind": "event", "text": "Eve catches the pull", "latencyMs": 1008, "audioS": 1.37}, {"index": 16, "kind": "event", "text": "Eve throws to Finn", "latencyMs": 1201, "audioS": 1.42}, {"index": 17, "kind": "event", "text": "Finn throws to Gia", "latencyMs": 1008, "audioS": 1.37}, {"index": 18, "kind": "event", "text": "Turnover by Gia", "latencyMs": 1000, "audioS": 1.46}, {"index": 19, "kind": "possession", "text": "Breakside on defense", "latencyMs": 1204, "audioS": 1.51}, {"index": 20, "kind": "score", "text": "Riverside scores!", "latencyMs": 1116, "audioS": 1.37}, {"index": 21, "kind": "currentscore", "text": "Current score: Breakside 1, Riverside 1", "latencyMs": 1594, "audioS": 3.38}, {"index": 22, "kind": "roster", "text": "Point 3 roster: Alice Bob Cara Dev Eve Finn Gia", "latencyMs": 1510, "audioS": 3.67}, {"index": 23, "kind": "pullnote", "text": "Breakside pulls to Riverside.", "latencyMs": 1305, "audioS": 1.85}, {"index": 24, "kind": "possession", "text": "Breakside on defense", "latencyMs": 1105, "audioS": 1.51}, {"index": 25, "kind": "event", "text": "Pull by Cara , good pull", "latencyMs": 1362, "audioS": 1.94}, {"index": 26, "kind": "event", "text": "Block by Dev", "latencyMs": 1037, "audioS": 1.25}, {"index": 27, "kind": "possession", "text": "Breakside on offense", "latencyMs": 1069, "audioS": 1.46}, {"index": 28, "kind": "event", "text": "Dev throws to Bob", "latencyMs": 1120, "audioS": 1.34}, {"index": 29, "kind": "event", "text": "Bob hucks to Alice for the score!", "latencyMs": 1178, "audioS": 1.9}, {"index": 30, "kind": "score", "text": "Breakside scores!", "latencyMs": 1131, "audioS": 1.34}, {"index": 31, "kind": "currentscore", "text": "Current score: Breakside 2, Riverside 1", "latencyMs": 1458, "audioS": 3.48}]}, "b-commentator-generative": {"title": "Commentator rewrite, generative voice", "engine": "generative", "voice": "Stephen", "ssml": false, "textSource": "say", "clips": 26, "characters": 1219, "latencyMs": {"median": 1296, "p90": 1989, "max": 2448}, "trackS": 99.5, "lines": [{"index": 0, "kind": "header", "text": "Welcome to Breakside against Riverside. Breakside will start the game on defense.", "latencyMs": 1850, "audioS": 5.14}, {"index": 1, "kind": "roster", "text": "Point one. On the line for Breakside: Alice, Bob, Cara, Dev, Eve, Finn, and Gia.", "latencyMs": 2216, "audioS": 6.79}, {"index": 2, "kind": "pullnote", "text": "Breakside to pull.", "latencyMs": 1143, "audioS": 1.63}, {"index": 4, "kind": "event", "text": "Alice with the pull, and it's a good one, deep into Riverside territory.", "latencyMs": 1548, "audioS": 4.46}, {"index": 5, "kind": "event", "text": "Riverside working it up the field... and Bob gets a hand on it! Block by Bob!", "latencyMs": 1988, "audioS": 5.47}, {"index": 7, "kind": "event", "text": "Bob picks it up and dumps it back to Cara.", "latencyMs": 1217, "audioS": 2.62}, {"index": 8, "kind": "event", "text": "Cara winds up and hucks it! Dev comes down with it just short of the goal line.", "latencyMs": 1693, "audioS": 4.66}, {"index": 9, "kind": "event", "text": "Dev to Alice in the end zone. Goal!", "latencyMs": 1274, "audioS": 2.78}, {"index": 10, "kind": "score", "text": "That's the break for Breakside.", "latencyMs": 1062, "audioS": 1.94}, {"index": 11, "kind": "currentscore", "text": "Breakside leads it, one to nothing.", "latencyMs": 1285, "audioS": 2.57}, {"index": 12, "kind": "roster", "text": "Point two. Same seven for Breakside.", "latencyMs": 1508, "audioS": 3.31}, {"index": 13, "kind": "pullnote", "text": "Riverside will pull this time.", "latencyMs": 1272, "audioS": 2.11}, {"index": 15, "kind": "event", "text": "Eve catches the pull cleanly.", "latencyMs": 1238, "audioS": 2.18}, {"index": 16, "kind": "event", "text": "Eve swings it over to Finn.", "latencyMs": 1312, "audioS": 1.94}, {"index": 17, "kind": "event", "text": "Finn across to Gia on the break side.", "latencyMs": 1215, "audioS": 2.4}, {"index": 18, "kind": "event", "text": "Gia puts it up for Eve... and it hits the turf. Turnover. Riverside ball.", "latencyMs": 1989, "audioS": 5.81}, {"index": 20, "kind": "score", "text": "Riverside works it in and punches it home.", "latencyMs": 1296, "audioS": 2.66}, {"index": 21, "kind": "currentscore", "text": "We're all tied up at one.", "latencyMs": 1091, "audioS": 1.94}, {"index": 22, "kind": "roster", "text": "Point three. Breakside sends out the same line.", "latencyMs": 1565, "audioS": 3.5}, {"index": 23, "kind": "pullnote", "text": "Breakside pulling.", "latencyMs": 1098, "audioS": 1.56}, {"index": 25, "kind": "event", "text": "Cara's pull hangs forever and lands right at the goal line.", "latencyMs": 1416, "audioS": 3.55}, {"index": 26, "kind": "event", "text": "Dev reads the throw... layout block! Dev comes up with it!", "latencyMs": 1837, "audioS": 4.85}, {"index": 28, "kind": "event", "text": "Dev gets it moving to Bob.", "latencyMs": 1228, "audioS": 1.85}, {"index": 29, "kind": "event", "text": "Bob sees Alice streaking deep. He puts it up... Alice catches it in the end zone! Goal, Breakside!", "latencyMs": 2448, "audioS": 7.56}, {"index": 30, "kind": "score", "text": "Another break for Breakside.", "latencyMs": 1163, "audioS": 1.94}, {"index": 31, "kind": "currentscore", "text": "Breakside back in front, two to one.", "latencyMs": 1250, "audioS": 2.5}]}, "c-commentator-neural-ssml": {"title": "Commentator rewrite, neural voice with SSML emphasis", "engine": "neural", "voice": "Matthew", "ssml": true, "textSource": "say", "clips": 26, "characters": 1219, "latencyMs": {"median": 893, "p90": 995, "max": 1075}, "trackS": 86.2, "lines": [{"index": 0, "kind": "header", "text": "Welcome to Breakside against Riverside. Breakside will start the game on defense.", "latencyMs": 854, "audioS": 4.63}, {"index": 1, "kind": "roster", "text": "Point one. On the line for Breakside: Alice, Bob, Cara, Dev, Eve, Finn, and Gia.", "latencyMs": 910, "audioS": 6.12}, {"index": 2, "kind": "pullnote", "text": "Breakside to pull.", "latencyMs": 795, "audioS": 1.06}, {"index": 4, "kind": "event", "text": "Alice with the pull, and it's a good one, deep into Riverside territory.", "latencyMs": 954, "audioS": 4.25}, {"index": 5, "kind": "event", "text": "Riverside working it up the field... and Bob gets a hand on it! Block by Bob!", "latencyMs": 995, "audioS": 4.54}, {"index": 7, "kind": "event", "text": "Bob picks it up and dumps it back to Cara.", "latencyMs": 814, "audioS": 2.18}, {"index": 8, "kind": "event", "text": "Cara winds up and hucks it! Dev comes down with it just short of the goal line.", "latencyMs": 999, "audioS": 4.37}, {"index": 9, "kind": "event", "text": "Dev to Alice in the end zone. Goal!", "latencyMs": 749, "audioS": 2.33}, {"index": 10, "kind": "score", "text": "That's the break for Breakside.", "latencyMs": 923, "audioS": 1.39}, {"index": 11, "kind": "currentscore", "text": "Breakside leads it, one to nothing.", "latencyMs": 1075, "audioS": 2.18}, {"index": 12, "kind": "roster", "text": "Point two. Same seven for Breakside.", "latencyMs": 893, "audioS": 2.76}, {"index": 13, "kind": "pullnote", "text": "Riverside will pull this time.", "latencyMs": 892, "audioS": 1.8}, {"index": 15, "kind": "event", "text": "Eve catches the pull cleanly.", "latencyMs": 755, "audioS": 1.68}, {"index": 16, "kind": "event", "text": "Eve swings it over to Finn.", "latencyMs": 837, "audioS": 1.63}, {"index": 17, "kind": "event", "text": "Finn across to Gia on the break side.", "latencyMs": 925, "audioS": 2.06}, {"index": 18, "kind": "event", "text": "Gia puts it up for Eve... and it hits the turf. Turnover. Riverside ball.", "latencyMs": 994, "audioS": 5.02}, {"index": 20, "kind": "score", "text": "Riverside works it in and punches it home.", "latencyMs": 924, "audioS": 2.11}, {"index": 21, "kind": "currentscore", "text": "We're all tied up at one.", "latencyMs": 857, "audioS": 1.49}, {"index": 22, "kind": "roster", "text": "Point three. Breakside sends out the same line.", "latencyMs": 963, "audioS": 3.31}, {"index": 23, "kind": "pullnote", "text": "Breakside pulling.", "latencyMs": 793, "audioS": 1.01}, {"index": 25, "kind": "event", "text": "Cara's pull hangs forever and lands right at the goal line.", "latencyMs": 918, "audioS": 3.31}, {"index": 26, "kind": "event", "text": "Dev reads the throw... layout block! Dev comes up with it!", "latencyMs": 912, "audioS": 3.72}, {"index": 28, "kind": "event", "text": "Dev gets it moving to Bob.", "latencyMs": 730, "audioS": 1.63}, {"index": 29, "kind": "event", "text": "Bob sees Alice streaking deep. He puts it up... Alice catches it in the end zone! Goal, Breakside!", "latencyMs": 871, "audioS": 6.46}, {"index": 30, "kind": "score", "text": "Another break for Breakside.", "latencyMs": 775, "audioS": 1.37}, {"index": 31, "kind": "currentscore", "text": "Breakside back in front, two to one.", "latencyMs": 837, "audioS": 2.06}]}, "d-commentator-longform": {"title": "Commentator rewrite, long-form voice", "engine": "long-form", "voice": "Ruth", "ssml": false, "textSource": "say", "clips": 26, "characters": 1219, "latencyMs": {"median": 2122, "p90": 3136, "max": 4030}, "trackS": 107.9, "lines": [{"index": 0, "kind": "header", "text": "Welcome to Breakside against Riverside. Breakside will start the game on defense.", "latencyMs": 3436, "audioS": 5.59}, {"index": 1, "kind": "roster", "text": "Point one. On the line for Breakside: Alice, Bob, Cara, Dev, Eve, Finn, and Gia.", "latencyMs": 4030, "audioS": 8.09}, {"index": 2, "kind": "pullnote", "text": "Breakside to pull.", "latencyMs": 1497, "audioS": 1.87}, {"index": 4, "kind": "event", "text": "Alice with the pull, and it's a good one, deep into Riverside territory.", "latencyMs": 3136, "audioS": 4.66}, {"index": 5, "kind": "event", "text": "Riverside working it up the field... and Bob gets a hand on it! Block by Bob!", "latencyMs": 2263, "audioS": 5.59}, {"index": 7, "kind": "event", "text": "Bob picks it up and dumps it back to Cara.", "latencyMs": 2262, "audioS": 3.17}, {"index": 8, "kind": "event", "text": "Cara winds up and hucks it! Dev comes down with it just short of the goal line.", "latencyMs": 2393, "audioS": 5.45}, {"index": 9, "kind": "event", "text": "Dev to Alice in the end zone. Goal!", "latencyMs": 2059, "audioS": 2.83}, {"index": 10, "kind": "score", "text": "That's the break for Breakside.", "latencyMs": 1811, "audioS": 2.45}, {"index": 11, "kind": "currentscore", "text": "Breakside leads it, one to nothing.", "latencyMs": 1974, "audioS": 2.93}, {"index": 12, "kind": "roster", "text": "Point two. Same seven for Breakside.", "latencyMs": 2052, "audioS": 3.05}, {"index": 13, "kind": "pullnote", "text": "Riverside will pull this time.", "latencyMs": 1764, "audioS": 2.33}, {"index": 15, "kind": "event", "text": "Eve catches the pull cleanly.", "latencyMs": 1863, "audioS": 2.33}, {"index": 16, "kind": "event", "text": "Eve swings it over to Finn.", "latencyMs": 1768, "audioS": 2.3}, {"index": 17, "kind": "event", "text": "Finn across to Gia on the break side.", "latencyMs": 2122, "audioS": 2.74}, {"index": 18, "kind": "event", "text": "Gia puts it up for Eve... and it hits the turf. Turnover. Riverside ball.", "latencyMs": 2531, "audioS": 6.26}, {"index": 20, "kind": "score", "text": "Riverside works it in and punches it home.", "latencyMs": 2159, "audioS": 2.9}, {"index": 21, "kind": "currentscore", "text": "We're all tied up at one.", "latencyMs": 1577, "audioS": 1.9}, {"index": 22, "kind": "roster", "text": "Point three. Breakside sends out the same line.", "latencyMs": 2474, "audioS": 3.84}, {"index": 23, "kind": "pullnote", "text": "Breakside pulling.", "latencyMs": 1576, "audioS": 2.09}, {"index": 25, "kind": "event", "text": "Cara's pull hangs forever and lands right at the goal line.", "latencyMs": 2833, "audioS": 4.1}, {"index": 26, "kind": "event", "text": "Dev reads the throw... layout block! Dev comes up with it!", "latencyMs": 2814, "audioS": 4.58}, {"index": 28, "kind": "event", "text": "Dev gets it moving to Bob.", "latencyMs": 1831, "audioS": 2.06}, {"index": 29, "kind": "event", "text": "Bob sees Alice streaking deep. He puts it up... Alice catches it in the end zone! Goal, Breakside!", "latencyMs": 2523, "audioS": 7.56}, {"index": 30, "kind": "score", "text": "Another break for Breakside.", "latencyMs": 1817, "audioS": 2.54}, {"index": 31, "kind": "currentscore", "text": "Breakside back in front, two to one.", "latencyMs": 1973, "audioS": 2.93}]}}};
+const SCRIPT_LINES = [{"kind": "header", "raw": "Game Summary: Breakside vs. Riverside.", "say": "Welcome to Breakside against Riverside. Breakside will start the game on defense."}, {"kind": "roster", "raw": "Point 1 roster: Alice Bob Cara Dev Eve Finn Gia", "say": "Point one. On the line for Breakside: Alice, Bob, Cara, Dev, Eve, Finn, and Gia."}, {"kind": "pullnote", "raw": "Breakside pulls to Riverside.", "say": "Breakside to pull."}, {"kind": "possession", "raw": "\u2014 Breakside on defense \u2014", "say": ""}, {"kind": "event", "raw": "Pull by Alice (Good Pull)", "say": "Alice with the pull, and it's a good one, deep into Riverside territory."}, {"kind": "event", "raw": "Block by Bob", "say": "Riverside working it up the field... and Bob gets a hand on it! Block by Bob!", "excite": true}, {"kind": "possession", "raw": "\u2014 Breakside on offense \u2014", "say": ""}, {"kind": "event", "raw": "Bob throws a reset to Cara", "say": "Bob picks it up and dumps it back to Cara."}, {"kind": "event", "raw": "Cara hucks to Dev", "say": "Cara winds up and hucks it! Dev comes down with it just short of the goal line."}, {"kind": "event", "raw": "Dev throws to Alice for the score!", "say": "Dev to Alice in the end zone. Goal!", "excite": true}, {"kind": "score", "raw": "Breakside scores!", "say": "That's the break for Breakside.", "excite": true}, {"kind": "currentscore", "raw": "Current score: Breakside 1, Riverside 0", "say": "Breakside leads it, one to nothing."}, {"kind": "roster", "raw": "Point 2 roster: Alice Bob Cara Dev Eve Finn Gia", "say": "Point two. Same seven for Breakside."}, {"kind": "pullnote", "raw": "Riverside pulls to Breakside.", "say": "Riverside will pull this time."}, {"kind": "possession", "raw": "\u2014 Breakside on offense \u2014", "say": ""}, {"kind": "event", "raw": "Eve catches the pull", "say": "Eve catches the pull cleanly."}, {"kind": "event", "raw": "Eve throws to Finn", "say": "Eve swings it over to Finn."}, {"kind": "event", "raw": "Finn throws to Gia", "say": "Finn across to Gia on the break side."}, {"kind": "event", "raw": "Turnover by Gia", "say": "Gia puts it up for Eve... and it hits the turf. Turnover. Riverside ball.", "excite": true}, {"kind": "possession", "raw": "\u2014 Breakside on defense \u2014", "say": ""}, {"kind": "score", "raw": "Riverside scores!", "say": "Riverside works it in and punches it home."}, {"kind": "currentscore", "raw": "Current score: Breakside 1, Riverside 1", "say": "We're all tied up at one."}, {"kind": "roster", "raw": "Point 3 roster: Alice Bob Cara Dev Eve Finn Gia", "say": "Point three. Breakside sends out the same line."}, {"kind": "pullnote", "raw": "Breakside pulls to Riverside.", "say": "Breakside pulling."}, {"kind": "possession", "raw": "\u2014 Breakside on defense \u2014", "say": ""}, {"kind": "event", "raw": "Pull by Cara (Good Pull)", "say": "Cara's pull hangs forever and lands right at the goal line."}, {"kind": "event", "raw": "Block by Dev", "say": "Dev reads the throw... layout block! Dev comes up with it!", "excite": true}, {"kind": "possession", "raw": "\u2014 Breakside on offense \u2014", "say": ""}, {"kind": "event", "raw": "Dev throws to Bob", "say": "Dev gets it moving to Bob."}, {"kind": "event", "raw": "Bob hucks to Alice for the score!", "say": "Bob sees Alice streaking deep. He puts it up... Alice catches it in the end zone! Goal, Breakside!", "excite": true}, {"kind": "score", "raw": "Breakside scores!", "say": "Another break for Breakside.", "excite": true}, {"kind": "currentscore", "raw": "Current score: Breakside 2, Riverside 1", "say": "Breakside back in front, two to one."}];
+const PRICE_PER_M = { standard: 4, neural: 16, 'long-form': 100, generative: 30 };
+const GAME_CHARS = 8000;
+
+function fmtMs(ms) { return ms >= 1000 ? (ms / 1000).toFixed(1) + ' s' : ms + ' ms'; }
+function cost(engine) { return '$' + (GAME_CHARS / 1e6 * PRICE_PER_M[engine]).toFixed(2); }
+
+for (const [key, a] of Object.entries(TIMINGS.approaches)) {
+  const stats = document.querySelector(`[data-stats="${key}"]`);
+  if (stats) stats.innerHTML = [
+    [fmtMs(a.latencyMs.median), 'median per line'],
+    [fmtMs(a.latencyMs.p90), '90th percentile'],
+    [a.trackS.toFixed(0) + ' s', `${a.clips} lines, ${a.characters} chars`],
+    [cost(a.engine), 'per game, synthesis only'],
+  ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  const lines = document.querySelector(`[data-lines="${key}"]`);
+  if (lines) lines.innerHTML = `<table><thead><tr><th>#</th><th>Kind</th><th>Spoken text</th><th class="num">Call</th><th class="num">Audio</th></tr></thead><tbody>` +
+    a.lines.map(l => `<tr class="${SCRIPT_LINES[l.index].excite ? 'excite' : ''}"><td class="num">${l.index}</td><td>${l.kind}</td><td>${esc(l.text)}</td><td class="num">${l.latencyMs} ms</td><td class="num">${l.audioS.toFixed(1)} s</td></tr>`).join('') +
+    '</tbody></table>';
+}
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+const rows = Object.entries(TIMINGS.approaches).map(([key, a], i) => {
+  const letter = 'ABCD'[i];
+  return `<tr><td>${letter}</td><td>${a.engine}</td><td>${a.voice}</td><td>${a.textSource === 'raw' ? 'log lines' : 'commentator'}</td><td class="num">${fmtMs(a.latencyMs.median)}</td><td class="num">${fmtMs(a.latencyMs.p90)}</td><td class="num">$${PRICE_PER_M[a.engine]}</td><td class="num">${cost(a.engine)}</td></tr>`;
+});
+rows.push(`<tr><td>E</td><td>browser</td><td>device</td><td>commentator</td><td class="num">0</td><td class="num">0</td><td class="num">$0</td><td class="num">$0.00</td></tr>`);
+document.getElementById('compare').innerHTML = `<table><thead><tr><th></th><th>Engine</th><th>Voice</th><th>Text</th><th class="num">Median</th><th class="num">p90</th><th class="num">$ / 1M chars</th><th class="num">$ / game</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+
+// E: Web Speech API, reading the commentator lines in order.
+const synth = window.speechSynthesis;
+const speakBtn = document.getElementById('speak'), stopBtn = document.getElementById('stop');
+const sel = document.getElementById('voices'), now = document.getElementById('now');
+let voices = [];
+function loadVoices() {
+  if (!synth) return;
+  voices = synth.getVoices().filter(v => /^en/i.test(v.lang));
+  voices.sort((a, b) => (b.localService === a.localService ? 0 : a.localService ? 1 : -1) || a.name.localeCompare(b.name));
+  sel.innerHTML = voices.map((v, i) => `<option value="${i}">${esc(v.name)} (${v.lang}${v.localService ? '' : ', online'})</option>`).join('') || '<option>No English voices found</option>';
+  const pref = voices.findIndex(v => /Samantha|Daniel|Google US English|Aria|Guy|Natural/i.test(v.name));
+  if (pref >= 0) sel.value = String(pref);
+}
+if (!synth) {
+  speakBtn.disabled = true; sel.disabled = true;
+  now.textContent = 'This browser has no speech synthesis. Open the page in Safari, Chrome or Edge.';
+} else {
+  loadVoices();
+  synth.onvoiceschanged = loadVoices;
+}
+let speaking = false;
+speakBtn.addEventListener('click', () => {
+  if (!synth) return;
+  synth.cancel();
+  const voice = voices[Number(sel.value)];
+  const lines = SCRIPT_LINES.filter(l => l.say);
+  speaking = true; speakBtn.disabled = true; stopBtn.disabled = false;
+  lines.forEach((l, i) => {
+    const u = new SpeechSynthesisUtterance(l.say);
+    if (voice) u.voice = voice;
+    u.rate = l.excite ? 1.12 : 1.02;
+    u.pitch = l.excite ? 1.1 : 1;
+    u.onstart = () => { now.textContent = l.say; };
+    if (i === lines.length - 1) u.onend = finish;
+    synth.speak(u);
+  });
+});
+function finish() { speaking = false; speakBtn.disabled = false; stopBtn.disabled = true; now.textContent = 'Done.'; }
+stopBtn.addEventListener('click', () => { synth.cancel(); finish(); now.textContent = 'Stopped.'; });
+</script>
