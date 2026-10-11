@@ -86,7 +86,7 @@ Commit early and often on feature branches; nothing bumps versions at commit tim
 
 ### Merging to production
 ```bash
-cd /Users/luebke/src/ultistats    # main worktree; keep it clean
+cd /Users/dluebke/src/breakside    # main worktree; keep it clean
 git checkout main
 git fetch origin
 git status -sb                    # must read "## main...origin/main" with no ahead/behind
@@ -100,8 +100,8 @@ git push origin main
 
 **If `main` is diverged by another session's commit**, do not merge your branch into it and do not resolve the other session's conflict. Rebase only your branch's own commits onto `origin/main` and push them from the branch, which fast-forwards the remote and leaves the local `main` alone:
 ```bash
-git -C /Users/luebke/src/ultistats/.worktrees/<feature> rebase --onto origin/main main
-git -C /Users/luebke/src/ultistats/.worktrees/<feature> push origin <feature>:main
+git -C /Users/dluebke/src/breakside/.worktrees/<feature> rebase --onto origin/main main
+git -C /Users/dluebke/src/breakside/.worktrees/<feature> push origin <feature>:main
 ```
 Then say so in your report. The stray commit belongs to whoever made it (or to the maintainer); once local `main` is rebased onto origin, any duplicate of your commit drops out on its own. This is what the 2026-09-26 `TODO.md` push race between three sessions came down to.
 
