@@ -63,3 +63,4 @@ test_team.json
 # Uploaded separately with deploy-time stamping + no-cache headers
 service-worker.js
 version.json
+test-results/*

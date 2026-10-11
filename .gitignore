@@ -74,3 +74,4 @@ scratchpad/
 
 # Local Python venvs (e.g. the 3.12 venv used to validate requirements.lock)
 .venv*/
+test-results/
