@@ -51,6 +51,11 @@ const REASON_LABELS = {
 
 let state = null;          // last /mail payload
 let busy = false;
+// Directory order: 'role' (coaches, managers, parents, other; by name within
+// each) or 'name'. Remembered per device.
+const SORT_KEY = 'breakside_mailDirectorySort';
+const KIND_ORDER = { coach: 0, manager: 1, guardian: 2, other: 3 };
+let directorySort = loadDirectorySort();
 // Contact ids whose inline editor is open. Field saves update the row in
 // place (a full re-render would steal the focus mid-tab), so the set only
 // matters when something structural re-renders the screen.
@@ -208,19 +213,41 @@ function renderQuarantine() {
         </div>`;
 }
 
+function loadDirectorySort() {
+    try { return localStorage.getItem(SORT_KEY) === 'name' ? 'name' : 'role'; } catch (_) { return 'role'; }
+}
+
+function setDirectorySort(sort) {
+    directorySort = sort === 'name' ? 'name' : 'role';
+    try { localStorage.setItem(SORT_KEY, directorySort); } catch (_) { /* private mode */ }
+}
+
+function sortedDirectory(contacts) {
+    const byName = (a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+    const people = contacts.filter(c => c.kind !== 'player');
+    if (directorySort === 'name') return people.sort(byName);
+    return people.sort((a, b) => ((KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9)) || byName(a, b));
+}
+
+/** Re-render just the Directory card (sort toggle); field saves have already landed in state. */
+async function rerenderDirectory() {
+    await pendingSave;
+    const card = document.querySelector('[data-section="directory"]');
+    if (card && state?.configured) card.outerHTML = renderDirectory();
+}
+
 function renderDirectory() {
-    const contacts = state.contacts || [];
-    const coaches = contacts.filter(c => c.kind === 'coach');
-    const others = contacts.filter(c => c.kind !== 'coach' && c.kind !== 'player');
+    const people = sortedDirectory([...(state.contacts || [])]);
     const unlisted = (state.members || []).filter(m => m.email && !m.inDirectory && m.role !== 'coach');
+    const sortBtn = (sort, label) => `<button type="button" class="mail-sort-btn${directorySort === sort ? ' is-active' : ''}" data-action="sort-directory" data-sort="${sort}" aria-pressed="${directorySort === sort}">${label}</button>`;
     return `
-        <div class="settings-section">
-            <h3>Directory</h3>
+        <div class="settings-section" data-section="directory">
+            <h3 class="mail-head-row">Directory <span class="mail-sort" aria-label="Sort directory by">Sort by ${sortBtn('role', 'Role')}${sortBtn('name', 'Name')}</span></h3>
             <p class="section-description">Who can send to and receive from the lists. Coaches come from the team's members automatically; add parents and managers with the form below. Players have their own section. A person can have several addresses, comma-separated: each one receives list mail and any of them may post.</p>
             <div class="mail-scroll">
             <div class="members-list">
-                ${coaches.map(renderContact).join('')}
-                ${others.map(renderContact).join('') || '<p class="info-message">No parents or managers yet.</p>'}
+                ${people.map(renderContact).join('')}
+                ${people.some(c => c.kind !== 'coach') ? '' : '<p class="info-message">No parents or managers yet.</p>'}
             </div>
             ${unlisted.length ? `
             <details class="mail-import">
@@ -368,10 +395,13 @@ function renderRoster() {
                     return `
                     <div class="member-item mail-player-row mail-editable-row" data-contact-id="${escAttr(c.id)}">
                         <div class="member-info">
-                            <div class="member-details">
-                                <span class="member-name">${esc(p.name)} ${contactBounces(c).length ? '<span class="mail-flag mail-flag-bad">bounce</span>' : ''}</span>
-                                <span class="member-email"><code data-player-address>${esc(p.address || '')}</code></span>
-                                <span class="member-email">${guardians.length ? 'Guardians: ' + esc(guardians.join(', ')) : '<em>No guardians linked yet</em>'}</span>
+                            <div class="member-details mail-player-details">
+                                <span class="mail-player-id">
+                                    <span class="member-name">${esc(p.name)}</span><span class="mail-player-sep">: </span>
+                                    <span class="member-email"><code data-player-address>${esc(p.address || '')}</code></span>
+                                    ${contactBounces(c).length ? '<span class="mail-flag mail-flag-bad">bounce</span>' : ''}
+                                </span>
+                                <span class="member-email mail-player-guardians">${guardians.length ? 'Guardians: ' + esc(guardians.join(', ')) : '<em>No guardians linked yet</em>'}</span>
                             </div>
                         </div>
                         <form class="mail-player-form" data-form="player" data-id="${escAttr(c.id)}">
@@ -499,7 +529,10 @@ async function onContentClick(event) {
     const { action, id } = button.dataset;
     try {
         busy = true;
-        if (action === 'send-test') {
+        if (action === 'sort-directory') {
+            setDirectorySort(button.dataset.sort);
+            await rerenderDirectory();
+        } else if (action === 'send-test') {
             const r = await api('/test', { method: 'POST' });
             setStatus('mailSettingsStatus', `Sent to ${r.to} via ${r.transport}.`, 'success');
         } else if (action === 'sync-aliases') {
