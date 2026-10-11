@@ -1626,10 +1626,50 @@
     border-radius: 8px;
 }
 
-.mail-add-form h4 {
-    margin: 8px 0 0 0;
-    font-size: 0.95rem;
-    color: var(--text-primary);
+.mail-add-form {
+    margin-top: 0;
+}
+
+/* Directory + Player addresses: one column on a phone, two cards side by
+   side from 820px up. Each card's list scrolls inside the card so the pair
+   stays about a screen high however many people the team has. The scroll
+   cap applies only in the two-column layout: on a phone a nested scroll
+   region fights the page scroll. */
+.mail-people {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.mail-people .settings-section {
+    margin-bottom: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.mail-people .settings-section > .invite-btn {
+    align-self: flex-start;
+    margin-bottom: 10px;
+}
+
+.mail-scroll {
+    min-height: 0;
+}
+
+@media (min-width: 820px) {
+    .mail-people {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .mail-scroll {
+        flex: 1 1 auto;
+        max-height: 60vh;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+        padding-right: 4px;
+    }
 }
 
 .mail-policy {
@@ -1697,17 +1737,22 @@
 
 .mail-player-form {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     align-items: center;
     flex: 1 1 100%;
     margin-top: 8px;
 }
 
+/* Inputs keep an intrinsic minimum width (~20 characters), so without
+   min-width: 0 the pair overflows a phone-width card. */
 .mail-player-form .url-input {
     padding: 8px 10px;
+    min-width: 0;
+    flex: 1 1 10em;
 }
 
-.mail-alias-input {
+.mail-player-form .mail-alias-input {
     flex: 0 1 9em;
 }
 

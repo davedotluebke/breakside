@@ -128,8 +128,11 @@ function render() {
     content.innerHTML = [
         renderAddresses(),
         renderQuarantine(),
-        renderDirectory(),
-        renderRoster(),
+        // Directory and player addresses sit side by side on a wide screen,
+        // each scrolling inside its card (css/teams-manage.css .mail-people);
+        // the add form is its own section below both.
+        `<div class="mail-people">${renderDirectory()}${renderRoster()}</div>`,
+        renderAddContact(),
         renderLists(),
         renderLog(),
     ].join('');
@@ -213,7 +216,8 @@ function renderDirectory() {
     return `
         <div class="settings-section">
             <h3>Directory</h3>
-            <p class="section-description">Who can send to and receive from the lists. Coaches come from the team's members automatically. Player addresses are in the roster section below. A person can have several addresses, comma-separated: each one receives list mail and any of them may post.</p>
+            <p class="section-description">Who can send to and receive from the lists. Coaches come from the team's members automatically; add parents and managers with the form below. Players have their own section. A person can have several addresses, comma-separated: each one receives list mail and any of them may post.</p>
+            <div class="mail-scroll">
             <div class="members-list">
                 ${coaches.map(renderContact).join('')}
                 ${others.map(renderContact).join('') || '<p class="info-message">No parents or managers yet.</p>'}
@@ -234,8 +238,15 @@ function renderDirectory() {
                         </div>`).join('')}
                 </div>
             </details>` : ''}
+            </div>
+        </div>`;
+}
+
+function renderAddContact() {
+    return `
+        <div class="settings-section">
+            <h3>Add a parent, guardian or manager</h3>
             <form class="mail-add-form" data-form="add-contact">
-                <h4>Add a parent, guardian or manager</h4>
                 <div class="mail-form-grid">
                     <label>Name <input type="text" name="name" class="url-input" maxlength="80" required></label>
                     <label>Email (one or more, comma-separated) <input type="email" multiple name="email" class="url-input" required autocapitalize="none" placeholder="parent@example.com, other@example.com"></label>
@@ -348,6 +359,7 @@ function renderRoster() {
             <h3>Player addresses</h3>
             <p class="section-description">Writing to a player's address reaches the player (if they have an email), all of their guardians, and every coach. Set a player's own email here if they have one (several, comma-separated, is fine); edit the address name if two players share a first name. Changes save when you leave the box.</p>
             ${missing.length ? `<button class="invite-btn viewer-invite" data-action="sync-aliases"><i class="fas fa-sync"></i> Add addresses for ${missing.length} new player${missing.length === 1 ? '' : 's'}</button>` : ''}
+            <div class="mail-scroll">
             <div class="members-list">
                 ${roster.map(p => {
                     const c = byPlayer[p.id];
@@ -369,6 +381,7 @@ function renderRoster() {
                         </form>
                     </div>`;
                 }).join('') || '<p class="info-message">No players on the roster.</p>'}
+            </div>
             </div>
         </div>`;
 }
