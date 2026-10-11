@@ -183,6 +183,26 @@ def no_supabase_calls(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "delete", _explode)
 
 
+def _route_paths(routes):
+    """Every route path the app serves, whatever Starlette wraps them in.
+
+    Starlette < 1.0 listed the included routers' routes flat on app.routes,
+    each with a `path`; 1.x lists one `_IncludedRouter` per include, whose
+    routes sit on `original_router`. Walk both shapes, so the guard below
+    keeps seeing the auth routes rather than an empty set.
+    """
+    paths = set()
+    for route in routes:
+        path = getattr(route, "path", None)
+        if path:
+            paths.add(path)
+        inner = getattr(route, "original_router", None) or getattr(route, "router", None)
+        nested = getattr(inner, "routes", None) if inner is not None else getattr(route, "routes", None)
+        if nested:
+            paths |= _route_paths(nested)
+    return paths
+
+
 def _as(user):
     from main import app
     from auth.jwt_validation import get_current_user, get_optional_user
@@ -246,7 +266,7 @@ class TestSelfOnly:
     def test_no_route_accepts_a_user_id_path_parameter(self):
         """A belt-and-braces guard against someone adding one later."""
         from main import app
-        paths = {getattr(r, "path", "") for r in app.routes}
+        paths = _route_paths(app.routes)
         assert "/api/auth/me/delete-preview" in paths
         assert not any(
             p.startswith("/api/auth/") and "{" in p for p in paths
