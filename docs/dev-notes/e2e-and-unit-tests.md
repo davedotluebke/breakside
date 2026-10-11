@@ -43,6 +43,10 @@ cd <worktree>/tests && npm ci && npx playwright install chromium   # each worktr
 CI=1 npx playwright test                                            # CI=1 forces fresh servers from THIS worktree
 ```
 
+### Boots that never reach the first screen (connection resets)
+
+Seen 2026-10-11 on a new MacBook (macOS 27): 8 of 10 smoke-test boots timed out with the splash still up, and the page's request log showed a dozen stylesheets and modules failing with `ERR_CONNECTION_RESET`, all from the local frontend server. `python3 -m http.server`, which the suite used until then, speaks HTTP/1.0 (no keep-alive, so Chromium opens a connection per file for the ~135 the app loads at boot) behind a listen backlog of 5; this machine resets the overflow where the previous one queued it. Both Playwright configs and `scripts/dev-server.sh` now use `scripts/serve-static.py` (HTTP/1.1 keep-alive, backlog 128, dual-stack). If boots ever flake this way again, check `page.on('requestfailed')` output before suspecting the app: the symptom in the DOM snapshot is the Start Game screen, which is only `index.html`'s initial state under the splash.
+
 ### A browser Playwright didn't download
 
 `BREAKSIDE_E2E_CHROMIUM=/path/to/chrome` makes both Playwright configs launch that binary instead of the build the installed `@playwright/test` expects. It exists for Claude Code cloud sessions: the container ships a Chromium at `/opt/pw-browsers/chromium`, forbids `playwright install`, and the pinned `@playwright/test` wants a newer build, so without the variable every spec dies at launch with "Executable doesn't exist". Set it in the cloud environment's variables; leave it unset on a laptop, where `npx playwright install chromium` is the right fix. The one caveat is version skew: a browser a few builds older than the package usually works (the whole suite passed on 1194 against a package expecting 1208), but a failure that only reproduces under the variable should be re-checked with a matching browser before anyone debugs the app.

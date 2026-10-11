@@ -58,7 +58,7 @@ export default defineConfig({
 
   webServer: [
     {
-      command: `python3 -m http.server ${FRONTEND_PORT}`,
+      command: `python3 scripts/serve-static.py ${FRONTEND_PORT}`,
       cwd: ROOT,
       url: `http://localhost:${FRONTEND_PORT}`,
       reuseExistingServer: true,
