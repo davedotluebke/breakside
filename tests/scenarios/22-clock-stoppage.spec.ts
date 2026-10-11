@@ -211,10 +211,18 @@ test.describe('point clock stoppages', () => {
     await startFirstPoint(page);
     await page.waitForTimeout(1_500);
 
-    // Take the first player on the line off, nobody on (an injury with no
-    // replacement is a sub too).
+    // Reaching for Injury Sub is the stoppage: the clock stops as the dialog
+    // opens, and the toast holds off until it closes.
     await page.click('#pbpSubPlayersBtn');
     await expect(page.locator('#subPlayersModal')).toBeVisible({ timeout: 5_000 });
+    const atOpen = await clock(page);
+    expect(atOpen.stopped).toBe('injury');
+    expect(atOpen.start).toBeNull();
+    await page.waitForTimeout(1_500);
+    await expect(toast(page)).toHaveCount(0);
+
+    // Take the first player on the line off, nobody on (an injury with no
+    // replacement is a sub too).
     const boxes = page.locator('#subPlayersTable tbody input[type="checkbox"]');
     await boxes.first().uncheck();
     await page.click('#subPlayersConfirmBtn');
@@ -223,8 +231,12 @@ test.describe('point clock stoppages', () => {
     const c = await clock(page);
     expect(c.stopped).toBe('injury');
     expect(c.start).toBeNull();
+    expect(c.stoppedAt, 'the stop moment is when the dialog opened').toBe(atOpen.stoppedAt);
+    expect(c.banked, 'nothing accrued while the dialog was up').toBe(atOpen.banked);
     await expect(toast(page)).toBeVisible({ timeout: 5_000 });
     await expect(toast(page)).toContainText('injury sub');
+    // The counter already shows the time spent in the dialog.
+    await expect(toast(page).locator('.clock-stopped-for')).not.toHaveText('0:00');
 
     // The sub event carries the play clock at the sub: the banked time,
     // which is what splits the point between the outgoing and incoming
@@ -248,6 +260,34 @@ test.describe('point clock stoppages', () => {
     expect(after.stopped).toBeNull();
     expect(after.start).not.toBeNull();
     expect(after.banked).toBe(c.banked);
+  });
+
+  test('cancelling the sub dialog leaves the clock stopped; the toast then shows the time since it opened', async ({ page }) => {
+    await startFirstPoint(page);
+
+    await page.click('#pbpSubPlayersBtn');
+    await expect(page.locator('#subPlayersModal')).toBeVisible({ timeout: 5_000 });
+    const atOpen = await clock(page);
+    expect(atOpen.stopped).toBe('injury');
+    await page.waitForTimeout(1_500);
+    await page.click('#subPlayersCancelBtn');
+    await expect(page.locator('#subPlayersModal')).not.toBeVisible({ timeout: 5_000 });
+
+    const c = await clock(page);
+    expect(c.stopped, 'the stoppage was real even with no sub').toBe('injury');
+    expect(c.stoppedAt).toBe(atOpen.stoppedAt);
+    await expect(toast(page)).toBeVisible({ timeout: 5_000 });
+    await expect(toast(page).locator('.clock-stopped-for')).not.toHaveText('0:00');
+
+    // No sub event was recorded, and the next play restarts the clock.
+    const subs = await page.evaluate(() => {
+      const p = (window as any).currentGame().points.at(-1);
+      return p.possessions.flatMap((poss: any) => poss.events || []).filter((e: any) => e.type === 'Other' && e.injury_flag).length;
+    });
+    expect(subs).toBe(0);
+    await recordThrow(page);
+    await expect(toast(page)).toHaveCount(0, { timeout: 5_000 });
+    expect((await clock(page)).stopped).toBeNull();
   });
 
   test('a timeout between points stops nothing and shows nothing', async ({ page }) => {

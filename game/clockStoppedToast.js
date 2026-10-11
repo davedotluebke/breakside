@@ -69,6 +69,15 @@ function standbyUp() {
     return !!(document.body && document.body.classList.contains('standby-active'));
 }
 
+// The Sub Players dialog stops the clock as it opens (the coach reaching
+// for Injury Sub is the stoppage); the toast waits until the dialog has
+// closed, then shows the time since. hideSubPlayersModal repaints the chip,
+// which reconciles the toast at once.
+function subDialogUp() {
+    const modal = document.getElementById('subPlayersModal');
+    return !!modal && modal.style.display !== 'none' && modal.style.display !== '';
+}
+
 function removeToast() {
     if (!toast) return;
     const el = toast;
@@ -123,7 +132,7 @@ export function refreshClockStoppedToast() {
     const point = getLatestPoint();
     const stopped = isPointClockStopped(point);
     const key = stopped ? stopKeyOf(point) : 0;
-    const wanted = stopped && isGameScreenVisible() && !standbyUp() &&
+    const wanted = stopped && isGameScreenVisible() && !standbyUp() && !subDialogUp() &&
         canEditPlayByPlay() && key !== dismissedStopKey;
 
     if (!wanted) {

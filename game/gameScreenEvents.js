@@ -973,9 +973,22 @@ function createSubPlayersModal() {
 }
 
 /**
- * Show the Sub Players modal and populate with current point players
+ * Show the Sub Players modal and populate with current point players.
+ *
+ * Reaching for Injury Sub is the stoppage: the point clock stops here, as
+ * the dialog opens, not when the sub is confirmed — the coach may take a
+ * while over the roster, and that time is not play (store/pointClock.js
+ * § Stoppages). The stopped-clock toast waits for the dialog to close
+ * (game/clockStoppedToast.js) and then shows the time since this moment.
+ * Cancelling the dialog leaves the clock stopped: the stoppage was real,
+ * and the next recorded play or the toast restarts it. A no-op unless the
+ * clock was running (armed, already stopped, or between points).
  */
 function showSubPlayersModal() {
+    if (stopPointClock(getLatestPoint(), 'injury')) {
+        if (typeof logEvent === 'function') logEvent('Point clock stopped — injury sub');
+        updateTimerDisplay();
+    }
     const modal = createSubPlayersModal();
     populateSubPlayersTable();
     modal.style.display = 'block';
@@ -989,6 +1002,9 @@ function hideSubPlayersModal() {
     if (modal) {
         modal.style.display = 'none';
     }
+    // The stopped-clock toast held off while the dialog was up; show it now
+    // rather than on the next 1 s tick.
+    updateTimerDisplay();
 }
 
 /**
@@ -1207,11 +1223,10 @@ function confirmSubstitution() {
         subDescription = `Sub: ${outNames} removed`;
     }
     
-    // An injury sub is a stoppage: the point clock stops until the next
-    // recorded play (store/pointClock.js § Stoppages; the toast comes from
-    // game/clockStoppedToast.js via the repaint). A no-op unless the clock
-    // was running. Stopped first so the banked play time below is the play
-    // clock at the sub.
+    // The clock stopped when the Sub dialog opened (showSubPlayersModal), so
+    // this is normally a no-op; it is the safety net for a dialog opened
+    // with the clock not yet running. Either way the banked play time below
+    // is the play clock at the sub.
     const clockStopped = stopPointClock(point, 'injury');
 
     // Create an Other event with the injury flag, description, the pre-sub
