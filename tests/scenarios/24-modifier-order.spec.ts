@@ -2,10 +2,9 @@
  * Throw-modifier order (playByPlay/eventAmend.js THROW_MODIFIERS)
  *
  * The stats a coach most wants to mark lead every modifier strip: break,
- * huck, layout, sky, hammer, reset. The Full tab strip reads "Last
- * pass/catch was a:" and omits swing (Field geometry sets it; the replay
- * editor can still edit it). The score dialog's flag buttons follow the
- * same order.
+ * huck, layout, sky, hammer, reset, swing. The Full tab strip reads "Last
+ * pass/catch was a:"; the score dialog's flag buttons follow the same order
+ * (it has no reset or swing).
  */
 import { test, expect, Page } from '@playwright/test';
 import {
@@ -24,7 +23,7 @@ async function shot(page: Page, locator: ReturnType<Page['locator']>, name: stri
 }
 
 test.describe('throw modifier order', () => {
-  test('Full tab strip and score dialog list break, huck, layout, sky, hammer, reset', async ({ page }) => {
+  test('Full tab strip and score dialog list break, huck, layout, sky, hammer, reset, swing', async ({ page }) => {
     await goToApp(page);
     await setupTeamWithPlayers(page, uniqueTeam());
     await startGame(page, 'offense');
@@ -42,7 +41,7 @@ test.describe('throw modifier order', () => {
     const strip = page.locator('#fullPbpModifierRow');
     await expect(strip.locator('.full-pbp-modifier-row-label')).toHaveText('Last pass/catch was a:');
     await expect(strip.locator('.full-pbp-modifier-chip:not(.full-pbp-set-chip)'))
-      .toHaveText(['break', 'huck', 'layout', 'sky', 'hammer', 'reset']);
+      .toHaveText(['break', 'huck', 'layout', 'sky', 'hammer', 'reset', 'swing']);
     await shot(page, strip, 'full-strip');
 
     // Score dialog from the Simple tab: the flag buttons, same order.

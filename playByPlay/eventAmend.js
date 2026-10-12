@@ -30,8 +30,8 @@ import { isTouchEvent } from '../store/pointClock.js';
 // Modifier tables. Keys are the visible chip label; values are the
 // property on the event object. Order = display order: the stats a coach
 // most wants to mark lead a horizontally scrolling row. The throw order
-// (break, huck, layout, sky, hammer, reset) is mirrored by the Field tab
-// chips, the score dialog's flag buttons and the key-play dialog; change
+// (break, huck, layout, sky, hammer, reset, swing) is mirrored by the Field
+// tab chips, the score dialog's flag buttons and the key-play dialog; change
 // them together.
 // -----------------------------------------------------------------
 export const THROW_MODIFIERS = Object.freeze([
@@ -41,7 +41,7 @@ export const THROW_MODIFIERS = Object.freeze([
     { label: 'sky',    prop: 'sky_flag'    },
     { label: 'hammer', prop: 'hammer_flag' },
     { label: 'reset',  prop: 'reset_flag'  },  // legacy stored dump_flag is aliased at deserialize
-    { label: 'swing',  prop: 'swing_flag', fullTab: false },  // auto-set by Field mode geometry; replay-editable, not on the Full strip
+    { label: 'swing',  prop: 'swing_flag'  },  // auto-set by Field mode geometry; editable anywhere
 ]);
 export const TURNOVER_MODIFIERS = Object.freeze([
     { label: 'huck',   prop: 'huck_flag'    },
