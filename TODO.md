@@ -1310,7 +1310,7 @@ Remaining work:
   - **TODO.** Update the stats computations (`utils/eventStats.js` — `accumulateGameStats`, `classifyPoint`, `getGameTeamStats`/`getEventTeamStats`) and the `.xlsx` export (`utils/xlsxExport.js`) to read `modes` and exclude/flag low-fidelity points & possessions accordingly. Decide on UI: a per-point badge or a footnote on the stats screen indicating which rows are mode-limited. Handle empty-`modes` legacy games (treat as unknown — probably "include but flag", matching how pre-existing tournament data is kept elsewhere).
 
 - [x] **Refinement**: Hockey assists as an explicit judgment call (not auto-derived)
-  — *built 2026-10-11 on branch `hockey-assist`; see ARCHITECTURE.md § Derived
+  — *shipped in 2.16.0 (2026-10-11, branch `hockey-assist`, frontend + backend); see ARCHITECTURE.md § Derived
   Statistics "Hockey assists are the coach's call".* Shipped as sketched below
   with two differences: the control is a checkbox-gated line — *Credit [player]
   with a hockey assist* + *Huck hockey assist?* — rather than a bare dropdown,
