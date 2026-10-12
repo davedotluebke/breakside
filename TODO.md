@@ -111,7 +111,7 @@ MVP shipped. Coach speaks naturally; the system extracts structured game events.
 
 ## Near Term
 
-### 🧾 Event roster during an event (branch `event-roster-ingame`, 2026-10-05)
+### 🧾 Event roster during an event (shipped: 2.13.0 on 2026-10-06, follow-ups as 2.15.0 on 2026-10-11)
 
 Weekend bug: players unchecked from the event roster on Day 1 and re-checked on
 Day 2 never appeared on the Line tab; the coach started points with someone
