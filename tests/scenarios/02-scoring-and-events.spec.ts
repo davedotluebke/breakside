@@ -48,6 +48,55 @@ test.describe('scoring and events', () => {
     await expectScore(page, 1, 0);
   });
 
+  test('hockey assist is the coach\'s call in the score dialog', async ({ page }) => {
+    await startGame(page, 'offense');
+    await selectAllPlayers(page);
+    await startPoint(page);
+
+    // Simple mode records no throws, so the dialog opens with the hockey-
+    // assist box unchecked and nobody pre-selected. Naming a player first,
+    // then the thrower and receiver (which auto-commits), records the call
+    // on the scoring throw; the chosen player drops out of the dropdown
+    // the moment they become the thrower or receiver.
+    await page.click('#pbpWeScoreBtn');
+    const dialog = page.locator('#scoreAttributionDialog');
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    const haCheck = page.locator('#haCheck');
+    const haSelect = page.locator('#haSelect');
+    await expect(haCheck).not.toBeChecked();
+    await expect(haSelect).toBeDisabled();
+    await haCheck.check();
+    await expect(haSelect).toBeEnabled();
+    await haSelect.selectOption('Carol');
+    await expect(page.locator('#haHuckCheck')).toBeEnabled();
+    await page.locator('#throwerButtons .player-button').filter({ hasText: 'Alice' }).click();
+    await expect(haSelect.locator('option', { hasText: 'Alice' })).toHaveCount(0);
+    await expect(haSelect).toHaveValue('Carol');
+    await page.locator('#receiverButtons .player-button').filter({ hasText: 'Bob' }).click();
+    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    await expectScore(page, 1, 0);
+
+    const recorded = await page.evaluate(() => {
+      const game = (window as any).currentGame();
+      const ev = game.points.at(-1).possessions.at(-1).events.at(-1);
+      return { summary: ev.summarize(), ha: ev.hockeyAssist?.name ?? null, huck: ev.hockeyAssistHuck_flag, none: ev.noHockeyAssist_flag };
+    });
+    expect(recorded).toEqual({ summary: 'Alice throws to Bob for the score! (hockey assist: Carol)', ha: 'Carol', huck: false, none: false });
+
+    // A second score with the box left unchecked is an explicit "none",
+    // which is what keeps the stats fallback (the previous throw) off it.
+    await selectAllPlayers(page);
+    await startPoint(page);
+    await completePullDialog(page, 'Dave', 'Good Pull');
+    await weScoreWithAttribution(page, 'Eve', 'Frank');
+    await expectScore(page, 2, 0);
+    const second = await page.evaluate(() => {
+      const ev = (window as any).currentGame().points.at(-1).possessions.at(-1).events.at(-1);
+      return { ha: ev.hockeyAssist, none: ev.noHockeyAssist_flag };
+    });
+    expect(second).toEqual({ ha: null, none: true });
+  });
+
   test('They Score increments opponent score', async ({ page }) => {
     await startGame(page, 'offense');
 

@@ -1309,7 +1309,19 @@ Remaining work:
     - Mixed arrays (e.g. `['simple','field']`) ⇒ mode changed mid-point/possession; treat the lower-fidelity floor as the trust level.
   - **TODO.** Update the stats computations (`utils/eventStats.js` — `accumulateGameStats`, `classifyPoint`, `getGameTeamStats`/`getEventTeamStats`) and the `.xlsx` export (`utils/xlsxExport.js`) to read `modes` and exclude/flag low-fidelity points & possessions accordingly. Decide on UI: a per-point badge or a footnote on the stats screen indicating which rows are mode-limited. Handle empty-`modes` legacy games (treat as unknown — probably "include but flag", matching how pre-existing tournament data is kept elsewhere).
 
-- [ ] **Refinement**: Hockey assists as an explicit judgment call (not auto-derived)
+- [x] **Refinement**: Hockey assists as an explicit judgment call (not auto-derived)
+  — *built 2026-10-11 on branch `hockey-assist`; see ARCHITECTURE.md § Derived
+  Statistics "Hockey assists are the coach's call".* Shipped as sketched below
+  with two differences: the control is a checkbox-gated line — *Credit [player]
+  with a hockey assist* + *Huck hockey assist?* — rather than a bare dropdown,
+  so "none" is an explicit, stored decision (`noHockeyAssist_flag`) and not a
+  placeholder; and the dropdown never offers the goal thrower or receiver (a
+  give-and-go score therefore starts unchecked instead of crediting the scorer
+  with their own HA, which the old derivation did). Back-compat went with (a):
+  a score carrying neither field keeps the previous-throw derivation, so
+  existing numbers are unchanged. Still open: editing the HA after the fact
+  (the replay sheet edits neither assist nor HA), and narrated scores, which
+  land without a decision and so still derive.
   - **Problem with current behavior.** Today a hockey assist is awarded automatically to whoever threw the pass *before* the scoring pass (`accumulateGameStats` in `utils/eventStats.js` walks back through the possession). But like hockey / other sports that track pre-assists, a hockey assist is really a judgment call — was the goal *notably enabled* by that prior pass, or was it just the previous touch? Auto-derivation over-counts (every dump-swing-score gets one) and can't be recorded at all in Simple mode where the prior pass usually isn't entered.
   - **Proposed model.** Make the hockey assist an explicit attribution captured in the Score Attribution dialog (`playByPlay/scoreAttribution.js`), alongside the existing goal + assist pickers:
     - Add a "Hockey assist" control: a player dropdown.
