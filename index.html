@@ -1029,6 +1029,22 @@
                 <button type="button" class="throw-flag-btn" id="layoutFlag" aria-pressed="false">Layout</button>
                 <button type="button" class="throw-flag-btn" id="hammerFlag" aria-pressed="false">Hammer</button>
             </div>
+            <!-- Hockey assist: the coach's call, not a derived stat. The dropdown
+                 lists the point's players minus the goal thrower and receiver;
+                 playByPlay/scoreAttribution.js pre-selects whoever threw to the
+                 goal thrower and checks the box when that throw is on record. -->
+            <div class="ha-row" id="haRow">
+                <div class="ha-line">
+                    <input type="checkbox" id="haCheck">
+                    <label for="haCheck">Credit</label>
+                    <select id="haSelect" aria-label="Hockey assist player" disabled></select>
+                    <label for="haCheck">with a hockey assist</label>
+                </div>
+                <div class="ha-line ha-huck-line">
+                    <input type="checkbox" id="haHuckCheck" disabled>
+                    <label for="haHuckCheck">Huck hockey assist?</label>
+                </div>
+            </div>
             <hr class="callahan-separator">
             <div class="score-attribution-actions">
                 <button id="callahanBtn" class="special-action-btn">Callahan</button>

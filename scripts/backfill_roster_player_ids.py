@@ -63,7 +63,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-PLAYER_ROLES = ('thrower', 'receiver', 'puller', 'defender', 'assist')
+PLAYER_ROLES = ('thrower', 'receiver', 'puller', 'defender', 'assist', 'hockeyAssist')
 _HASH_CHARS = string.ascii_lowercase + string.digits
 
 

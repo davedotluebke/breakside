@@ -1,6 +1,7 @@
 /*
  * Score Attribution Dialog
- * Handles the "We Score" player attribution dialog (thrower/receiver selection).
+ * Handles the "We Score" player attribution dialog (thrower/receiver selection,
+ * throw modifiers, and the hockey-assist judgment call).
  * Extracted from simpleModeScreen.js during legacy screen cleanup.
  */
 import { Throw, Possession, Role, UNKNOWN_PLAYER } from '../store/models.js';
@@ -36,6 +37,22 @@ let pendingTo = null;
 // flags before committing. The Score button is the explicit commit in
 // that case. Cleared on every showScoreAttributionDialog() call.
 let suppressAutoFire = false;
+
+// Hockey-assist line ("[x] Credit [name] with a hockey assist" + "[ ] Huck
+// hockey assist?"). The HA is the coach's call, not a derived stat: the
+// dropdown lists the point's players minus the goal thrower and receiver,
+// pre-selected to whoever threw to the goal thrower (the last completion of
+// the current possession) with the box checked when that throw is on record.
+// Commit records the choice on the scoring Throw (store/models.js) — an
+// explicit holder, or noHockeyAssist_flag when the box is unchecked — and
+// utils/statAccumulator.js honors it instead of walking the throw sequence.
+//   pointPlayers — the line, resolved once per open: [{ name, player }]
+//   haDefault    — the derived pre-selection { name, huck } or null
+//   haTouched    — the coach has changed the line, so re-deriving on a
+//                  thrower/receiver change must not overwrite their pick
+let pointPlayers = [];
+let haDefault = null;
+let haTouched = false;
 
 // The throw-modifier flags (Huck/Break/Sky/Layout/Hammer) are toggle buttons,
 // not checkboxes — tighter and tidier. Selected state lives in the .selected
@@ -84,6 +101,31 @@ function initializeScoreAttributionDialog() {
         const btn = document.getElementById(id);
         if (btn) btn.addEventListener('click', () => setFlag(id, !getFlag(id)));
     });
+
+    // Hockey-assist line. Any change marks it touched so a later thrower /
+    // receiver click re-filters the dropdown without discarding the pick.
+    const haCheck = document.getElementById('haCheck');
+    const haSelect = document.getElementById('haSelect');
+    const haHuckCheck = document.getElementById('haHuckCheck');
+    if (haCheck && haSelect && haHuckCheck) {
+        haCheck.addEventListener('change', () => {
+            haTouched = true;
+            haSelect.disabled = !haCheck.checked;
+            haHuckCheck.disabled = !haCheck.checked;
+            if (!haCheck.checked) {
+                haHuckCheck.checked = false;
+            } else if (haDefault && haSelect.value === haDefault.name) {
+                haHuckCheck.checked = haDefault.huck;
+            }
+        });
+        haSelect.addEventListener('change', () => {
+            haTouched = true;
+            // The huck box describes the enabling throw; only the derived
+            // default's throw is known, so any other pick starts unchecked.
+            haHuckCheck.checked = !!(haDefault && haSelect.value === haDefault.name && haDefault.huck);
+        });
+        haHuckCheck.addEventListener('change', () => { haTouched = true; });
+    }
 
     // Explicit "Score" commit button. Same code path as the auto-fire
     // branch in handleScoreAttribution. Enabled only when both thrower
@@ -225,8 +267,10 @@ function showScoreAttributionDialog(opts) {
     // current name so cross-column matching and opts pre-selection line up.
     const point = getLatestPoint();
     const lookup = buildPointPlayerLookup(currentGame());
+    pointPlayers = [];
     point.players.forEach(entry => {
         const { player, name } = lookup(entry);
+        pointPlayers.push({ name, player });
         const throwerBtn = createPlayerButton(name, player);
         const receiverBtn = createPlayerButton(name, player);
         throwerButtons.appendChild(throwerBtn);
@@ -269,6 +313,11 @@ function showScoreAttributionDialog(opts) {
         }
     }
 
+    // Hockey-assist line: fresh derivation for this score.
+    haTouched = false;
+    haDefault = null;
+    refreshHockeyAssistLine();
+
     // Callahan only ever applies in Simple mode — it's a defensive score, so
     // it can never happen on an offensive possession (Field / Full PBP). In
     // those contexts we keep the button present-but-disabled as a reminder
@@ -286,6 +335,101 @@ function showScoreAttributionDialog(opts) {
 
     // Fit the player rows for the current orientation (no-op in portrait).
     fitScoreButtons();
+}
+
+/**
+ * The default hockey-assist holder: the thrower of the last completion in the
+ * current offensive possession, when the goal thrower is the one who caught
+ * it (or no thrower is picked yet — Simple mode, where the dialog opens with
+ * nothing selected). A turnover or block since that throw, an Unknown
+ * thrower, or a thrower pick that doesn't match means no default — the coach
+ * can still name anyone from the dropdown.
+ * @returns {{name: string, huck: boolean}|null}
+ */
+function deriveDefaultHockeyAssist() {
+    const point = (typeof getLatestPoint === 'function') ? getLatestPoint() : null;
+    const possessions = (point && point.possessions) || [];
+    const poss = possessions[possessions.length - 1];
+    if (!poss || !poss.offensive) return null;
+    const events = poss.events || [];
+    for (let j = events.length - 1; j >= 0; j--) {
+        const ev = events[j];
+        if (ev.type === 'Turnover' || ev.type === 'Defense') return null;
+        if (ev.type !== 'Throw') continue;
+        const thrower = ev.thrower, receiver = ev.receiver;
+        if (!thrower || !thrower.name || thrower.name === UNKNOWN_PLAYER) return null;
+        if (selectedThrower && selectedThrower.name !== UNKNOWN_PLAYER
+            && (!receiver || receiver.name !== selectedThrower.name)) return null;
+        return { name: thrower.name, huck: !!ev.huck_flag };
+    }
+    return null;
+}
+
+/**
+ * Rebuild the hockey-assist dropdown for the current thrower / receiver
+ * selection: those two are never eligible. Untouched, the line follows the
+ * derived default (box checked, huck box per that throw); once the coach has
+ * changed it, their pick survives re-filtering unless it just became the
+ * thrower or receiver, in which case there is nobody to credit and the box
+ * clears.
+ */
+function refreshHockeyAssistLine() {
+    const check = document.getElementById('haCheck');
+    const select = document.getElementById('haSelect');
+    const huck = document.getElementById('haHuckCheck');
+    if (!check || !select || !huck) return;
+
+    const excluded = new Set([selectedThrower?.name, selectedReceiver?.name].filter(Boolean));
+    const eligible = pointPlayers.filter(e => e.name !== UNKNOWN_PLAYER && !excluded.has(e.name));
+    if (!haTouched) haDefault = deriveDefaultHockeyAssist();
+    const defaultEligible = !!(haDefault && eligible.some(e => e.name === haDefault.name));
+
+    let value = '';
+    if (haTouched) {
+        if (eligible.some(e => e.name === select.value)) value = select.value;
+    } else if (defaultEligible) {
+        value = haDefault.name;
+    }
+
+    select.innerHTML = '';
+    if (!value) {
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'player…';
+        select.appendChild(placeholder);
+    }
+    eligible.forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.name;
+        opt.textContent = (e.player && formatPlayerName(e.player)) || e.name;
+        select.appendChild(opt);
+    });
+    select.value = value;
+
+    if (!haTouched) {
+        check.checked = !!value;
+        huck.checked = !!value && haDefault.huck;
+    } else if (!value) {
+        check.checked = false;
+        huck.checked = false;
+    }
+    select.disabled = !check.checked;
+    huck.disabled = !check.checked;
+}
+
+/**
+ * The committed hockey-assist choice, or null for "no hockey assist" (box
+ * unchecked, or checked with no player picked).
+ * @returns {{player: object, huck: boolean}|null}
+ */
+function getHockeyAssistSelection() {
+    const check = document.getElementById('haCheck');
+    const select = document.getElementById('haSelect');
+    const huck = document.getElementById('haHuckCheck');
+    if (!check || !select || !check.checked || !select.value) return null;
+    const entry = pointPlayers.find(e => e.name === select.value);
+    const player = (entry && entry.player) || getPlayerFromName(select.value) || playerStub(select.value);
+    return { player, huck: !!(huck && huck.checked) };
 }
 
 /**
@@ -394,6 +538,12 @@ function commitScoreAttribution() {
         from: pendingFrom,
         to: pendingTo
     };
+    // The hockey-assist judgment rides on the scoring throw: an explicit
+    // holder, or the explicit "none" that stops the stats fallback.
+    const ha = getHockeyAssistSelection();
+    opts.hockeyAssist = ha ? ha.player : null;
+    opts.hockeyAssistHuck = !!(ha && ha.huck);
+    opts.noHockeyAssist = !ha;
 
     // Route through the shared possession core so the scoring throw is recorded
     // identically to every other PBP surface: completedPasses + assist (thrower)
@@ -414,7 +564,9 @@ function commitScoreAttribution() {
         score: true,
         huck: opts.huck, breakmark: opts.breakmark, sky: opts.sky,
         layout: opts.layout, hammer: opts.hammer,
-        from: opts.from, to: opts.to
+        from: opts.from, to: opts.to,
+        hockeyAssist: opts.hockeyAssist, hockeyAssistHuck: opts.hockeyAssistHuck,
+        noHockeyAssist: opts.noHockeyAssist
     });
     const possession = (typeof ensurePossessionExists === 'function')
         ? ensurePossessionExists(true)
@@ -515,6 +667,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
         }
         updateCallahanButtonState();
         updateScoreButtonState();
+        refreshHockeyAssistLine();
         return;
     }
 
@@ -568,6 +721,7 @@ function handleScoreAttribution(playerName, isThrower, buttonElement) {
 
     updateCallahanButtonState();
     updateScoreButtonState();
+    refreshHockeyAssistLine();
 
     // If both players are selected, auto-commit — UNLESS the dialog was
     // opened with a pre-selection (Full PBP path), in which case the user

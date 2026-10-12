@@ -237,7 +237,7 @@ export function throwerChainConflict(point, event, newThrower) {
 // -----------------------------------------------------------------
 // Applying a patch.
 // -----------------------------------------------------------------
-export const PLAYER_FIELDS = Object.freeze(['thrower', 'receiver', 'defender', 'puller', 'assist']);
+export const PLAYER_FIELDS = Object.freeze(['thrower', 'receiver', 'defender', 'puller', 'assist', 'hockeyAssist']);
 
 /** Shallow clone that keeps the prototype (so summarize() still works). */
 export function snapshotEvent(event) {

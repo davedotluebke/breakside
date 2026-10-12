@@ -151,21 +151,32 @@ function accumulateGameStats(game, stats) {
                         const assister = resolveRef(event.assist || event.thrower);
                         if (assister.name) ensurePlayer(assister.id, assister.name).assists++;
 
-                        // Hockey assist: previous Throw in this possession.
-                        // It follows the throw sequence even when the assist
-                        // was credited to someone else (open question in
-                        // TODO.md: hockey assists as a judgment call).
-                        // Walk back, skipping non-Throw events (Violations etc).
-                        for (let j = idx - 1; j >= 0; j--) {
-                            const prev = events[j];
-                            if (prev.type === 'Throw') {
-                                const ha = resolveRef(prev.thrower);
-                                if (ha.name) {
-                                    const s = ensurePlayer(ha.id, ha.name);
-                                    s.hockeyAssists++;
-                                    if (prev.huck_flag) s.huckHockeyAssists++;
+                        // Hockey assist. A judged score (recorded through the
+                        // Score Attribution dialog) carries the coach's call:
+                        // an explicit holder, or noHockeyAssist_flag for
+                        // "none". Everything else — legacy games, narrated
+                        // scores, direct createThrow paths — falls back to
+                        // the previous Throw in this possession, skipping
+                        // non-Throw events (Violations etc).
+                        if (event.hockeyAssist) {
+                            const ha = resolveRef(event.hockeyAssist);
+                            if (ha.name) {
+                                const s = ensurePlayer(ha.id, ha.name);
+                                s.hockeyAssists++;
+                                if (event.hockeyAssistHuck_flag) s.huckHockeyAssists++;
+                            }
+                        } else if (!event.noHockeyAssist_flag) {
+                            for (let j = idx - 1; j >= 0; j--) {
+                                const prev = events[j];
+                                if (prev.type === 'Throw') {
+                                    const ha = resolveRef(prev.thrower);
+                                    if (ha.name) {
+                                        const s = ensurePlayer(ha.id, ha.name);
+                                        s.hockeyAssists++;
+                                        if (prev.huck_flag) s.huckHockeyAssists++;
+                                    }
+                                    break;
                                 }
-                                break;
                             }
                         }
                     }

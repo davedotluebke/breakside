@@ -60,7 +60,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-PLAYER_ROLES = ('thrower', 'receiver', 'puller', 'defender', 'assist')
+PLAYER_ROLES = ('thrower', 'receiver', 'puller', 'defender', 'assist', 'hockeyAssist')
 
 STAT_FIELDS = (
     'pointsPlayed', 'timePlayed', 'goals', 'assists', 'hockeyAssists',

@@ -1741,7 +1741,7 @@ function applyLineupCorrection(mistakenPlayer, correctPlayer) {
     let reassigned = 0;
     (point.possessions || []).forEach(poss => {
         (poss.events || []).forEach(evt => {
-            ['thrower', 'receiver', 'assist', 'defender', 'puller'].forEach(role => {
+            ['thrower', 'receiver', 'assist', 'hockeyAssist', 'defender', 'puller'].forEach(role => {
                 const ref = evt[role];
                 if (!ref || typeof ref !== 'object') return;
                 if (ref !== mistakenPlayer && ref.id !== mistakenPlayer.id) return;

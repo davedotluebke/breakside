@@ -7,9 +7,12 @@
  *  - the assist goes to the Throw's explicit `assist` holder when one was
  *    recorded, otherwise to its thrower — the same `assist || thrower` rule
  *    the live counters, event amendment, undo and Connections follow;
- *  - the hockey assist goes to the thrower of the previous Throw in the same
- *    possession (skipping non-Throw events), whoever holds the assist, and
- *    counts as a huck HA too when that throw was a huck.
+ *  - the hockey assist is the coach's call when the scoring Throw carries one
+ *    (`hockeyAssist` + `hockeyAssistHuck_flag`, or `noHockeyAssist_flag` for
+ *    an explicit none, both set by the Score Attribution dialog); otherwise —
+ *    legacy and narrated scores — it goes to the thrower of the previous
+ *    Throw in the same possession (skipping non-Throw events), whoever holds
+ *    the assist, and counts as a huck HA too when that throw was a huck.
  *
  * Run: node --test 'tests/unit/*.test.mjs'
  */
@@ -125,4 +128,44 @@ test('the hockey assist follows the throw sequence even with an explicit assist 
     const s = statsFor([pass(ALICE, BOB), pass(BOB, CHARLIE, { score_flag: true, assist: DANA })]);
     assert.equal(count(s, ALICE, 'hockeyAssists'), 1);
     assert.equal(count(s, DANA, 'hockeyAssists'), 0);
+});
+
+// ── explicit hockey assists (the dialog's judgment call) ───────────────
+
+test('an explicit hockey assist overrides the throw-sequence fallback', () => {
+    // Alice threw the pass before the assist, but the coach credited Dana.
+    const s = statsFor([pass(ALICE, BOB), pass(BOB, CHARLIE, { score_flag: true, hockeyAssist: DANA })]);
+    assert.equal(count(s, DANA, 'hockeyAssists'), 1);
+    assert.equal(count(s, ALICE, 'hockeyAssists'), 0);
+    assert.equal(count(s, DANA, 'huckHockeyAssists'), 0);
+});
+
+test('an explicit hockey assist is a huck HA only by its own flag', () => {
+    // The previous throw was a huck, but the coach credited a different throw.
+    const plain = statsFor([pass(ALICE, BOB, { huck_flag: true }), pass(BOB, CHARLIE, { score_flag: true, hockeyAssist: DANA })]);
+    assert.equal(count(plain, DANA, 'huckHockeyAssists'), 0);
+    const huck = statsFor([pass(ALICE, BOB), pass(BOB, CHARLIE, { score_flag: true, hockeyAssist: DANA, hockeyAssistHuck_flag: true })]);
+    assert.equal(count(huck, DANA, 'hockeyAssists'), 1);
+    assert.equal(count(huck, DANA, 'huckHockeyAssists'), 1);
+});
+
+test('an explicit "no hockey assist" stops the fallback', () => {
+    const s = statsFor([pass(ALICE, BOB, { huck_flag: true }), pass(BOB, CHARLIE, { score_flag: true, noHockeyAssist_flag: true })]);
+    for (const p of ROSTER) {
+        assert.equal(count(s, p, 'hockeyAssists'), 0, p.name);
+        assert.equal(count(s, p, 'huckHockeyAssists'), 0, p.name);
+    }
+});
+
+test('a legacy name-string hockey assist resolves through the roster snapshot', () => {
+    const s = statsFor([pass(ALICE, BOB), pass(BOB, CHARLIE, { score_flag: true, hockeyAssist: 'Dana' })]);
+    assert.equal(count(s, DANA, 'hockeyAssists'), 1);
+    assert.equal(count(s, ALICE, 'hockeyAssists'), 0);
+});
+
+test('a judged score with no decision recorded still uses the fallback', () => {
+    // Neither hockeyAssist nor noHockeyAssist_flag: a narrated or direct
+    // createThrow score, same as every game recorded before the dialog.
+    const s = statsFor([pass(ALICE, BOB), pass(BOB, CHARLIE, { score_flag: true, hockeyAssist: null })]);
+    assert.equal(count(s, ALICE, 'hockeyAssists'), 1);
 });

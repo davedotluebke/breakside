@@ -414,7 +414,7 @@ class Event {
 
 // Throw event class
 class Throw extends Event {
-    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, reset = false, swing = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null}) {
+    constructor({thrower = "voidthrower", receiver = "voidreceiver", huck = false, breakmark = false, reset = false, swing = false, hammer = false, sky = false, layout = false, score = false, from = null, to = null, assist = null, hockeyAssist = null, hockeyAssistHuck = false, noHockeyAssist = false}) {
         super('Throw');
         this.thrower = thrower;
         this.receiver = receiver;
@@ -441,6 +441,18 @@ class Throw extends Event {
         // today: the Field tab's editable Assist chip was replaced by the
         // shared Score Attribution dialog before it shipped.
         this.assist = assist;
+        // Hockey assist (scores only): the coach's judgment call, recorded by
+        // the Score Attribution dialog. `hockeyAssist` is a Player reference
+        // (the player whose throw set up the assist, usually but not always
+        // the previous thrower) or null; `hockeyAssistHuck_flag` marks that
+        // enabling throw as a huck. `noHockeyAssist_flag` is the explicit
+        // "none" — set when the dialog committed with the box unchecked — and
+        // is what separates a judged score from a legacy or narrated one, for
+        // which utils/statAccumulator.js still derives the HA from the throw
+        // before the scoring pass. See ARCHITECTURE.md § Derived Statistics.
+        this.hockeyAssist = hockeyAssist;
+        this.hockeyAssistHuck_flag = hockeyAssistHuck;
+        this.noHockeyAssist_flag = noHockeyAssist;
     }
 
     // Override summarize for Throw events
@@ -459,6 +471,9 @@ class Throw extends Event {
             summary += `for a ${this.sky_flag ? "sky ":""}${this.layout_flag ? "layout ":""}catch `;
         }        
         if (this.score_flag) summary += 'for the score!';
+        if (this.score_flag && this.hockeyAssist && this.hockeyAssist.name) {
+            summary += ` (${this.hockeyAssistHuck_flag ? 'huck ' : ''}hockey assist: ${this.hockeyAssist.name})`;
+        }
 
         return summary;
     }
@@ -917,7 +932,8 @@ function isTestGame(game) {
 // =============================================================================
 const EVENT_CLASSES = { Throw, Turnover, Violation, Defense, Pull, Pickup, Other };
 const EVENT_PLAYER_REFS = [['thrower', 'throwerId'], ['receiver', 'receiverId'],
-    ['defender', 'defenderId'], ['puller', 'pullerId'], ['assist', 'assistId']];
+    ['defender', 'defenderId'], ['puller', 'pullerId'], ['assist', 'assistId'],
+    ['hockeyAssist', 'hockeyAssistId']];
 
 /**
  * Build a model event from its serialized form. Player refs become

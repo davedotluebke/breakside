@@ -868,6 +868,17 @@ class TestScrubberPrecision:
         assert event["assistId"] == "Removed-cccc3333"
         assert event["assist"] == TOMBSTONE_NAME
 
+    def test_hockey_assist_fields_are_rewritten(self):
+        from storage import PlayerScrubber, TOMBSTONE_NAME
+        scrubber = PlayerScrubber("Alex-1111", "Alex", "Removed-cccc3333")
+        event = {"type": "Throw", "thrower": "Bo", "throwerId": "Bo-9999",
+                 "hockeyAssist": "Alex", "hockeyAssistId": "Alex-1111",
+                 "hockeyAssistHuck_flag": True, "score_flag": True}
+        assert scrubber.scrub_event(event) is True
+        assert event["hockeyAssistId"] == "Removed-cccc3333"
+        assert event["hockeyAssist"] == TOMBSTONE_NAME
+        assert event["thrower"] == "Bo"
+
     def test_unchanged_documents_report_no_change(self):
         from storage import PlayerScrubber
         scrubber = PlayerScrubber("Nobody-0000", "Nobody", "Removed-dddd4444")

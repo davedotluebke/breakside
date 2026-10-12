@@ -306,7 +306,11 @@ const pbpPossession = (function() {
             score: !!opts.score,
             from: opts.from || null,
             to: opts.to || null,
-            assist: opts.assist || null
+            assist: opts.assist || null,
+            // Hockey assist judgment (scores only; Throw in store/models.js).
+            hockeyAssist: opts.score ? (opts.hockeyAssist || null) : null,
+            hockeyAssistHuck: !!(opts.score && opts.hockeyAssist && opts.hockeyAssistHuck),
+            noHockeyAssist: !!(opts.score && !opts.hockeyAssist && opts.noHockeyAssist)
         });
         const possession = ensurePossessionExists(true);
         possession.addEvent(evt);

@@ -17,7 +17,7 @@ const STATS_COLUMN_HELP = {
     'Assists':  { name: 'Assists',
                   desc: 'Threw the scoring pass.' },
     'HA':       { name: 'Hockey Assists',
-                  desc: 'Threw the pass that led to the assist (the pass before the goal).' },
+                  desc: 'Threw the pass that set up the assist — the coach\'s call in the score dialog (usually the pass before the goal, which is also what older games fall back to).' },
     'Huck HA':  { name: 'Huck Hockey Assists',
                   desc: 'Hockey assists where the throw was a huck. Counted in the HA total as well.' },
     'Throws':   { name: 'Throws Attempted',

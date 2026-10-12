@@ -36,7 +36,7 @@ const COMP_THROWS_PERCENTILE = 0.15;
  */
 const SHOUTOUT_CATEGORIES = [
     { key: 'ha', label: 'Hockey assists', icon: 'fa-hands-helping',
-      hint: 'The pass before the assist',
+      hint: 'The pass that set up the assist',
       value: ps => ps.hockeyAssists || 0 },
     { key: 'ds', label: 'Ds', icon: 'fa-hand-paper',
       hint: 'Blocks and interceptions',

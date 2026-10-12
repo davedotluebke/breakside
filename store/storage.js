@@ -33,7 +33,7 @@ function serializeEvent(event, useIds = true) {
 
     // Player reference ID fields are handled separately in the player reference section below
     // We must exclude them here to avoid duplicating IDs when player lookup fails during deserialization
-    const playerIdFields = ['throwerId', 'receiverId', 'pullerId', 'defenderId', 'assistId'];
+    const playerIdFields = ['throwerId', 'receiverId', 'pullerId', 'defenderId', 'assistId', 'hockeyAssistId'];
 
     // Serialize only the properties that are different from the default instance
     for (const prop in event) {
@@ -79,6 +79,12 @@ function serializeEvent(event, useIds = true) {
         serializedEvent.assist = event.assist.name;
         if (useIds && event.assist.id) {
             serializedEvent.assistId = event.assist.id;
+        }
+    }
+    if (event.hockeyAssist) {
+        serializedEvent.hockeyAssist = event.hockeyAssist.name;
+        if (useIds && event.hockeyAssist.id) {
+            serializedEvent.hockeyAssistId = event.hockeyAssist.id;
         }
     }
 
@@ -364,6 +370,9 @@ function deserializeEvent(eventData) {
             event.receiver = resolvePlayerReference(eventData.receiverId, eventData.receiver);
             if (eventData.assist || eventData.assistId) {
                 event.assist = resolvePlayerReference(eventData.assistId, eventData.assist);
+            }
+            if (eventData.hockeyAssist || eventData.hockeyAssistId) {
+                event.hockeyAssist = resolvePlayerReference(eventData.hockeyAssistId, eventData.hockeyAssist);
             }
             break;
         case 'Turnover':

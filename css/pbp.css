@@ -187,12 +187,57 @@
     overflow-y: auto;
 }
 #scoreAttributionDialog .throw-flags-container,
+#scoreAttributionDialog .ha-row,
 #scoreAttributionDialog .callahan-separator,
 #scoreAttributionDialog .score-attribution-actions {
     flex: 0 0 auto;       /* pinned — never compressed by the scroll area */
 }
 #scoreAttributionDialog .throw-flags-container {
-    margin: 0.5rem 0;
+    margin: 0.5rem 0 0.25rem;
+}
+/* Hockey-assist line: "[x] Credit [name v] with a hockey assist" and, under
+   it, "[ ] Huck hockey assist?". One sentence per row; the sentence wraps as
+   a unit on narrow phones rather than breaking mid-phrase. */
+#scoreAttributionDialog .ha-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0 0 0.25rem;
+    padding: 0 0.25rem;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+#scoreAttributionDialog .ha-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 1.8rem;
+}
+#scoreAttributionDialog .ha-line input[type="checkbox"] {
+    margin: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex: 0 0 auto;
+}
+#scoreAttributionDialog .ha-line label {
+    cursor: pointer;
+    user-select: none;
+}
+#scoreAttributionDialog .ha-line select {
+    font-size: 0.85rem;
+    padding: 0.2rem 0.3rem;
+    max-width: 60%;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+#scoreAttributionDialog .ha-huck-line {
+    padding-left: 1.4rem;   /* indent under the sentence it depends on */
+}
+#scoreAttributionDialog .ha-line input:disabled + label,
+#scoreAttributionDialog .ha-line select:disabled {
+    color: var(--text-muted);
+    cursor: default;
 }
 #scoreAttributionDialog .score-attribution-actions {
     flex-wrap: wrap;

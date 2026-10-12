@@ -99,3 +99,15 @@ test('hydrateGame feeds buildGameLogEntries and the replay engine like a deseria
     assert.ok(eng.pointSummaries()[0].startAt === 1700000000000);
     assert.ok(last > 0);
 });
+
+test('hydrateEvent folds the hockey-assist ref and summarize() names it on a score', () => {
+    const t = hydrateEvent({ type: 'Throw', thrower: 'Bob', throwerId: 'Bob-3c4d', receiver: 'Cara', receiverId: 'Cara-5e6f',
+        score_flag: true, hockeyAssist: 'Alice', hockeyAssistId: 'Alice-1a2b', hockeyAssistHuck_flag: true });
+    assert.deepEqual(t.hockeyAssist, { name: 'Alice', id: 'Alice-1a2b' });
+    assert.equal(t.hockeyAssistId, undefined, 'id field folds into the ref');
+    assert.equal(t.summarize(), 'Bob throws to Cara for the score! (huck hockey assist: Alice)');
+    const none = hydrateEvent({ type: 'Throw', thrower: 'Bob', receiver: 'Cara', score_flag: true, noHockeyAssist_flag: true });
+    assert.equal(none.hockeyAssist, null);
+    assert.equal(none.noHockeyAssist_flag, true);
+    assert.equal(none.summarize(), 'Bob throws to Cara for the score!');
+});

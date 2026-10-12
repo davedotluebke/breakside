@@ -136,6 +136,7 @@ _EVENT_ID_TO_NAME = {
     "defenderId": "defender",
     "pullerId": "puller",
     "assistId": "assist",
+    "hockeyAssistId": "hockeyAssist",
 }
 
 # Per-point lists of player references. Some stored data uses IDs, but the

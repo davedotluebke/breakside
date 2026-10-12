@@ -219,7 +219,7 @@ function buildPlayerNameResolver(game, { quiet = false } = {}) {
     (game?.points || []).forEach(point => {
         (point.possessions || []).forEach(poss => {
             (poss.events || []).forEach(event => {
-                ['thrower', 'receiver', 'puller', 'defender', 'assist'].forEach(role => {
+                ['thrower', 'receiver', 'puller', 'defender', 'assist', 'hockeyAssist'].forEach(role => {
                     const ref = event[role];
                     if (ref && typeof ref === 'object') add(ref.name, ref.id);
                 });
