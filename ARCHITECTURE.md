@@ -1441,7 +1441,7 @@ The whole feature is **invisible until a team opts in**.
   labels on offence, defensive on defence:
   - **Full tab header**, on the top line with the O/D pill and Undo. The
     primary one: a coach taps it as the possession unfolds.
-  - **Full tab modifier row** ("Last pass was a:" / "Last D was a:"), a mirror
+  - **Full tab modifier row** ("Last pass/catch was a:" / "Last D was a:"), a mirror
     of the same possession, so whatever was picked during the possession is
     what shows next to the play it belongs with.
   - **Field tab action row**, immediately left of Events.

@@ -68,13 +68,13 @@ function createKeyPlayPanels() {
     panelsContainer.innerHTML = '';
     
     // Create Throw Panel
-    const throwPanel = createKeyPlayPanel('Throws', [
-        { text: 'huck', fullWidth: false },
+    const throwPanel = createKeyPlayPanel('Throws', [   // same order as the Full tab strip
         { text: 'break', fullWidth: false },
-        { text: 'hammer', fullWidth: false },
-        { text: 'reset', fullWidth: false },
+        { text: 'huck', fullWidth: false },
         { text: 'layout', fullWidth: false },
         { text: 'sky', fullWidth: false },
+        { text: 'hammer', fullWidth: false },
+        { text: 'reset', fullWidth: false },
         { text: 'score', fullWidth: true }
     ], 'throw');
     

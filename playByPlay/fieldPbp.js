@@ -152,14 +152,14 @@ const fieldPbp = (function() {
     // Interactive chips that tag the *last recorded* event, keyed by event type.
     // Each toggles a boolean *_flag directly on the event (then amend + persist).
     const LASTMODS = {
-        Throw: [
+        Throw: [   // same order as eventAmend.THROW_MODIFIERS (the Full tab strip)
             { label: 'Break', flag: 'break_flag' },
             { label: 'Huck', flag: 'huck_flag' },
-            { label: 'Reset', flag: 'reset_flag' },
-            { label: 'Swing', flag: 'swing_flag' },
-            { label: 'Hammer', flag: 'hammer_flag' },
+            { label: 'Layout', flag: 'layout_flag' },
             { label: 'Sky', flag: 'sky_flag' },
-            { label: 'Layout', flag: 'layout_flag' }
+            { label: 'Hammer', flag: 'hammer_flag' },
+            { label: 'Reset', flag: 'reset_flag' },
+            { label: 'Swing', flag: 'swing_flag' }
         ],
         Defense: [
             { label: 'Layout', flag: 'layout_flag' },
@@ -951,7 +951,7 @@ const fieldPbp = (function() {
             // carrying the tap locations through opts.from/opts.to so the
             // spatial marker survives. The dialog's Score button commits a goal,
             // "continue possession" downgrades to a plain completion, and its
-            // modifier flags (huck/break/sky/layout/hammer) apply either way.
+            // modifier flags (break/huck/layout/sky/hammer) apply either way.
             // A geometry-detected huck pre-checks the dialog's Huck flag.
             openScoreDialog(thrower, receiver, from, to);
             render();

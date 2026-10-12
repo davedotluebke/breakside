@@ -54,11 +54,11 @@ let pointPlayers = [];
 let haDefault = null;
 let haTouched = false;
 
-// The throw-modifier flags (Huck/Break/Sky/Layout/Hammer) are toggle buttons,
+// The throw-modifier flags (Break/Huck/Layout/Sky/Hammer) are toggle buttons,
 // not checkboxes — tighter and tidier. Selected state lives in the .selected
 // class + aria-pressed rather than an input's .checked. These helpers keep the
 // rest of the file agnostic to that.
-const FLAG_IDS = ['huckFlag', 'breakFlag', 'skyFlag', 'layoutFlag', 'hammerFlag'];
+const FLAG_IDS = ['breakFlag', 'huckFlag', 'layoutFlag', 'skyFlag', 'hammerFlag'];
 function setFlag(id, on) {
     const btn = document.getElementById(id);
     if (!btn) return;

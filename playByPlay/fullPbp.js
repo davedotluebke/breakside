@@ -296,7 +296,8 @@ const fullPbp = (function() {
      * sits above the bottom action row. Adapts to the most recent
      * editable event in the current point:
      *
-     *     Throw    → "Last pass was a:"     {break, huck, reset, hammer, sky catch, layout catch}
+     *     Throw    → "Last pass/catch was a:" {break, huck, layout, sky, hammer, reset}
+     *                (swing stays out of the strip: Field geometry sets it, the replay editor edits it)
      *     Turnover → "Last turnover was a:" {huck, good D}
      *     Defense  → "Last D was a:"        {sky, layout}
      *
@@ -328,10 +329,10 @@ const fullPbp = (function() {
         if (editable) {
             const isThrow = editable.type === 'Throw';
             const isTurnover = editable.type === 'Turnover';
-            const flags = isThrow ? THROW_MODIFIERS
+            const flags = isThrow ? THROW_MODIFIERS.filter(m => m.fullTab !== false)
                         : isTurnover ? TURNOVER_MODIFIERS
                         : DEFENSE_MODIFIERS;
-            const titleText = isThrow ? 'Last pass was a:'
+            const titleText = isThrow ? 'Last pass/catch was a:'
                             : isTurnover ? 'Last turnover was a:'
                             : 'Last D was a:';
 
