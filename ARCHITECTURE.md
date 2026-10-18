@@ -938,6 +938,14 @@ many aliases it is behind: the coaches, or a parent of two of the players,
 get a single mail whose From names all the players it covers ("Dave via
 Alice Smith, Bob Jones (CUDO)") and whose Reply-To lists all their aliases,
 so a reply still reaches every family and is grouped again on the way back.
+That grouping needs the aliases to arrive as one message, and a sender's
+mail server may deliver them as separate SMTP transactions (Gmail does), so
+SES stores one copy and sends one notification per recipient. The poller
+(`mail/inbound.py`) therefore holds Received notifications for
+`HOLD_SECONDS` (5), keyed by original Message-ID plus envelope sender, and
+relays the siblings that arrive in the window as one message with every
+recipient. Every inbound mail waits those seconds; a sibling that arrives
+later is relayed on its own, as before the grouping existed.
 The activity log keeps one row per alias; `copies` counts who that alias
 reached and `sharedWith` names the other aliases of the same send. A
 player alias plus a group list (`alice-cudo` and `parents-cudo`) is still

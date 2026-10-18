@@ -775,8 +775,15 @@ class FakeSQS:
     def __init__(self, bodies):
         self.messages = [{"MessageId": f"m{i}", "ReceiptHandle": f"h{i}", "Body": b} for i, b in enumerate(bodies)]
         self.deleted = []
+        self.waits = []
+
+    def arrive(self, body):
+        """A message that reaches the queue after the poller started."""
+        i = len(self.messages) + len(self.deleted) + 100
+        self.messages.append({"MessageId": f"m{i}", "ReceiptHandle": f"h{i}", "Body": body})
 
     def receive_message(self, **kwargs):
+        self.waits.append(kwargs.get("WaitTimeSeconds"))
         batch, self.messages = self.messages[:kwargs.get("MaxNumberOfMessages", 10)], self.messages[10:]
         return {"Messages": batch}
 
@@ -793,10 +800,13 @@ class FakeS3:
         return {"Body": io.BytesIO(self.objects[(Bucket, Key)])}
 
 
-def ses_received(recipients, key, dmarc="PASS"):
+def ses_received(recipients, key, dmarc="PASS", source="mom@x.test", header_id=None):
+    mail = {"source": source, "destination": recipients, "messageId": key}
+    if header_id:
+        mail["commonHeaders"] = {"messageId": header_id}
     return json.dumps({
         "notificationType": "Received",
-        "mail": {"source": "mom@x.test", "destination": recipients, "messageId": key},
+        "mail": mail,
         "receipt": {"recipients": recipients, "spamVerdict": {"status": "PASS"}, "virusVerdict": {"status": "PASS"},
                     "spfVerdict": {"status": "PASS"}, "dkimVerdict": {"status": "GRAY"}, "dmarcVerdict": {"status": dmarc},
                     "action": {"type": "S3", "bucketName": "bkt", "objectKey": key}},
@@ -819,7 +829,7 @@ class TestInbound:
             "not json",
             json.dumps({"eventType": "Delivery"}),
         ]
-        poller = inbound.InboundPoller("q", region="us-east-1", bucket="bkt",
+        poller = inbound.InboundPoller("q", region="us-east-1", bucket="bkt", hold_seconds=0,
                                        sqs_client=FakeSQS(bodies), s3_client=FakeS3({("bkt", "inbound/k1"): raw, ("bkt", "inbound/k2"): raw}))
         handled = poller.poll_once()
         assert handled == 6                      # only the JSON message with no S3 key stays in the queue
@@ -831,6 +841,53 @@ class TestInbound:
         tid = configured["team_id"]
         assert ms.get_mail_contact(tid, configured["dad"]["id"])["bounces"]["dad@x.test"]["kind"] == "hard"
         assert ms.get_mail_contact(tid, configured["mgr"]["id"])["bounces"]["carol@x.test"]["kind"] == "complaint"
+
+    def test_two_deliveries_of_one_message_relay_as_one(self, configured):
+        """Gmail delivers a mail to two of our addresses as two SMTP
+        transactions, so SES stores two copies and sends two notifications.
+        Same Message-ID header and sender: one relay with both recipients,
+        so the coaches get one copy; both queue messages are deleted."""
+        import email as email_lib
+        from email import policy as email_policy
+        from mail import inbound
+        both = [f"alice-cudo@{DOMAIN}", f"bob-cudo@{DOMAIN}"]
+        raw = raw_mail("Coach Dave <coach@x.test>", ", ".join(both), subject="Practice")
+        bodies = [ses_received([both[0]], "inbound/a", source="coach@x.test", header_id="<m1@x.test>"),
+                  ses_received([both[1]], "inbound/b", source="coach@x.test", header_id="<m1@x.test>"),
+                  ses_received([f"parents-cudo@{DOMAIN}"], "inbound/c", source="coach@x.test", header_id="<m2@x.test>")]
+        poller = inbound.InboundPoller("q", region="us-east-1", bucket="bkt", hold_seconds=0,
+                                       sqs_client=FakeSQS(bodies),
+                                       s3_client=FakeS3({("bkt", "inbound/a"): raw, ("bkt", "inbound/b"): raw,
+                                                         ("bkt", "inbound/c"): raw_mail("Coach Dave <coach@x.test>", f"parents-cudo@{DOMAIN}")}))
+        assert poller.poll_once() == 3
+        assert poller.processed == 2 and sorted(poller.sqs.deleted) == ["h0", "h1", "h2"]
+        sends = configured["outbox"].sent()
+        coach_copies = [email_lib.message_from_bytes(s["raw"], policy=email_policy.default) for s in sends
+                        if sorted(s["recipients"]) == ["coach2@x.test", "coach@x.test"]]
+        assert len(coach_copies) == 1
+        assert [a.addr_spec for a in coach_copies[0]["Reply-To"].addresses] == both
+
+    def test_hold_window_waits_for_a_late_sibling(self, configured):
+        from mail import inbound
+        both = [f"alice-cudo@{DOMAIN}", f"bob-cudo@{DOMAIN}"]
+        raw = raw_mail("Coach Dave <coach@x.test>", ", ".join(both))
+        sqs = FakeSQS([ses_received([both[0]], "inbound/a", source="coach@x.test", header_id="<m1@x.test>")])
+        poller = inbound.InboundPoller("q", region="us-east-1", bucket="bkt", hold_seconds=5, sqs_client=sqs,
+                                       s3_client=FakeS3({("bkt", "inbound/a"): raw, ("bkt", "inbound/b"): raw}))
+        now = [1000.0]
+        poller._clock = lambda: now[0]
+        assert poller.poll_once() == 0 and poller.processed == 0 and sqs.deleted == []   # held, not relayed
+        assert sqs.waits == [20]
+        now[0] += 2
+        sqs.arrive(ses_received([both[1]], "inbound/b", source="coach@x.test", header_id="<m1@x.test>"))
+        assert poller.poll_once() == 0                      # sibling joins the hold; window still open
+        assert sqs.waits[-1] == 3                           # long-poll only until the window closes
+        now[0] += 4
+        assert poller.poll_once() == 2 and poller.processed == 1
+        assert len(sqs.deleted) == 2 and sqs.waits[-1] == 0
+        sends = configured["outbox"].sent()
+        assert len([s for s in sends if sorted(s["recipients"]) == ["coach2@x.test", "coach@x.test"]]) == 1
+        assert sqs.waits.__len__() == 3 and poller._next_wait() == 20   # nothing held: back to the full wait
 
     def test_parse_and_verdicts(self):
         from mail import inbound
