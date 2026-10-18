@@ -389,6 +389,86 @@ class TestRelay:
         results = relay.process_inbound(raw_mail("Mom <mom@x.test>", f"zed-cudo@{DOMAIN}"), envelope_recipients=[f"zed-cudo@{DOMAIN}"])
         assert (results[0].action, results[0].reason) == ("quarantine", "unknown-alias")
 
+    def test_mail_to_several_aliases_sends_one_copy_per_address(self, configured):
+        """One message to alice-cudo and bob-cudo: the coaches (behind both)
+        and dad (guardian of both) each get ONE copy whose From names both
+        players and whose Reply-To lists both aliases; mom and Bob, behind one
+        alias each, get the ordinary single-alias copy."""
+        import email as email_lib
+        from email import policy as email_policy
+        from mail import relay
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        both = [f"alice-cudo@{DOMAIN}", f"bob-cudo@{DOMAIN}"]
+        results = relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", ", ".join(both), subject="Practice"),
+                                        envelope_recipients=both)
+        assert [(r.address, r.action, r.recipients) for r in results] == [(both[0], "relay", 4), (both[1], "relay", 4)]
+        sends = configured["outbox"].sent()
+        assert len(sends) == 4            # was 5: the coaches' copy went out once per alias
+        by_recipients = {tuple(sorted(s["recipients"])): email_lib.message_from_bytes(s["raw"], policy=email_policy.default) for s in sends}
+        assert set(by_recipients) == {("mom@x.test",), ("dad@x.test",), ("coach2@x.test", "coach@x.test"), ("bob@x.test",)}
+        coaches = by_recipients[("coach2@x.test", "coach@x.test")]
+        assert coaches["Subject"] == "[CUDO] [Coach copy] Practice"
+        assert coaches["From"].addresses[0].display_name == "Coach Dave via Alice Smith, Bob Jones (CUDO)"
+        assert coaches["From"].addresses[0].addr_spec == both[0]
+        assert [a.addr_spec for a in coaches["Reply-To"].addresses] == both
+        assert [a.display_name for a in coaches["Reply-To"].addresses] == ["Alice Smith (CUDO)", "Bob Jones (CUDO)"]
+        assert coaches["X-Breakside-List"] == "alice-cudo"
+        dad = by_recipients[("dad@x.test",)]
+        assert dad["Subject"] == "[CUDO] [Parent copy] Practice"
+        assert [a.addr_spec for a in dad["Reply-To"].addresses] == both
+        mom = by_recipients[("mom@x.test",)]
+        assert mom["From"].addresses[0].display_name == "Coach Dave via Alice Smith (CUDO)"
+        assert [a.addr_spec for a in mom["Reply-To"].addresses] == [both[0]]
+        bob = by_recipients[("bob@x.test",)]
+        assert bob["Subject"] == "[CUDO] Practice"
+        assert bob["From"].addresses[0].addr_spec == both[1] and [a.addr_spec for a in bob["Reply-To"].addresses] == [both[1]]
+        # One activity row per alias, each describing who that alias reached.
+        rows = ms.read_mail_log(tid, 2)
+        by_list = {row["list"]: row for row in rows}
+        assert by_list["alice-cudo"]["copies"] == {"guardian": 2, "coach": 2}
+        assert by_list["bob-cudo"]["copies"] == {"guardian": 1, "coach": 2, "player": 1}
+        assert by_list["alice-cudo"]["sharedWith"] == ["bob-cudo"] and by_list["bob-cudo"]["sharedWith"] == ["alice-cudo"]
+        # A coach replying to the single coach copy writes to both aliases and
+        # comes back through the same path: one coach copy again.
+        results = relay.process_inbound(raw_mail("Coach Two <coach2@x.test>", ", ".join(both), subject="Re: [CUDO] [Coach copy] Practice"),
+                                        envelope_recipients=both)
+        assert [r.action for r in results] == ["relay", "relay"]
+        sends = configured["outbox"].sent()[4:]
+        subjects = {tuple(sorted(s["recipients"])): email_lib.message_from_bytes(s["raw"], policy=email_policy.default)["Subject"] for s in sends}
+        assert subjects == {("mom@x.test",): "Re: [CUDO] [Parent copy] Practice",
+                            ("dad@x.test",): "Re: [CUDO] [Parent copy] Practice",
+                            ("coach2@x.test", "coach@x.test"): "Re: [CUDO] [Coach copy] Practice",
+                            ("bob@x.test",): "Re: [CUDO] Practice"}
+        # An author behind neither alias (the manager) is added to Reply-To on
+        # every copy, as on a single-alias send.
+        relay.process_inbound(raw_mail("Carol Manager <carol@x.test>", ", ".join(both)), envelope_recipients=both)
+        for s in configured["outbox"].sent()[8:]:
+            out = email_lib.message_from_bytes(s["raw"], policy=email_policy.default)
+            assert out["Reply-To"].addresses[-1].addr_spec == "carol@x.test"
+
+    def test_aliases_of_two_teams_are_grouped_per_team(self, configured):
+        """A message to a player on each of two teams is two relays, one per
+        team, each with its own coaches."""
+        from mail import relay
+        from storage import mail_storage
+        from mail import directory as directory_mod
+        other = configured["other_team"]
+        from storage import player_storage, team_storage, index_storage
+        zed = player_storage.save_player({"name": "Zed Quinn"})
+        team_storage.update_team(other, {"playerIds": [zed]})
+        index_storage.rebuild_index()
+        mail_storage.create_mail_directory(other, "other", "Other")
+        directory_mod.ensure_player_aliases(other)
+        mail_storage.add_mail_contact(other, {"kind": "guardian", "name": "Zed Dad", "email": "coach@x.test", "playerIds": [zed]})
+        both = [f"alice-cudo@{DOMAIN}", f"zed-other@{DOMAIN}"]
+        results = relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", ", ".join(both)), envelope_recipients=both)
+        assert [(r.address, r.action) for r in results] == [(both[0], "relay"), (both[1], "relay")]
+        assert sorted(sorted(s["recipients"]) for s in configured["outbox"].sent()) == sorted([
+            ["dad@x.test", "mom@x.test"], ["coach2@x.test", "coach@x.test"],       # CUDO: Alice's guardians, CUDO coaches
+            ["coach@x.test"], ["out@x.test"],                                      # Other: Zed's guardian, Other's coach
+        ])
+
     def test_loop_verdicts_and_unknown_address(self, configured):
         from mail import relay
         r = relay.process_inbound(raw_mail("mom@x.test", f"parents-cudo@{DOMAIN}", extra=["X-Breakside-List: parents-cudo"]),

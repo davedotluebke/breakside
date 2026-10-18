@@ -326,6 +326,28 @@ class TestRewrite:
                                              reply_to_mode="list", also_reply_to=("", LIST.upper())))
         assert [a.addr_spec for a in out["Reply-To"].addresses] == [LIST]
 
+    def test_reply_to_lists_names_every_alias_a_copy_covers(self):
+        aliases = [("Alice Smith (CUDO)", "alice-cudo@team.breakside.pro"), ("Bob Jones (CUDO)", "bob-cudo@team.breakside.pro")]
+        out = parsed(rewrite.rewrite_message(simple(), list_address=aliases[0][1], list_display="Alice Smith, Bob Jones (CUDO)",
+                                             subject_tag="", reply_to_mode="list", reply_to_lists=aliases))
+        assert [(a.display_name, a.addr_spec) for a in out["Reply-To"].addresses] == aliases
+        assert out["From"].addresses[0].addr_spec == aliases[0][1]
+        assert out["List-Post"] == f"<mailto:{aliases[0][1]}>"
+        # the author outside both aliases is appended once; one already among them is not
+        out = parsed(rewrite.rewrite_message(simple(), list_address=aliases[0][1], list_display="X", subject_tag="",
+                                             reply_to_mode="list", reply_to_lists=aliases, also_reply_to=("Zed Q", "zed@x.test")))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == [aliases[0][1], aliases[1][1], "zed@x.test"]
+        out = parsed(rewrite.rewrite_message(simple(), list_address=aliases[0][1], list_display="X", subject_tag="",
+                                             reply_to_mode="list", reply_to_lists=aliases, also_reply_to=("", aliases[1][1].upper())))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == [aliases[0][1], aliases[1][1]]
+        # coaches and author modes ignore it
+        out = parsed(rewrite.rewrite_message(simple(), list_address=aliases[0][1], list_display="X", subject_tag="",
+                                             reply_to_mode="coaches", coaches_address="coaches-cudo@team.breakside.pro", reply_to_lists=aliases))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == ["coaches-cudo@team.breakside.pro"]
+        out = parsed(rewrite.rewrite_message(simple(), list_address=aliases[0][1], list_display="X", subject_tag="",
+                                             reply_to_mode="author", reply_to_lists=aliases))
+        assert [a.addr_spec for a in out["Reply-To"].addresses] == ["bob@yahoo.com"]
+
     def test_rfc2369_headers_point_at_the_coaches(self):
         out = parsed(rewrite.rewrite_message(simple(extra=["List-Unsubscribe: <http://evil.example/unsub>"]),
                                              list_address=LIST, list_display="X", subject_tag="", reply_to_mode="list",

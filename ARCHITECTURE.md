@@ -931,7 +931,17 @@ Recipients are envelope-only: nobody sees anyone else's address. Mail to a playe
 per group: the guardians' copy carries `[Parent copy]` after the list tag
 and the coaches' copy `[Coach copy]`; both markers are stripped from every
 inbound subject so a reply does not hand the player a message labelled as
-somebody else's copy.
+somebody else's copy. When one message is addressed to several player
+aliases of the same team, the aliases are relayed together
+(`relay._relay_player_group`) and every address receives one copy however
+many aliases it is behind: the coaches, or a parent of two of the players,
+get a single mail whose From names all the players it covers ("Dave via
+Alice Smith, Bob Jones (CUDO)") and whose Reply-To lists all their aliases,
+so a reply still reaches every family and is grouped again on the way back.
+The activity log keeps one row per alias; `copies` counts who that alias
+reached and `sharedWith` names the other aliases of the same send. A
+player alias plus a group list (`alice-cudo` and `parents-cudo`) is still
+two separate relays, so coaches see both copies.
 
 **Data.** `data/mail/_slugs.json` maps slug → team for inbound routing;
 `data/mail/{teamId}/directory.json` holds the slug, per-list settings and the

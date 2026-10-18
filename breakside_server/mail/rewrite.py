@@ -20,7 +20,7 @@ from email.headerregistry import Address
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import make_msgid, parseaddr
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 # Headers that must not survive a relay. The original DKIM signature is broken
 # by the From rewrite anyway (SES adds ours); Return-Path/Sender are the
@@ -198,7 +198,8 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
                     coaches_display: Optional[str] = None,
                     author: Optional[Tuple[str, str]] = None,
                     subject_marker: str = "",
-                    also_reply_to: Optional[Tuple[str, str]] = None) -> bytes:
+                    also_reply_to: Optional[Tuple[str, str]] = None,
+                    reply_to_lists: Optional[Sequence[Tuple[str, str]]] = None) -> bytes:
     """Return the relayed form of ``raw``.
 
     Args:
@@ -218,6 +219,10 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
             ``coaches`` modes — the relay passes the author when they are not
             among the list's recipients, so a reply reaches them as well as
             the list. Ignored in ``author`` mode, where they already are.
+        reply_to_lists: (display, address) pairs that Reply-To names in
+            ``list`` mode instead of the list itself — the relay passes every
+            player alias a grouped copy covers, so a reply from a coach's
+            single copy reaches every family. Defaults to the list.
     """
     msg = parse_message(raw)
     name, addr = author or sender_of(msg)
@@ -245,10 +250,11 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
         extra = Address(display_name=(also_reply_to[0] or "").strip(), addr_spec=also_reply_to[1])
     if reply_to_mode == "coaches" and coaches_address:
         primary = Address(display_name=coaches_display or f"Coaches {list_display}", addr_spec=coaches_address)
-        msg["Reply-To"] = _reply_to(primary, extra)
+        msg["Reply-To"] = _reply_to([primary], extra)
     elif reply_to_mode == "list":
-        primary = Address(display_name=list_display, addr_spec=list_address)
-        msg["Reply-To"] = _reply_to(primary, extra)
+        primaries = [Address(display_name=(d or "").strip(), addr_spec=a) for d, a in (reply_to_lists or [])
+                     if a] or [Address(display_name=list_display, addr_spec=list_address)]
+        msg["Reply-To"] = _reply_to(primaries, extra)
     else:
         if original_reply_to:
             msg["Reply-To"] = original_reply_to
@@ -277,11 +283,11 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
     return msg.as_bytes()
 
 
-def _reply_to(primary: Address, extra: Optional[Address]) -> str:
-    """Reply-To value: the list, plus the author when they are outside it."""
-    if extra is None or extra.addr_spec.lower() == primary.addr_spec.lower():
-        return str(primary)
-    return f"{primary}, {extra}"
+def _reply_to(primaries: Sequence[Address], extra: Optional[Address]) -> str:
+    """Reply-To value: the list(s), plus the author when they are outside them."""
+    if extra is not None and all(extra.addr_spec.lower() != p.addr_spec.lower() for p in primaries):
+        primaries = [*primaries, extra]
+    return ", ".join(str(p) for p in primaries)
 
 
 def _quote_display(text: str) -> str:
