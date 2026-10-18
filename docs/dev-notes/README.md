@@ -31,3 +31,4 @@ These notes were seeded on 2026-09-05 from an AI agent's per-project memory, ver
 | [small-phone-layout.md](small-phone-layout.md) | The multi-phone viewport sweep, what it found on a 13 mini, what was fixed and what is a design call |
 | [standby-screen.md](standby-screen.md) | Black standby screen: the tap/hold split on ☀, why exit is on `click`, how to verify |
 | [team-list-order.md](team-list-order.md) | Teams screen order (most recently opened, pinned group on top): the decisions and how to verify |
+| [veo-platform-capabilities.md](veo-platform-capabilities.md) | What Veo stores per recording, what ultimate gets, what can be downloaded, the invite-only API, the terms; verified 2026-10-17 |
