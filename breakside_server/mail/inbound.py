@@ -226,6 +226,9 @@ class InboundPoller:
         return handled
 
     def _handle_bounce(self, kind: str, note: Dict[str, Any]) -> None:
+        # mail.messageId here is the SES id of OUR outbound send that bounced,
+        # which the relay recorded on its activity-log row (providerIds).
+        provider_id = str((note.get("mail") or {}).get("messageId") or "") or None
         if kind == "Bounce":
             bounce = note.get("bounce") or {}
             bounce_kind = "hard" if bounce.get("bounceType") == "Permanent" else "soft"
@@ -233,13 +236,13 @@ class InboundPoller:
             recipients = bounce.get("bouncedRecipients") or []
             for r in recipients:
                 diag = r.get("diagnosticCode") or detail
-                n = storage.record_mail_bounce(r.get("emailAddress", ""), bounce_kind, diag)
+                n = storage.record_mail_bounce(r.get("emailAddress", ""), bounce_kind, diag, provider_id=provider_id)
                 logger.info("mail: %s bounce for %s recorded on %d contact(s)", bounce_kind, addresses.mask_address(r.get("emailAddress")), n)
         else:
             complaint = note.get("complaint") or {}
             detail = complaint.get("complaintFeedbackType") or "complaint"
             for r in complaint.get("complainedRecipients") or []:
-                n = storage.record_mail_bounce(r.get("emailAddress", ""), "complaint", detail)
+                n = storage.record_mail_bounce(r.get("emailAddress", ""), "complaint", detail, provider_id=provider_id)
                 logger.warning("mail: complaint from %s recorded on %d contact(s)", addresses.mask_address(r.get("emailAddress")), n)
 
     # ---------------------------------------------------------------- the loop

@@ -308,13 +308,62 @@ function contactBounces(c) {
     return entries;
 }
 
+// A hard bounce or a complaint stops delivery to the address until a coach
+// clears it (policy.py). A soft bounce is one failed delivery (mailbox full,
+// server busy); later mail is still sent, so the note is only worth showing
+// while it is recent — after that, mail that did not bounce is the better
+// signal, and the "bounce" label just reads as a problem that is not there.
+const BLOCKING_BOUNCES = new Set(['hard', 'complaint']);
+const SOFT_BOUNCE_SHOWN_DAYS = 30;
+
+function bounceBlocks(b) {
+    return BLOCKING_BOUNCES.has(b?.kind);
+}
+
+function daysSince(iso) {
+    const t = Date.parse(iso || '');
+    return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null;
+}
+
+function fmtAgo(iso) {
+    const d = daysSince(iso);
+    if (d === null) return '';
+    if (d <= 0) return 'today';
+    if (d === 1) return 'yesterday';
+    if (d < 14) return `${d} days ago`;
+    if (d < 60) return `${Math.round(d / 7)} weeks ago`;
+    try {
+        return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch (_) {
+        return '';
+    }
+}
+
+/** The contact's bounces worth a flag: blocking ones always, soft ones while recent. */
+function shownBounces(c) {
+    return contactBounces(c).filter(([, b]) => bounceBlocks(b) || (daysSince(b.at) ?? 0) <= SOFT_BOUNCE_SHOWN_DAYS);
+}
+
+function bounceFlag(addr, b, { withAddress = false } = {}) {
+    const blocking = bounceBlocks(b);
+    const label = b.kind === 'complaint' ? 'complained' : `${b.kind} bounce`;
+    const when = fmtAgo(b.at);
+    const title = [
+        blocking ? 'Delivery to this address is stopped until you clear it.' : 'One delivery failed; later mail is still sent to this address.',
+        b.subject ? `Message: ${b.subject}` : '',
+        b.detail || '',
+        addr,
+    ].filter(Boolean).join(' — ');
+    return `<span class="mail-flag ${blocking ? 'mail-flag-bad' : 'mail-flag-soft'}" title="${escAttr(title)}">${esc(label)}${when ? ' ' + esc(when) : ''}${withAddress ? ': ' + esc(addr) : ''}</span>`;
+}
+
 function renderContact(c) {
     const playerNames = (c.playerIds || []).map(id => (state.roster || []).find(p => p.id === id)?.name || id);
     const flags = [];
     if (c.status && c.status !== 'active') flags.push(`<span class="mail-flag">${esc(c.status)}</span>`);
-    const bounces = contactBounces(c);
+    const bounces = shownBounces(c);
     for (const [addr, b] of bounces) {
-        flags.push(`<span class="mail-flag mail-flag-bad" title="${escAttr((b.detail || '') + ' — ' + addr)}">${esc(b.kind === 'complaint' ? 'complained' : b.kind + ' bounce')}${contactEmails(c).length > 1 ? ': ' + esc(addr) : ''}</span>`);
+        flags.push(bounceFlag(addr, b, { withAddress: contactEmails(c).length > 1 }));
     }
     if ((c.optOut || []).length) flags.push(`<span class="mail-flag">opted out: ${esc(c.optOut.join(', '))}</span>`);
     const derived = c.derived;
@@ -331,7 +380,7 @@ function renderContact(c) {
             </div>
             ${derived ? '' : `
             <div class="mail-contact-actions">
-                ${bounces.length ? `<button class="icon-button" data-action="clear-bounce" data-id="${escAttr(c.id)}" title="Deliver to this contact again"><i class="fas fa-redo"></i></button>` : ''}
+                ${bounces.length ? `<button class="icon-button" data-action="clear-bounce" data-id="${escAttr(c.id)}" title="${bounces.some(([, b]) => bounceBlocks(b)) ? 'Deliver to this contact again' : 'Clear the bounce note'}"><i class="fas fa-redo"></i></button>` : ''}
                 <button class="icon-button" data-action="${editing ? 'close-editor' : 'edit-contact'}" data-id="${escAttr(c.id)}" title="${editing ? 'Done editing' : 'Edit name, email addresses, role or players'}"><i class="fas fa-${editing ? 'check' : 'pen'}"></i></button>
                 <button class="icon-button" data-action="toggle-status" data-id="${escAttr(c.id)}" data-status="${escAttr(c.status || 'active')}" title="${c.status === 'active' ? 'Pause delivery' : 'Resume delivery'}"><i class="fas fa-${c.status === 'active' ? 'pause' : 'play'}"></i></button>
                 <button class="icon-button remove-member-btn" data-action="remove-contact" data-id="${escAttr(c.id)}" data-name="${escAttr(c.name)}" title="Remove from directory"><i class="fas fa-times"></i></button>
@@ -399,7 +448,7 @@ function renderRoster() {
                                 <span class="mail-player-id">
                                     <span class="member-name">${esc(p.name)}</span><span class="mail-player-sep">: </span>
                                     <span class="member-email"><code data-player-address>${esc(p.address || '')}</code></span>
-                                    ${contactBounces(c).length ? '<span class="mail-flag mail-flag-bad">bounce</span>' : ''}
+                                    ${shownBounces(c).map(([addr, b]) => bounceFlag(addr, b)).join(' ')}
                                 </span>
                                 <span class="member-email mail-player-guardians">${guardians.length ? 'Guardians: ' + esc(guardians.join(', ')) : '<em>No guardians linked yet</em>'}</span>
                             </div>
@@ -462,6 +511,7 @@ function renderLog() {
     return `
         <div class="settings-section">
             <h3>Recent activity</h3>
+            <p class="section-description">✅ means the mail service accepted the message for every recipient and nothing has bounced back since; it is not a receipt from each inbox. When one recipient's mail bounces, the message shows ⚠️ with who bounced, and the contact gets a bounce note.</p>
             <div id="mailLogList"><p class="loading-message">Loading…</p></div>
         </div>`;
 }
@@ -505,11 +555,25 @@ function renderHeld(item) {
 }
 
 function renderLogRow(e) {
-    const icon = { relayed: '✅', released: '✅', quarantined: '⏸', dropped: '🚫', failed: '❌', bounce: '↩️', complaint: '⚠️', test: '🧪' }[e.action] || '•';
-    const what = e.action === 'relayed' || e.action === 'released'
-        ? `to ${e.recipients} recipient${e.recipients === 1 ? '' : 's'}`
-        : (REASON_LABELS[e.reason] || e.reason || e.action);
-    return `<tr><td>${icon}</td><td>${esc(fmtDate(e.at))}</td><td><code>${esc(e.list || '')}</code></td><td>${esc(e.fromName || e.from || '')}</td><td>${esc(e.subject || '')}</td><td>${esc(what)}</td></tr>`;
+    const bounced = Array.isArray(e.bounces) ? e.bounces : [];     // bounce rows the server tied to this relay
+    let icon = { relayed: '✅', released: '✅', quarantined: '⏸', dropped: '🚫', failed: '❌', bounce: '↩️', complaint: '⚠️', test: '🧪' }[e.action] || '•';
+    let what;
+    let title = '';
+    if (e.action === 'relayed' || e.action === 'released') {
+        what = `to ${e.recipients} recipient${e.recipients === 1 ? '' : 's'}`;
+        if (bounced.length) {
+            icon = '⚠️';
+            what += `, ${bounced.length} bounced`;
+            title = bounced.map(b => `${b.email}: ${b.kind === 'complaint' ? 'complaint' : (b.kind || '') + ' bounce'}${b.detail ? ' — ' + b.detail : ''}`).join('\n');
+        }
+    } else if (e.action === 'bounce' || e.action === 'complaint') {
+        what = e.action === 'complaint' ? 'marked as spam by the recipient (delivery stopped)'
+            : `${e.reason || ''} bounce${e.reason === 'soft' ? ' (still delivering)' : ' (delivery stopped)'}`;
+        title = e.detail || '';
+    } else {
+        what = REASON_LABELS[e.reason] || e.reason || e.action;
+    }
+    return `<tr${bounced.length ? ' class="mail-log-warn"' : ''}><td>${icon}</td><td>${esc(fmtDate(e.at))}</td><td><code>${esc(e.list || '')}</code></td><td>${esc(e.fromName || e.from || '')}</td><td>${esc(e.subject || '')}</td><td title="${escAttr(title)}">${esc(what)}</td></tr>`;
 }
 
 // =============================================================================

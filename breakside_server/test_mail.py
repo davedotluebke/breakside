@@ -751,6 +751,7 @@ class TestApi:
         assert client.delete(f"/api/teams/{tid}/mail/quarantine/{qid}").status_code == 200
         log = client.get(f"/api/teams/{tid}/mail/log?limit=10").json()["entries"]
         assert [e["action"] for e in log][:3] == ["quarantined", "released", "quarantined"]
+        assert all("bounces" in e for e in log if e["action"] in ("relayed", "released"))   # the endpoint joins bounces onto relays
         r = client.post(f"/api/teams/{tid}/mail/test")
         assert r.status_code == 200 and r.json()["to"] == "coach@x.test" and r.json()["transport"] == "file"
 
@@ -814,6 +815,49 @@ def ses_received(recipients, key, dmarc="PASS", source="mom@x.test", header_id=N
 
 
 class TestInbound:
+    def test_bounce_is_tied_to_the_relay_it_came_from(self, configured):
+        """A bounce notification names the SES id of our outbound send that
+        bounced; the relay recorded every send's id on its log row, so the
+        bounce row points at the message and the log view can say
+        "4 recipients, 1 bounced" on the message itself."""
+        from mail import inbound, policy, relay
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        both = [f"alice-cudo@{DOMAIN}", f"bob-cudo@{DOMAIN}"]
+        relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", ", ".join(both), subject="Practice"), envelope_recipients=both)
+        rows = ms.read_mail_log(tid, 2)
+        assert all(len(r["providerIds"]) == 4 and r["providerId"] == r["providerIds"][0] for r in rows)   # four sends, every id on both alias rows
+        pid = rows[0]["providerIds"][1]
+        bodies = [json.dumps({"eventType": "Bounce", "mail": {"messageId": pid},
+                              "bounce": {"bounceType": "Transient", "bounceSubType": "MailboxFull",
+                                         "bouncedRecipients": [{"emailAddress": "dad@x.test", "diagnosticCode": "552 over quota"}]}})]
+        poller = inbound.InboundPoller("q", region="us-east-1", bucket="bkt", hold_seconds=0,
+                                       sqs_client=FakeSQS(bodies), s3_client=FakeS3({}))
+        assert poller.poll_once() == 1
+        log = ms.attach_bounces(ms.read_mail_log(tid, 10))
+        bounce = log[0]
+        assert bounce["action"] == "bounce" and bounce["reason"] == "soft" and bounce["providerId"] == pid
+        assert bounce["relayedId"] in {r["id"] for r in rows}
+        assert bounce["subject"] == "Practice" and bounce["list"] in ("alice-cudo", "bob-cudo") and bounce["detail"] == "552 over quota"
+        linked = next(r for r in log if r.get("id") == bounce["relayedId"])
+        expected = [{"at": bounce["at"], "email": "dad@x.test", "kind": "soft", "detail": "552 over quota"}]
+        assert linked["bounces"] == expected
+        # the other alias's row shares the send ids, so it shows the bounce too
+        assert [r["bounces"] for r in log if r["action"] == "relayed"] == [expected, expected]
+        dad = ms.get_mail_contact(tid, configured["dad"]["id"])
+        assert dad["bounces"]["dad@x.test"]["subject"] == "Practice" and dad["bounces"]["dad@x.test"]["relayedId"] == linked["id"]
+        assert policy.deliverable_addresses(dad) == ["dad@x.test"]        # a soft bounce never stops delivery
+        # An id we do not know, or none at all: still recorded, just not linked.
+        assert ms.record_mail_bounce("mom@x.test", "hard", "550", provider_id="ses-unknown") == 1
+        unlinked = ms.read_mail_log(tid, 1)[0]
+        assert unlinked["relayedId"] is None and unlinked["subject"] == "550" and unlinked["list"] is None
+        assert ms.record_mail_bounce("mom@x.test", "hard", "550") == 1
+        assert "subject" not in ms.get_mail_contact(tid, configured["mom"]["id"])["bounces"]["mom@x.test"]
+        # A group-list relay records its one send id the same way.
+        relay.process_inbound(raw_mail("coach@x.test", f"coaches-cudo@{DOMAIN}"), envelope_recipients=[f"coaches-cudo@{DOMAIN}"])
+        row = ms.read_mail_log(tid, 1)[0]
+        assert row["providerIds"] == [row["providerId"]] and row["providerId"]
+
     def test_received_and_bounce_and_poison(self, configured):
         from mail import inbound
         from storage import mail_storage as ms

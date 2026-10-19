@@ -960,6 +960,26 @@ receives list mail and any of them may post. The author receives their own
 post too, like any mailing list (Gmail merges it with the Sent copy).
 Directories written with the single-address shape
 are normalized on read, so no migration is needed.
+**Bounces.** SES publishes bounce and complaint events to the same queue
+the inbound poller reads (nothing else: there is no per-recipient delivery
+event, so "delivered" only ever means "accepted by SES and not bounced").
+`record_mail_bounce` stamps `bounces[address] = {at, kind, detail}` on every
+contact carrying the address, in every team, keeping only the latest event
+per address, and appends a `bounce` / `complaint` log row. A hard bounce or
+a complaint removes the address from every list until a coach clears it
+(`policy.deliverable_addresses`); a **soft bounce never blocks delivery**,
+so the admin screen shows it in amber, dated, and only for 30 days, while a
+blocking one stays red until cleared. Each relayed log row records every
+SES message id its sends produced (`providerIds`; `providerId` is the
+first), and a bounce event names the id of the send that bounced, so the
+bounce row is tied to its message (`relayedId`, plus the message's list and
+subject; the contact's bounce record gets the subject too). The log
+endpoint joins them (`attach_bounces`): a relayed row carries `bounces:
+[{at, email, kind, detail}]`, which the activity table renders as ⚠️
+"8 recipients, 1 bounced" instead of the plain check. One gap: a send to
+more than 50 addresses goes out in several SES calls and only the first id
+is kept, so a bounce from a later batch stays unlinked (recorded on the
+contact, shown as its own row).
 **Coaches are never stored** — they are derived from team memberships on
 every use, so the coaches list cannot go stale. `log/{YYYY-MM}.jsonl` records
 every relayed, held, dropped and bounced message; `quarantine/` holds

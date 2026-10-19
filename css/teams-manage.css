@@ -1859,6 +1859,17 @@
     color: var(--color-danger-ink);
 }
 
+/* A soft bounce: one failed delivery, mail still flowing. Amber, not red. */
+.mail-flag-soft {
+    background: var(--color-warning-surface);
+    color: var(--color-warning-text);
+}
+
+/* An activity row for a relay one of whose recipients bounced. */
+.mail-log tr.mail-log-warn td {
+    background: var(--color-warning-surface-soft);
+}
+
 .mail-badge {
     display: inline-block;
     min-width: 1.5em;

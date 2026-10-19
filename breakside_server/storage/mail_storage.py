@@ -551,12 +551,17 @@ def add_player_contacts(team_id: str, players: Iterable[Tuple[str, str, str]]) -
 # Bounces and complaints
 # ==========================================================================
 
-def record_mail_bounce(email: str, kind: str, detail: str = "") -> int:
+def record_mail_bounce(email: str, kind: str, detail: str = "", provider_id: Optional[str] = None) -> int:
     """Mark every contact with this address, in every team. Returns count.
 
     ``kind`` is ``hard`` (permanent bounce), ``soft`` (transient) or
     ``complaint``. Hard bounces and complaints stop delivery to the address
     until a coach clears them (policy.py); soft ones are informational.
+
+    ``provider_id`` is the SES message id of the send that bounced. When a
+    relayed log row carries it, the bounce row is tied to that row
+    (``relayedId``, and the row's list and subject), which is what lets the
+    activity view show "8 recipients, 1 bounced" on the message itself.
     """
     email = (email or "").strip().lower()
     if not email:
@@ -568,10 +573,15 @@ def record_mail_bounce(email: str, kind: str, detail: str = "") -> int:
             directory = get_mail_directory(team_id)
             if directory is None:
                 continue
+            relayed = find_mail_log_by_provider(team_id, provider_id) if provider_id else None
+            record = {"at": _now(), "kind": kind, "detail": detail[:200]}
+            if relayed:
+                record["subject"] = relayed.get("subject") or ""
+                record["relayedId"] = relayed.get("id")
             changed = False
             for contact in directory["contacts"]:
                 if email in (contact.get("emails") or []):
-                    contact.setdefault("bounces", {})[email] = {"at": _now(), "kind": kind, "detail": detail[:200]}
+                    contact.setdefault("bounces", {})[email] = dict(record)
                     contact["updatedAt"] = _now()
                     changed = True
                     touched += 1
@@ -579,14 +589,63 @@ def record_mail_bounce(email: str, kind: str, detail: str = "") -> int:
                 _save_directory(directory)
                 append_mail_log(team_id, {
                     "action": "bounce" if kind != "complaint" else "complaint",
-                    "list": None,
+                    "list": relayed.get("list") if relayed else None,
                     "from": email,
                     "fromName": None,
-                    "subject": detail[:120],
+                    "subject": (relayed.get("subject") or "") if relayed else detail[:120],
+                    "detail": detail[:200],
                     "recipients": 0,
                     "reason": kind,
+                    "providerId": provider_id,
+                    "relayedId": relayed.get("id") if relayed else None,
                 })
     return touched
+
+
+def find_mail_log_by_provider(team_id: str, provider_id: str, limit: int = 5000) -> Optional[Dict[str, Any]]:
+    """The relayed (or released) row one of whose sends carried this SES
+    message id, searching the newest ``limit`` rows; None when unknown.
+    A bounce arrives minutes to days after the send, so recent is enough."""
+    if not provider_id:
+        return None
+    for entry in read_mail_log(team_id, limit=limit):
+        if entry.get("action") not in ("relayed", "released"):
+            continue
+        if entry.get("providerId") == provider_id or provider_id in (entry.get("providerIds") or []):
+            return entry
+    return None
+
+
+def attach_bounces(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Give every relayed/released row in ``entries`` the bounce and
+    complaint rows that point at it, as ``bounces``: ``[{at, email, kind,
+    detail}, …]``. Joins within the given rows only: a bounce row is always
+    newer than the row it points at, so a newest-first page that holds the
+    relayed row holds its bounces too."""
+    by_relayed: Dict[str, List[Dict[str, Any]]] = {}
+    by_provider: Dict[str, List[Dict[str, Any]]] = {}
+    for e in entries:
+        if e.get("action") in ("bounce", "complaint") and (e.get("relayedId") or e.get("providerId")):
+            item = {"id": e.get("id"), "at": e.get("at"), "email": e.get("from"), "kind": e.get("reason"),
+                    "detail": e.get("detail") or e.get("subject") or ""}
+            if e.get("relayedId"):
+                by_relayed.setdefault(e["relayedId"], []).append(item)
+            if e.get("providerId"):
+                by_provider.setdefault(e["providerId"], []).append(item)
+    for e in entries:
+        if e.get("action") not in ("relayed", "released"):
+            continue
+        # By row id, and by send id too: a grouped relay logs one row per
+        # player alias, all carrying the same send ids, and a bounce of the
+        # shared coach copy belongs on every one of those rows.
+        found: Dict[str, Dict[str, Any]] = {}
+        for item in by_relayed.get(e.get("id") or "", []):
+            found[item["id"]] = item
+        for pid in e.get("providerIds") or ([e["providerId"]] if e.get("providerId") else []):
+            for item in by_provider.get(pid, []):
+                found[item["id"]] = item
+        e["bounces"] = [{k: v for k, v in item.items() if k != "id"} for item in found.values()]
+    return entries
 
 
 # ==========================================================================

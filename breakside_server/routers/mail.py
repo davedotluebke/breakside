@@ -21,7 +21,7 @@ from ._shared import (
     get_user,
     list_mail_quarantine,
     purge_expired_quarantine,
-    read_mail_log,
+    read_mail_log, attach_bounces,
     remove_mail_contact,
     remove_mail_quarantine,
     require_team_coach,
@@ -246,7 +246,7 @@ async def get_mail_log(
     user: dict = Depends(require_team_coach("team_id")),
 ):
     _require_team(team_id)
-    entries = read_mail_log(team_id, limit=limit)
+    entries = attach_bounces(read_mail_log(team_id, limit=limit))
     return {"entries": entries, "count": len(entries)}
 
 

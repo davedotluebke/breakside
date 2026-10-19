@@ -220,8 +220,11 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
         logger.error("mail: relay to %s failed: %s", address, exc)
         _log(team_id, {**base_entry, "action": "failed", "recipients": total, "reason": str(exc)[:200]})
         raise
+    # providerIds: every SES message id this relay produced, so a bounce
+    # notification (which names the id of the send that bounced) can be tied
+    # back to this row; providerId stays the first for older readers.
     log_id = _log(team_id, {**base_entry, "action": _log_action(base_entry), "recipients": total,
-                            "reason": None, "providerId": provider_id,
+                            "reason": None, "providerId": provider_id, "providerIds": [provider_id],
                             "senderKinds": decision.sender_kinds, "copies": None})
     logger.info("mail: relayed %s from %s to %d recipient(s)", address, addresses.mask_address(author_email), total)
     return RelayResult(address, team_id, "relay", None, total, provider_id, log_id=log_id)
@@ -297,7 +300,7 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
         sends.setdefault((entry["kind"], tuple(entry["locals"])), []).append(email)
 
     copies: Dict[str, Dict[str, int]] = {t.local: {} for t in targets}
-    provider_id: Optional[str] = None
+    provider_ids: List[str] = []
     for (kind, locals_), emails in sends.items():
         covered = [by_local[local] for local in locals_]
         address = f"{locals_[0]}@{domain}"
@@ -326,17 +329,22 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
                                "recipients": len(target.decision.recipients),
                                "reason": str(exc)[:200], "copies": copies[target.local]})
             raise
-        provider_id = provider_id or sent_id
+        if sent_id:
+            provider_ids.append(sent_id)
         for local in locals_:
             copies[local][kind] = copies[local].get(kind, 0) + len(emails)
 
+    provider_id = provider_ids[0] if provider_ids else None
     results = []
     for target in targets:
         total = len(target.decision.recipients)
         address = f"{target.local}@{domain}"
         others = [t.local for t in targets if t is not target]
+        # Every send's id goes on every alias's row: a coach copy covering two
+        # aliases can bounce, and either row should show it.
         log_id = _log(team_id, {**target.base_entry, "action": _log_action(target.base_entry),
                                 "recipients": total, "reason": None, "providerId": provider_id,
+                                "providerIds": provider_ids,
                                 "senderKinds": target.decision.sender_kinds,
                                 "copies": copies[target.local],
                                 "sharedWith": others or None})
