@@ -31,6 +31,7 @@ import {
     groupScrimmages, scrimmageSquadNames, squadAssignments, squadPatch,
     squadDefinition, applySquadDefinition, describeSquadChange,
 } from '../store/scrimmage.js';
+import { VARIATIONS, TWO_POINT_HINT, variationById, normalizeRules } from '../store/scrimmageRules.js';
 import { formatPlayerName, currentGame, isPointInProgress } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { isGameScreenVisible } from '../ui/panelSystem.js';
@@ -206,8 +207,16 @@ function openDialog(mode, team) {
                     squad sees the change on their phone. A point already on the field
                     keeps its line — the new squads play from the next point.
                 </p>` : `
+                <div class="event-dialog-row scrimmage-rules-row">
+                    <label for="scrimmageVariation">Variation</label>
+                    <select id="scrimmageVariation" class="event-dialog-select">
+                        ${VARIATIONS.map(v => `<option value="${v.id}">${v.label}</option>`).join('')}
+                    </select>
+                    <label class="scrimmage-two-point"><input type="checkbox" id="scrimmageTwoPoint"> Two-point plays</label>
+                </div>
+                <p class="text-hint scrimmage-hint scrimmage-rules-hint" id="scrimmageVariationHint"></p>
                 <div class="event-dialog-row scrimmage-pull-row">
-                    <span>First pull by</span>
+                    <span id="scrimmagePullLabel">First pull by</span>
                     <span class="scrimmage-pull-toggle" role="radiogroup" aria-label="Which squad pulls first">
                         <button type="button" class="scrimmage-pull-btn" data-squad="X"></button>
                         <button type="button" class="scrimmage-pull-btn" data-squad="Y"></button>
@@ -239,6 +248,8 @@ function openDialog(mode, team) {
         absent: new Set(),
         names: { ...DEFAULT_SQUAD_NAMES },
         pulling: 'X',
+        variation: 'standard',
+        twoPointPlays: false,
         busy: false,
         edit: null,
         justAdded: null,
@@ -260,6 +271,15 @@ function openDialog(mode, team) {
             state.pulling = btn.dataset.squad;
             renderNames();
         });
+    });
+    // Variation + two-point plays (store/scrimmageRules.js), new mode only.
+    modal.querySelector('#scrimmageVariation')?.addEventListener('change', (e) => {
+        state.variation = e.target.value;
+        renderNames();
+    });
+    modal.querySelector('#scrimmageTwoPoint')?.addEventListener('change', (e) => {
+        state.twoPointPlays = e.target.checked;
+        renderNames();
     });
     modal.querySelector('#scrimmageClearBtn').addEventListener('click', () => {
         state.assignment = new Map();
@@ -563,6 +583,16 @@ function renderNames() {
         btn.setAttribute('aria-checked', on ? 'true' : 'false');
         btn.setAttribute('role', 'radio');
     });
+    // Under a drill the pull toggle names who pulls EVERY point.
+    const variation = variationById(state.variation);
+    const pullLabel = modal.querySelector('#scrimmagePullLabel');
+    if (pullLabel) pullLabel.textContent = variation.fixedPuller ? 'Pulls every point' : 'First pull by';
+    const rulesHint = modal.querySelector('#scrimmageVariationHint');
+    if (rulesHint) {
+        rulesHint.textContent = (variation.id === 'standard' ? '' : `${variation.hint} `)
+            + (state.twoPointPlays ? TWO_POINT_HINT : '');
+        rulesHint.style.display = rulesHint.textContent ? '' : 'none';
+    }
     modal.querySelectorAll('.scrimmage-start-btn[data-squad]').forEach(btn => {
         btn.innerHTML = '<i class="fas fa-play"></i> ';
         btn.appendChild(document.createTextNode(`Start, tracking ${names[btn.dataset.squad]}`));
@@ -724,8 +754,11 @@ function startScrimmage(trackSquad) {
 
     try {
         const label = (state.modal.querySelector('#newScrimmageName')?.value || '').trim() || null;
+        const rules = normalizeRules({
+            variation: state.variation, twoPointPlays: state.twoPointPlays, puller: state.pulling,
+        });
         const games = createSquadGames(currentTeam, {
-            names, ids, label, pullingSquad: state.pulling, trackSquad,
+            names, ids, label, pullingSquad: state.pulling, trackSquad, rules,
         });
         const tracked = games[trackSquad];
         log(`🥏 Scrimmage created: ${names.X} vs ${names.Y} (${tracked.scrimmageId}); tracking ${names[trackSquad]}`);
@@ -758,9 +791,10 @@ function startScrimmage(trackSquad) {
  *          label: string|null, pullingSquad: 'X'|'Y', trackSquad: 'X'|'Y'}} spec
  * @returns {{X: Game, Y: Game}}
  */
-function createSquadGames(team, { names, ids, label, pullingSquad, trackSquad }) {
+function createSquadGames(team, { names, ids, label, pullingSquad, trackSquad, rules = null }) {
     const now = new Date();
     const scrimmageId = generateScrimmageId(now);
+    const scrimmageRules = normalizeRules(rules);
 
     // Legacy per-player counters, as startNewGame does before a game.
     team.teamRoster.forEach(player => { player.pointsPlayedPreviousGames = player.totalPointsPlayed; });
@@ -776,6 +810,9 @@ function createSquadGames(team, { names, ids, label, pullingSquad, trackSquad })
         // Squads are dealt by the coach, so no ratio rule applies to a squad-game.
         game.alternateGenderRatio = 'No';
         game.alternateGenderPulls = false;
+        // The same variation on both halves (store/scrimmageRules.js); each
+        // half reads its own side from it (fixedPointStart).
+        game.scrimmageRules = scrimmageRules ? { ...scrimmageRules } : null;
         game.id = generateGameId(game);
         games[squad] = game;
     });

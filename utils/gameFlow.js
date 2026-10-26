@@ -15,6 +15,7 @@
  * Unit tests: tests/unit/gameFlow.test.mjs.
  */
 import { classifyPoint } from './statAccumulator.js';
+import { pointValueOf } from '../store/scrimmageRules.js';
 
 const WE_WON = winner => winner === 'team';   // Role.TEAM; 'opponent' is theirs
 
@@ -93,12 +94,16 @@ function buildGameFlow(game) {
     let inProgress = false;
     ((game && game.points) || []).forEach((point, idx) => {
         if (!point || !point.winner) { inProgress = true; return; }
+        // A scrimmage drill rep nobody scored (store/scrimmageRules.js NO_SCORE)
+        // is a point on the chart with the margin unchanged.
+        const noScore = point.winner === 'none';
         const weWon = WE_WON(point.winner);
-        if (weWon) us++; else them++;
+        const value = pointValueOf(point);
+        if (weWon) us += value; else if (!noScore) them += value;
         const breaks = pointBreakEvents(point);
         points.push({
             idx, number: idx + 1,
-            winner: weWon ? 'us' : 'them',
+            winner: noScore ? 'none' : (weWon ? 'us' : 'them'),
             us, them, diff: us - them,
             startedOn: point.startingPosition === 'offense' ? 'O' : 'D',
             kind: classifyPoint(point),

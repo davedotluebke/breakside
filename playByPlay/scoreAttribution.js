@@ -11,9 +11,9 @@ import {
     buildPointPlayerLookup, playerStub,
 } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
-import { updateScore } from '../game/gameLogic.js';
-import { moveToNextPoint } from '../game/pointManagement.js';
+import { recordScore } from '../game/gameLogic.js';
 import { showControllerToast } from '../game/controllerState.js';
+import { twoPointPlaysEnabled } from '../store/scrimmageRules.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
 import { log } from '../utils/logger.js';
 
@@ -68,6 +68,12 @@ function setFlag(id, on) {
 function getFlag(id) {
     const btn = document.getElementById(id);
     return !!(btn && btn.classList.contains('selected'));
+}
+/** The two-point box, when its row is showing (scrimmage variations). */
+function getTwoPoint() {
+    const row = document.getElementById('twoPointRow');
+    const box = document.getElementById('twoPointCheck');
+    return !!(row && !row.hidden && box && box.checked);
 }
 
 /**
@@ -165,8 +171,10 @@ function initializeScoreAttributionDialog() {
             // also awards the defender's goal, updates the score, and advances
             // the point on a Callahan.
             const defender = selectedReceiver || selectedThrower || null;
+            const twoPoint = getTwoPoint();
             const callahanEvent = window.pbpPossession.createDefense(defender, {
                 Callahan: true,
+                twoPoint,
                 from: pendingFrom,
                 to: pendingTo
             });
@@ -177,8 +185,7 @@ function initializeScoreAttributionDialog() {
                 // behavior of still scoring + advancing on an unattributed
                 // Callahan (the button is normally only enabled with one
                 // player selected, so this is a rare fallback).
-                if (typeof updateScore === 'function') updateScore(Role.TEAM);
-                if (typeof moveToNextPoint === 'function') moveToNextPoint();
+                recordScore(Role.TEAM, { twoPoint });
             }
         });
     }
@@ -251,6 +258,13 @@ function showScoreAttributionDialog(opts) {
     setFlag('skyFlag', false);
     setFlag('layoutFlag', false);
     setFlag('hammerFlag', false);
+
+    // Two-point play: a scrimmage variation (store/scrimmageRules.js). The
+    // row shows only when the game's rules enable it; unticked every time.
+    const twoPointRow = document.getElementById('twoPointRow');
+    const twoPointCheck = document.getElementById('twoPointCheck');
+    if (twoPointRow) twoPointRow.hidden = !twoPointPlaysEnabled(currentGame());
+    if (twoPointCheck) twoPointCheck.checked = false;
 
     // Clear existing buttons
     throwerButtons.innerHTML = '';
@@ -535,6 +549,7 @@ function commitScoreAttribution() {
         sky: getFlag('skyFlag'),
         layout: getFlag('layoutFlag'),
         hammer: getFlag('hammerFlag'),
+        twoPoint: getTwoPoint(),
         from: pendingFrom,
         to: pendingTo
     };
@@ -585,9 +600,8 @@ function commitScoreAttribution() {
     selectedReceiver.goals = (selectedReceiver.goals || 0) + 1;
     if (typeof logEvent === 'function') logEvent(scoreEvent.summarize());
     if (window.narrationEventBus) window.narrationEventBus.publish('eventAdded', { event: scoreEvent });
-    updateScore(Role.TEAM);
     if (dialog) dialog.style.display = 'none';
-    moveToNextPoint();
+    recordScore(Role.TEAM, { twoPoint: opts.twoPoint });
 }
 
 /**

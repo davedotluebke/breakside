@@ -12,6 +12,7 @@
  *     point (game score, per-player point stats, point winner/timestamps)
  */
 import { Role, Throw, Defense, Other } from '../store/models.js';
+import { isScoringSide, pointValueOf } from '../store/scrimmageRules.js';
 
 /** A Throw with score_flag or a Defense with Callahan_flag scored a point. */
 function isScoreEvent(evt) {
@@ -55,6 +56,15 @@ function applyUndoToGame(game, deps) {
 
     if (!game || game.points.length === 0) return result;
     const point = game.points[game.points.length - 1];
+
+    // ── Branch 0: the opponent scored under a conversion rule (scrimmage
+    // variations) and must convert — their score is the last thing recorded
+    // (it leaves no event), so Undo takes it back and the point plays on.
+    if (!point.winner && point.pendingConversion === Role.OPPONENT) {
+        point.pendingConversion = null;
+        result.outcome = 'score-reverted';
+        return result;
+    }
 
     // ── Branch 1: scored point, but the last event isn't a scoring event —
     // revert only the score (handles "They Score" and "Skip" without event)
@@ -117,6 +127,9 @@ function applyUndoToGame(game, deps) {
         // If the undone event was a score, revert updateScore() changes
         if (point.winner && isScoreEvent(undoneEvent)) {
             revertPointScore(point);
+        } else if (isScoreEvent(undoneEvent) && point.pendingConversion === Role.TEAM) {
+            // Our score awaiting its conversion (scrimmage variations) — taken back.
+            point.pendingConversion = null;
         }
 
         // If the possession is now empty after undoing (e.g. pull was only
@@ -187,8 +200,8 @@ function applyUndoToGame(game, deps) {
                     decrementStat(player, 'pointsLost');
                 }
             });
-            // Decrement game score
-            game.scores[point.winner]--;
+            // Decrement game score (a no-score drill rep put nothing on it)
+            if (isScoringSide(point.winner)) game.scores[point.winner] -= pointValueOf(point);
         }
         game.points.pop();
         result.pointRemoved = true;

@@ -7,6 +7,10 @@
 import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
 import { currentTeam, currentEvent, saveAllTeamsData, getActiveRoster } from '../store/storage.js';
 import { isScrimmageGame } from '../store/scrimmage.js';
+import {
+    NO_SCORE, VARIATIONS, TWO_POINT_HINT, variationById, normalizeRules, gameRules,
+    conversionRule, scoreOutcome, turnoverOutcome, isScoringSide, pointValueOf,
+} from '../store/scrimmageRules.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import {
     currentGame, getLatestPoint, getActivePossession, getPlayerFromName,
@@ -155,11 +159,75 @@ function configureStartGameMode(midGame) {
         if (startButtons) startButtons.style.display = 'none';
         if (applyBtn) applyBtn.style.display = '';
         if (continueBtn) continueBtn.classList.remove('inactive');
+        fillScrimmageRulesSettings(game);
     } else {
         if (titleEl) titleEl.textContent = 'Start Game';
         if (startButtons) startButtons.style.display = '';
         if (applyBtn) applyBtn.style.display = 'none';
+        fillScrimmageRulesSettings(null);
     }
+}
+
+// ── Scrimmage variation controls on the Game Settings screen ──────────────
+// Shown for a squad-game only (store/scrimmageRules.js). Apply writes the
+// rules onto THIS half; the other coach sets theirs the same way (the New
+// Scrimmage dialog gives both halves the same rules to begin with).
+
+/** Fill (or hide) the #scrimmageRulesSettings block for the game. */
+function fillScrimmageRulesSettings(game) {
+    const block = document.getElementById('scrimmageRulesSettings');
+    if (!block) return;
+    const show = !!(game && isScrimmageGame(game));
+    block.style.display = show ? '' : 'none';
+    if (!show) return;
+
+    const rules = gameRules(game) || { variation: 'standard', twoPointPlays: false, puller: null };
+    const variationSel = document.getElementById('gameSettingsVariation');
+    if (variationSel) {
+        if (!variationSel.options.length) {
+            VARIATIONS.forEach(v => variationSel.add(new Option(v.label, v.id)));
+        }
+        variationSel.value = rules.variation;
+        variationSel.onchange = () => renderScrimmageRulesHint(game);
+    }
+    const twoPoint = document.getElementById('gameSettingsTwoPoint');
+    if (twoPoint) twoPoint.checked = rules.twoPointPlays;
+
+    // Squad names from this half's point of view: X and Y keep their keys.
+    const pullerSel = document.getElementById('gameSettingsPuller');
+    if (pullerSel) {
+        const names = game.scrimmageSquad === 'X'
+            ? { X: game.team, Y: game.opponent } : { X: game.opponent, Y: game.team };
+        pullerSel.innerHTML = '';
+        ['X', 'Y'].forEach(s => pullerSel.add(new Option(names[s], s)));
+        pullerSel.value = rules.puller || game.scrimmageSquad || 'X';
+    }
+    renderScrimmageRulesHint(game);
+}
+
+function renderScrimmageRulesHint(game) {
+    const variationSel = document.getElementById('gameSettingsVariation');
+    const def = variationById(variationSel && variationSel.value);
+    const hint = document.getElementById('gameSettingsVariationHint');
+    if (hint) hint.textContent = `${def.hint} ${TWO_POINT_HINT}`;
+    const pullerRow = document.getElementById('gameSettingsPullerRow');
+    if (pullerRow) pullerRow.style.display = def.fixedPuller ? '' : 'none';
+}
+
+/** Read the block back onto the game (no-op for a real game). */
+function readScrimmageRulesSettings(game) {
+    if (!game || !isScrimmageGame(game)) return;
+    const block = document.getElementById('scrimmageRulesSettings');
+    if (!block || block.style.display === 'none') return;
+    const variationSel = document.getElementById('gameSettingsVariation');
+    const twoPoint = document.getElementById('gameSettingsTwoPoint');
+    const pullerSel = document.getElementById('gameSettingsPuller');
+    game.scrimmageRules = normalizeRules({
+        variation: variationSel ? variationSel.value : 'standard',
+        twoPointPlays: !!(twoPoint && twoPoint.checked),
+        puller: pullerSel ? pullerSel.value : null,
+    });
+    document.dispatchEvent(new CustomEvent('breakside:scrimmage-rules-changed'));
 }
 
 /**
@@ -186,6 +254,8 @@ function applyGameSettingsToCurrentGame() {
         if (!isNaN(secs)) setCountdownSeconds(secs);
     }
 
+    readScrimmageRulesSettings(game);
+
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     if (typeof syncGameToCloud === 'function' && game.id) syncGameToCloud(game);
 }
@@ -197,8 +267,15 @@ document.getElementById('applyGameSettingsBtn')?.addEventListener('click', funct
     }
 });
 
-function updateScore(winner) {
-    if (winner !== Role.TEAM && winner !== Role.OPPONENT) {
+/**
+ * End the current point: `winner` ('team' | 'opponent', or NO_SCORE for a
+ * drill rep nobody scored) takes `value` points (1 ordinarily; 2 for a
+ * two-point play or a converted extra point; ignored for NO_SCORE). Every
+ * scoring surface reaches this through recordScore below, which applies the
+ * scrimmage variation first.
+ */
+function updateScore(winner, value = 1) {
+    if (winner !== Role.TEAM && winner !== Role.OPPONENT && winner !== NO_SCORE) {
         throw new Error("inactive role");
     }
 
@@ -226,10 +303,16 @@ function updateScore(winner) {
     point.clockStopped = null;
     point.endTimestamp = new Date();
     point.winner = winner; // Setting the winning team for the current point
-    currentGame().scores[winner]++;
+    point.pendingConversion = null;
+    point.pointValue = winner === NO_SCORE ? 0 : Math.max(0, Number(value) || 0);
+    if (winner !== NO_SCORE) currentGame().scores[winner] += point.pointValue;
 
     // Update event log
-    logEvent(`${point.winner} scores!`);
+    if (winner === NO_SCORE) {
+        logEvent('Point over — no score');
+    } else {
+        logEvent(`${point.winner} scores!${point.pointValue !== 1 ? ` (${point.pointValue} points)` : ''}`);
+    }
 
     // Update player stats for those who played this point (including players
     // substituted out mid-point). Membership-based: point.players holds names
@@ -247,6 +330,98 @@ function updateScore(winner) {
 
     summarizeGame();
     saveAllTeamsData(); // Save and Sync
+}
+
+// ── Scrimmage variations: the scoring entry points ────────────────────────
+// The decisions are pure (store/scrimmageRules.js); this is where they land
+// on the live point. Without rules on the game these reduce to the plain
+// updateScore + moveToNextPoint every surface used to call directly.
+
+/** "Dark" / "Light" in a scrimmage; the team and opponent names otherwise. */
+function sideName(game, side) {
+    return side === Role.TEAM ? (game.team || 'We') : (game.opponent || 'They');
+}
+
+function announceRulesState() {
+    // The Simple panel's Missed / No Score control follows the point state
+    // (game/scrimmageVariations.js listens). A CustomEvent rather than an
+    // import: the UI layer sits above this one.
+    document.dispatchEvent(new CustomEvent('breakside:scrimmage-rules-changed'));
+}
+
+/**
+ * Record a score by `scorer` ('team' | 'opponent') under the game's rules:
+ * ends the point and advances (the ordinary case), or — under a conversion
+ * rule — leaves the point live with the conversion pending. The two-point
+ * box counts on the score that ends the point.
+ * @returns {object} the scoreOutcome decision that was applied
+ */
+function recordScore(scorer, { twoPoint = false } = {}) {
+    const game = currentGame();
+    const point = getLatestPoint();
+    const outcome = scoreOutcome(game, point, scorer, { twoPoint });
+    if (outcome.action === 'pending') {
+        point.pendingConversion = outcome.by;
+        const who = sideName(game, outcome.by);
+        const text = conversionRule(game) === 'double'
+            ? `${who} scored — bring it out and score again to make it count`
+            : `${who} scored — bring it out for the extra point`;
+        if (outcome.voided) logEvent(`${sideName(game, outcome.voided)} missed the conversion — score voided`);
+        logEvent(text);
+        showControllerToast(text, 'info');
+        saveAllTeamsData();
+        announceRulesState();
+        return outcome;
+    }
+    if (outcome.missed && outcome.dropped) {
+        // Extra point: the other side scored while a conversion was pending.
+        const text = `${sideName(game, outcome.winner)}'s extra point missed — one point. `
+            + `${sideName(game, outcome.dropped)}'s score was not recorded: start the next point and record it there.`;
+        logEvent(text);
+        showControllerToast(text, 'warning');
+    } else if (outcome.converted) {
+        logEvent(`${sideName(game, outcome.winner)} converted`);
+    }
+    updateScore(outcome.winner, outcome.value);
+    moveToNextPoint();
+    return outcome;
+}
+
+/**
+ * The disc changed hands (any turnover, either side) — or the coach tapped
+ * Missed: a pending conversion is over, and under a possession limit the rep
+ * may be too. Called by the possession core after every turnover event, and
+ * by the Simple panel's manual control. No-op without rules.
+ * @returns {object} the turnoverOutcome decision that was applied
+ */
+function settlePointAfterTurnover() {
+    const game = currentGame();
+    const point = getLatestPoint();
+    if (!game || !point || point.winner) return { action: 'none' };
+    const outcome = turnoverOutcome(game, point);
+    if (outcome.action === 'clearPending') {
+        point.pendingConversion = null;
+        const text = `${sideName(game, outcome.missedBy)} missed the conversion — score voided, play on`;
+        logEvent(text);
+        showControllerToast(text, 'info');
+        saveAllTeamsData();
+        announceRulesState();
+    } else if (outcome.action === 'end') {
+        logEvent(outcome.dead
+            ? 'Possessions used up — point over'
+            : `${sideName(game, outcome.winner)} missed the extra point — one point`);
+        updateScore(outcome.winner, outcome.value);
+        moveToNextPoint();
+    }
+    return outcome;
+}
+
+/** The coach's call that the rep is over with nobody scoring (Simple mode has no turnover events). */
+function endPointWithoutScore() {
+    const point = getLatestPoint();
+    if (!point || point.winner) return;
+    updateScore(NO_SCORE, 0);
+    moveToNextPoint();
 }
 
 // Legacy end game, switch sides, timeout, halftime buttons removed —
@@ -365,16 +540,22 @@ let undoEmptyPointTimestamp = null;
  * Used by undoEvent() when reverting a scored point.
  */
 function revertPointScore(point) {
-    currentGame().scores[point.winner]--;
+    const game = currentGame();
+    if (isScoringSide(point.winner)) game.scores[point.winner] -= pointValueOf(point);
 
     // Decrement the per-player counters updateScore applied. Era-paired: the
     // point's playerStatsCounted marker picks membership vs legacy raw-name
     // matching so undo never decrements counters that were never incremented
     // (see game/pointStats.js).
-    revertPointPlayerStats(point, currentTeam.teamRoster, buildPointMembership(currentGame()));
+    revertPointPlayerStats(point, currentTeam.teamRoster, buildPointMembership(game));
 
+    // Under a conversion rule every scored point went through "conversion
+    // pending" first, so that is the state the point returns to.
+    point.pendingConversion = (conversionRule(game) && isScoringSide(point.winner)) ? point.winner : null;
     point.winner = "";
+    point.pointValue = 1;
     point.endTimestamp = null;
+    announceRulesState();
     point.startTimestamp = new Date();
 
     // late-bound back-edge (gameScreenSync lives "above" this layer); see
@@ -519,7 +700,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // --- ES-module exports ---
 export {
-    updateScore, summarizeGame, summarizeGameEntries, gameLogEntryOptions, downloadJSON, undoEvent,
+    updateScore, recordScore, settlePointAfterTurnover, endPointWithoutScore,
+    summarizeGame, summarizeGameEntries, gameLogEntryOptions, downloadJSON, undoEvent,
     configureStartGameMode, appVersion,
 };
 // window survivor: late-bound back-edge hook (called by ui/eventLogDisplay.js,

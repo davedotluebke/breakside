@@ -8,6 +8,7 @@
  * (game/selectLine.js, #panelActivePlayersTable).
  */
 import { currentGame } from '../utils/helpers.js';
+import { pointValueOf } from '../store/scrimmageRules.js';
 import { log } from '../utils/logger.js';
 
 let nextLineSelections = null;
@@ -22,8 +23,10 @@ let nextLineSelections = null;
 function getRunningScores() {
     const runningScores = { team: [0], opponent: [0] };
     currentGame().points.forEach(point => {
-        runningScores.team.push(point.winner === 'team' ? runningScores.team.slice(-1)[0] + 1 : runningScores.team.slice(-1)[0]);
-        runningScores.opponent.push(point.winner === 'opponent' ? runningScores.opponent.slice(-1)[0] + 1 : runningScores.opponent.slice(-1)[0]);
+        // pointValueOf: 1 ordinarily, 2 for a two-point play, 0 for a no-score rep
+        const value = pointValueOf(point);
+        runningScores.team.push(runningScores.team.slice(-1)[0] + (point.winner === 'team' ? value : 0));
+        runningScores.opponent.push(runningScores.opponent.slice(-1)[0] + (point.winner === 'opponent' ? value : 0));
     });
     return runningScores;
 }

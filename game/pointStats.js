@@ -53,9 +53,11 @@ function applyPointPlayerStats(point, roster, membership) {
             player.totalPointsPlayed++;
             player.consecutivePointsPlayed++;
             player.totalTimePlayed += timeCredited(point, player, membership);
+            // A scrimmage drill rep nobody scored (store/scrimmageRules.js
+            // NO_SCORE) is neither won nor lost.
             if (point.winner === Role.TEAM) {
                 player.pointsWon++;
-            } else {
+            } else if (point.winner === Role.OPPONENT) {
                 player.pointsLost++;
             }
         } else {                                    // the player did not play this point
@@ -91,7 +93,7 @@ function revertPointPlayerStats(point, roster, membership) {
             if (point.winner === Role.TEAM) {
                 player.pointsWon--;
                 if (player.pointsWon < 0) player.pointsWon = 0;
-            } else {
+            } else if (point.winner === Role.OPPONENT) {
                 player.pointsLost--;
                 if (player.pointsLost < 0) player.pointsLost = 0;
             }

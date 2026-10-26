@@ -280,16 +280,18 @@ function sumPlayerStats(psList) {
 /**
  * Classify a completed point from the tracking team's perspective.
  * @param {object} point - Point with startingPosition, winner, possessions
- * @returns {'break' | 'cleanHold' | 'hold' | 'broken' | 'opponentHold' | null}
+ * @returns {'break' | 'cleanHold' | 'hold' | 'broken' | 'opponentHold' | 'noScore' | null}
  *   - 'break'        — started on D, we scored
  *   - 'cleanHold'    — started on O, we scored with no turnovers
  *   - 'hold'         — started on O, we scored after at least one turnover
  *   - 'broken'       — started on O, opponent scored
  *   - 'opponentHold' — started on D, opponent scored (we failed to break)
+ *   - 'noScore'      — a scrimmage drill rep nobody scored (store/scrimmageRules.js)
  *   - null           — point is not yet complete or data is missing
  */
 function classifyPoint(point) {
     if (!point || !point.winner) return null;
+    if (point.winner === 'none') return 'noScore';
     const startedOnO = point.startingPosition === 'offense';
     const weWon = point.winner === 'team' || point.winner === Role.TEAM;
     const numPoss = (point.possessions || []).length;

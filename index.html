@@ -412,6 +412,22 @@
                         <label for="pointTimerInput">Seconds between points:</label>
                         <input type="number" id="pointTimerInput" value="90" min="0" max="300">
                     </div>
+                    <!-- Scrimmage variation (store/scrimmageRules.js): a squad-game's
+                         Game Settings only; filled by game/gameLogic.js. -->
+                    <div id="scrimmageRulesSettings" class="scrimmage-rules-settings" style="display: none;">
+                        <div class="start-game-field-row">
+                            <label for="gameSettingsVariation">Scrimmage variation:</label>
+                            <select id="gameSettingsVariation"></select>
+                        </div>
+                        <div class="start-game-field-row" id="gameSettingsPullerRow">
+                            <label for="gameSettingsPuller">Pulls every point:</label>
+                            <select id="gameSettingsPuller"></select>
+                        </div>
+                        <div class="start-game-field-row">
+                            <label><input type="checkbox" id="gameSettingsTwoPoint"> Two-point plays</label>
+                        </div>
+                        <p class="text-hint scrimmage-rules-hint" id="gameSettingsVariationHint"></p>
+                    </div>
                     <div class="start-game-buttons">
                         Start Game on: <button id="startGameOnOBtn">Offense</button>
                         <button id="startGameOnDBtn">Defense</button>
@@ -1049,6 +1065,13 @@
                 <div class="ha-line ha-huck-line">
                     <input type="checkbox" id="haHuckCheck" disabled>
                     <label for="haHuckCheck">Huck hockey assist?</label>
+                </div>
+                <!-- Scrimmage variations (store/scrimmageRules.js): shown only when
+                     the game's rules enable two-point plays; counts on the score
+                     that ends the point. -->
+                <div class="ha-line two-point-line" id="twoPointRow" hidden>
+                    <input type="checkbox" id="twoPointCheck">
+                    <label for="twoPointCheck">Two-point play</label>
                 </div>
             </div>
             <hr class="callahan-separator">

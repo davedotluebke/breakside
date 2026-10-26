@@ -2979,3 +2979,38 @@ body.panel-dragging .panel-content {
     display: none;
 }
 
+
+/* =============================================================================
+   NO SCORE / MISSED (scrimmage variations — game/scrimmageVariations.js)
+   A fourth main button, shown only when the game's rules call for it. Sized
+   like Key Play in the layouts that give Key Play its own size; the compact
+   and medium layouts share space among .pbp-main-buttons .pbp-btn already.
+   ============================================================================= */
+.pbp-btn-rules-end {
+    background: var(--surface-light);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+}
+
+.pbp-panel-content.layout-expanded .pbp-btn-rules-end {
+    width: 60%;
+    max-width: 280px;
+    padding: 18px 24px;
+    font-size: 1.2rem;
+    border-radius: 12px;
+}
+.pbp-panel-content.layout-expanded .pbp-btn-rules-end .pbp-btn-label { display: inline; }
+.pbp-panel-content.layout-expanded .pbp-btn-rules-end i { display: none; }
+
+.pbp-panel-content.layout-full .pbp-btn-rules-end {
+    width: 50%;
+    max-width: 200px;
+    min-height: 60px;
+    flex: 0.6 1 auto;
+    max-height: 120px;
+    padding: 12px 16px;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    border-radius: 20px;
+}
+.pbp-panel-content.layout-full .pbp-btn-rules-end .pbp-btn-label { display: inline; }
+.pbp-panel-content.layout-full .pbp-btn-rules-end i { display: none; }

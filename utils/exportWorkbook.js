@@ -211,7 +211,7 @@ function buildGameFlowSheet(game, { teamName, opponentName }) {
     rows.push(header);
     flow.points.forEach(p => {
         rows.push([
-            p.number, p.us, p.them, p.diff, p.winner === 'us' ? teamName : opponentName,
+            p.number, p.us, p.them, p.diff, p.winner === 'us' ? teamName : (p.winner === 'none' ? '' : opponentName),
             p.startedOn === 'O' ? 'Offense' : 'Defense', kindLabel[p.kind] || '',
             p.durationMs ? Math.round(p.durationMs / 600) / 100 : '',
             p.halftimeAfter ? 'Yes' : '', p.timeoutsUs || '', p.timeoutsThem || '',

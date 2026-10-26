@@ -39,8 +39,7 @@ import { saveAllTeamsData } from '../store/storage.js';
 import { touchPointClock, awaitingPull } from '../store/pointClock.js';
 import { getLatestPoint, getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
-import { updateScore } from '../game/gameLogic.js';
-import { moveToNextPoint } from '../game/pointManagement.js';
+import { recordScore, settlePointAfterTurnover } from '../game/gameLogic.js';
 import { ensurePossessionExists } from './keyPlayDialog.js';
 import {
     THROW_MODIFIERS, TURNOVER_MODIFIERS, DEFENSE_MODIFIERS, PICKUP_MODIFIERS, modifiersFor,
@@ -87,6 +86,12 @@ const pbpPossession = (function() {
                 if (!lastEvent.score_flag) {
                     mode = 'offense';
                     holder = lastEvent.receiver || null;
+                } else if (point.pendingConversion) {
+                    // Scored, but the point is live: a scrimmage conversion rule
+                    // (store/scrimmageRules.js) — we bring the disc out, nobody
+                    // holds it yet.
+                    mode = 'offense';
+                    holder = null;
                 }
             } else if (lastEvent.type === 'Turnover') {
                 mode = 'defense';
@@ -329,9 +334,10 @@ const pbpPossession = (function() {
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, opts.source);
 
-        if (evt.score_flag && typeof updateScore === 'function' && typeof Role !== 'undefined') {
-            updateScore(Role.TEAM);
-            if (typeof moveToNextPoint === 'function') moveToNextPoint();
+        if (evt.score_flag) {
+            // Ends the point and advances — or, under a scrimmage conversion
+            // rule, leaves it live with the conversion pending (gameLogic).
+            recordScore(Role.TEAM, { twoPoint: !!opts.twoPoint });
         }
 
         persist();
@@ -374,6 +380,9 @@ const pbpPossession = (function() {
         publishAdded(evt, opts.source);
 
         persist();
+        // Scrimmage variations: a pending conversion is missed, or a drill
+        // rep's possessions are used up (store/scrimmageRules.js).
+        settlePointAfterTurnover();
         return evt;
     }
 
@@ -407,13 +416,14 @@ const pbpPossession = (function() {
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, opts.source);
 
-        if (evt.Callahan_flag && typeof updateScore === 'function' && typeof Role !== 'undefined') {
+        if (evt.Callahan_flag) {
             if (defender) defender.goals = (defender.goals || 0) + 1;
-            updateScore(Role.TEAM);
-            if (typeof moveToNextPoint === 'function') moveToNextPoint();
+            recordScore(Role.TEAM, { twoPoint: !!opts.twoPoint });
         }
 
         persist();
+        // The opponent lost the disc: see createTurnover.
+        if (!evt.Callahan_flag) settlePointAfterTurnover();
         return evt;
     }
 

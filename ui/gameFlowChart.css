@@ -66,6 +66,7 @@
 .gf-pt-hold    { fill: var(--pbp-green-ink); stroke: var(--pbp-green-ink); }
 .gf-pt-broken  { fill: var(--pbp-red-ink);   stroke: var(--pbp-red-ink); }
 .gf-pt-opphold { fill: none;                 stroke: var(--text-faint); }
+.gf-pt-noscore { fill: none;                 stroke: var(--text-faint); stroke-dasharray: 2 2; }  /* a scrimmage drill rep nobody scored */
 .gf-pt-active  { stroke: var(--text-strong); stroke-width: 3; }
 /* invisible, generous hit area over each marker */
 .gf-hit { fill: none; pointer-events: all; cursor: pointer; }

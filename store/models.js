@@ -150,6 +150,9 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     this.scrimmageId = null;
     this.scrimmageSquad = null;   // 'X' | 'Y'
     this.scrimmageName = null;    // optional label the coach gave the scrimmage
+    // Scrimmage variation (store/scrimmageRules.js): { variation, twoPointPlays,
+    // puller } on a squad-game played under one; null otherwise.
+    this.scrimmageRules = null;
     this.points = [];  // An array of Point objects
     this.gameStartTimestamp = new Date();
     this.gameEndTimestamp = null;
@@ -804,7 +807,17 @@ class Point {
         this.possessions = [];
         this.players = playingPlayers;  // An array of player names who played the point
         this.startingPosition = startOn;  // Either 'offense' or 'defense'
-        this.winner = "";  // Either 'team' or 'opponent'
+        // 'team' or 'opponent' once scored; "" while live. 'none' (NO_SCORE in
+        // store/scrimmageRules.js) for a drill rep that ended with no score.
+        this.winner = "";
+        // Scrimmage variations (store/scrimmageRules.js). The side that has
+        // scored and must now convert under a double-score / extra-point
+        // rule, null otherwise; and the points the winner earned when the
+        // point ended (1 ordinarily, 2 for a two-point play or a converted
+        // extra point, 0 for a no-score rep). Both absent on stored points
+        // recorded before the fields existed.
+        this.pendingConversion = null;
+        this.pointValue = 1;
         this.startTimestamp = null;
         this.endTimestamp = null;
         this.totalPointTime = 0;  // Accumulated time tracking

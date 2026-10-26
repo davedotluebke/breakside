@@ -765,6 +765,34 @@ body.scrimmage-dialog-open {
     font-size: 0.95rem;
 }
 
+/* Scrimmage variation (store/scrimmageRules.js): "Variation [select] [ ] Two-point plays" */
+.scrimmage-rules-row {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+}
+
+.scrimmage-rules-row .event-dialog-select {
+    flex: 1 1 10em;
+    min-width: 0;
+}
+
+.scrimmage-two-point {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.scrimmage-two-point input {
+    margin: 0;
+}
+
+.scrimmage-rules-hint {
+    margin-top: 0.25rem;
+}
+
 .scrimmage-pull-toggle {
     display: inline-flex;
     border: 1px solid var(--border-strong);

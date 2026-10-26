@@ -19,8 +19,8 @@ import { buildGameFlow, describeGameFlow, formatDuration } from '../utils/gameFl
 import { buildConnections, buildConnectionMatrix } from '../utils/connections.js';
 import { escapeHtml } from '../utils/gameLogRenderer.js';
 
-const KIND_CLASS = { break: 'break', cleanHold: 'hold', hold: 'hold', broken: 'broken', opponentHold: 'opphold' };
-const KIND_LABEL = { break: 'Break', cleanHold: 'Clean hold', hold: 'Hold', broken: 'Broken', opponentHold: 'Their hold' };
+const KIND_CLASS = { break: 'break', cleanHold: 'hold', hold: 'hold', broken: 'broken', opponentHold: 'opphold', noScore: 'noscore' };
+const KIND_LABEL = { break: 'Break', cleanHold: 'Clean hold', hold: 'Hold', broken: 'Broken', opponentHold: 'Their hold', noScore: 'No score' };
 
 const CHART_H = 190;
 const PAD = { top: 24, right: 16, bottom: 28, left: 34 };

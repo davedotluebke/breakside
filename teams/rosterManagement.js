@@ -283,6 +283,7 @@ function teamGameLinePlusMinus(game, offense) {
     let points = 0;
     (game.points || []).forEach(point => {
         if (!point.winner) return; // skip in-progress points
+        if (point.winner === 'none') return; // a scrimmage drill rep nobody scored
         if ((point.startingPosition === 'offense') !== offense) return;
         points++;
         plusMinus += (point.winner === 'team' || point.winner === Role.TEAM) ? 1 : -1;

@@ -158,6 +158,7 @@ import './game/undoLogic.js';
 import './game/pointManagement.js';
 import { appVersion } from './game/gameLogic.js';
 import './game/controllerState.js';
+import './game/scrimmageVariations.js';
 import './game/shareGame.js';
 import './ui/hints.js';
 import './ui/standbyScreen.js';

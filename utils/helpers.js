@@ -5,6 +5,7 @@
 import { Gender, PlayerPosition, DefaultLine, UNKNOWN_PLAYER } from '../store/models.js';
 import { UNKNOWN_PLAYER_OBJ, currentTeam } from '../store/storage.js';
 import { playTimeFor } from '../store/pointPlayTime.js';
+import { fixedPointStart } from '../store/scrimmageRules.js';
 import { log } from './logger.js';
 
 /**
@@ -388,6 +389,10 @@ function formatPlayTime(totalTimePlayed) {
  */
 function determineStartingPosition() {
     if (!currentGame()) { log("Warning: No current game"); return 'offense'; }
+    // A scrimmage drill with a fixed puller (store/scrimmageRules.js) ignores
+    // who scored: the same squad pulls every point.
+    const fixed = fixedPointStart(currentGame());
+    if (fixed) return fixed;
     const flip = pos => (pos === 'offense') ? 'defense' : 'offense';
     let startPointOn = currentGame().startingPosition;
     // How the current period opened; the first period opens on the game's

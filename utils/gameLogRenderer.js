@@ -226,13 +226,20 @@ function buildGameLogEntries(game, {
         // if most recent event is a score, indicate which team scored
         const badgeLabel = scoreBadge ? scoreBadge(point) : null;
         const badgeSuffix = badgeLabel ? `  [${badgeLabel}]` : '';
+        // Scrimmage variations (store/scrimmageRules.js): a point is worth its
+        // pointValue (absent = 1) and a drill rep can end with nobody scoring.
+        const pointValue = Number.isFinite(Number(point.pointValue)) ? Number(point.pointValue) : 1;
+        const valueSuffix = pointValue !== 1 ? ` (${pointValue} points)` : '';
         if (point.winner === 'team') {
-            push('score', `${teamName} scores!${badgeSuffix} `, { pointIdx, at: pointEndAt, side: 'us' });
-            runningScoreUs++;
+            push('score', `${teamName} scores!${valueSuffix}${badgeSuffix} `, { pointIdx, at: pointEndAt, side: 'us' });
+            runningScoreUs += pointValue;
         }
         if (point.winner === 'opponent') {
-            push('score', `${opponentName} scores!${badgeSuffix} `, { pointIdx, at: pointEndAt, side: 'opp' });
-            runningScoreThem++;
+            push('score', `${opponentName} scores!${valueSuffix}${badgeSuffix} `, { pointIdx, at: pointEndAt, side: 'opp' });
+            runningScoreThem += pointValue;
+        }
+        if (point.winner === 'none') {
+            push('score', 'Point over — no score ', { pointIdx, at: pointEndAt, side: null });
         }
         if (point.winner) {
             push('currentscore', `Current score: ${teamName} ${runningScoreUs}, ${opponentName} ${runningScoreThem}`,

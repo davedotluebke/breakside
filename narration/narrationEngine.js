@@ -26,8 +26,7 @@ import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { buildPointPlayerLookup, currentGame, getLatestPoint, getPlayerFromName, pointHasPull } from '../utils/helpers.js';
 import { logEvent } from '../ui/eventLogDisplay.js';
 import { showControllerToast } from '../game/controllerState.js';
-import { updateScore } from '../game/gameLogic.js';
-import { moveToNextPoint } from '../game/pointManagement.js';
+import { recordScore, settlePointAfterTurnover } from '../game/gameLogic.js';
 import { ensurePossessionExists } from '../playByPlay/keyPlayDialog.js';
 import { closePullDialog } from '../playByPlay/pullDialog.js';
 import { touchPointClock } from '../store/pointClock.js';
@@ -314,10 +313,8 @@ Just listen. Transcription happens automatically.`;
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, provId);
 
-        if (evt.score_flag && typeof updateScore === 'function' && typeof Role !== 'undefined') {
-            updateScore(Role.TEAM);
-            if (typeof moveToNextPoint === 'function') moveToNextPoint();
-        }
+        // Scrimmage variations apply here as on every other surface (gameLogic).
+        if (evt.score_flag) recordScore(Role.TEAM);
         return evt;
     }
 
@@ -350,6 +347,7 @@ Just listen. Transcription happens automatically.`;
         provisionalEvents.push({ id: provId, event: evt, possession });
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, provId);
+        settlePointAfterTurnover();   // scrimmage variations (store/scrimmageRules.js)
         return evt;
     }
 
@@ -377,10 +375,11 @@ Just listen. Transcription happens automatically.`;
         if (typeof logEvent === 'function') logEvent(evt.summarize());
         publishAdded(evt, provId);
 
-        if (args.callahan && typeof updateScore === 'function' && typeof Role !== 'undefined') {
+        if (args.callahan) {
             if (defender) defender.goals = (defender.goals || 0) + 1;
-            updateScore(Role.TEAM);
-            if (typeof moveToNextPoint === 'function') moveToNextPoint();
+            recordScore(Role.TEAM);
+        } else {
+            settlePointAfterTurnover();   // scrimmage variations (store/scrimmageRules.js)
         }
         return evt;
     }
@@ -449,10 +448,7 @@ Just listen. Transcription happens automatically.`;
     }
 
     function applyOpponentScore() {
-        if (typeof updateScore === 'function' && typeof Role !== 'undefined') {
-            updateScore(Role.OPPONENT);
-            if (typeof moveToNextPoint === 'function') moveToNextPoint();
-        }
+        recordScore(Role.OPPONENT);   // scrimmage variations apply (gameLogic)
         if (typeof logEvent === 'function') logEvent('Opponent scored');
     }
 

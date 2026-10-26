@@ -375,6 +375,13 @@ function createPlayByPlayContent() {
                 <i class="fas fa-star"></i>
                 <span class="pbp-btn-label"><span class="pbp-label-word">Key</span> <span class="pbp-label-word">Play</span></span>
             </button>
+            <!-- Scrimmage variations (game/scrimmageVariations.js): "No Score"
+                 ends a drill rep whose possessions are used up; "Missed" says a
+                 pending conversion failed. Hidden unless the rules call for it. -->
+            <button id="pbpRulesEndBtn" class="pbp-btn pbp-btn-rules-end" style="display: none;">
+                <i class="fas fa-ban"></i>
+                <span class="pbp-btn-label" id="pbpRulesEndLabel">No Score</span>
+            </button>
         </div>
         <div class="pbp-action-buttons">
             <button id="pbpUndoBtn" class="pbp-btn pbp-btn-action" title="Undo">

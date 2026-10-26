@@ -20,6 +20,7 @@ import { getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { log } from '../utils/logger.js';
 import { normalizePointTimers } from './pointTimerNormalizer.js';
 import { isScrimmageGame, squadRoster } from './scrimmage.js';
+import { normalizeRules, recountScores } from './scrimmageRules.js';
 
 /**
  * Serialize an event to JSON
@@ -134,6 +135,8 @@ function serializeGame(game) {
         scrimmageId: game.scrimmageId || null,
         scrimmageSquad: game.scrimmageSquad || null,
         scrimmageName: game.scrimmageName || null,
+        // Scrimmage variation (store/scrimmageRules.js); null unless one is set
+        scrimmageRules: normalizeRules(game.scrimmageRules),
         team: game.team,       // Legacy: team name string
         opponent: game.opponent,
         startingPosition: game.startingPosition,
@@ -186,6 +189,9 @@ function serializeGame(game) {
             ...(point.clockPending ? { clockPending: true } : {}),
             // Clock stopped for a stoppage (timeout / injury / manual); same rule.
             ...(point.clockStopped ? { clockStopped: point.clockStopped } : {}),
+            // Scrimmage variations (store/scrimmageRules.js); same rule.
+            ...(point.pendingConversion ? { pendingConversion: point.pendingConversion } : {}),
+            ...(point.winner && point.pointValue !== 1 ? { pointValue: point.pointValue } : {}),
             substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
             substitutedInPlayers: point.substitutedInPlayers || [],    // Players subbed in mid-point
             playerStatsCounted: !!point.playerStatsCounted,  // live counters applied id-aware (pointStats.js)
@@ -509,6 +515,9 @@ function deserializePointsFromServer(pointsData) {
         point.lastPauseTime = pointData.lastPauseTime ? new Date(pointData.lastPauseTime) : null;
         point.clockPending = pointData.clockPending === true;  // absent on legacy data
         point.clockStopped = typeof pointData.clockStopped === 'string' ? pointData.clockStopped : null;
+        point.pendingConversion = (pointData.pendingConversion === Role.TEAM || pointData.pendingConversion === Role.OPPONENT)
+            ? pointData.pendingConversion : null;
+        point.pointValue = Number.isFinite(Number(pointData.pointValue)) ? Number(pointData.pointValue) : 1;
         point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
         point.substitutedInPlayers = pointData.substitutedInPlayers || [];    // Players subbed in mid-point
         point.playerStatsCounted = !!pointData.playerStatsCounted;  // absent on pre-fix data → legacy revert path
@@ -557,6 +566,7 @@ function deserializeGame(gameData) {
     game.scrimmageId = gameData.scrimmageId || null;
     game.scrimmageSquad = gameData.scrimmageSquad || null;
     game.scrimmageName = gameData.scrimmageName || null;
+    game.scrimmageRules = normalizeRules(gameData.scrimmageRules);
     game.gameStartTimestamp = new Date(gameData.gameStartTimestamp);
     game.gameEndTimestamp = gameData.gameEndTimestamp ? new Date(gameData.gameEndTimestamp) : null;
     
@@ -618,15 +628,10 @@ function deserializeGame(gameData) {
     // This fixes cases where gameData.scores is missing, incorrect, or out of sync
     const completedPoints = game.points.filter(p => p.winner);
     if (completedPoints.length > 0) {
-        const calculatedScores = { [Role.TEAM]: 0, [Role.OPPONENT]: 0 };
-        completedPoints.forEach(point => {
-            if (point.winner === Role.TEAM || point.winner === 'team') {
-                calculatedScores[Role.TEAM]++;
-            } else if (point.winner === Role.OPPONENT || point.winner === 'opponent') {
-                calculatedScores[Role.OPPONENT]++;
-            }
-        });
-        
+        // Each scored point counts its pointValue (2 for a two-point play or
+        // a converted extra point); a no-score drill rep counts nothing.
+        const calculatedScores = recountScores(completedPoints);
+
         // Use calculated scores if they differ from stored (or if stored are 0-0 with completed points)
         const storedTotal = (game.scores[Role.TEAM] || 0) + (game.scores[Role.OPPONENT] || 0);
         const calculatedTotal = calculatedScores[Role.TEAM] + calculatedScores[Role.OPPONENT];

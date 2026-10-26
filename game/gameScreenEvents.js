@@ -62,6 +62,7 @@ import {
 // so these back-edge imports are safe.
 import { showScoreAttributionDialog } from '../playByPlay/scoreAttribution.js';
 import { showKeyPlayDialog } from '../playByPlay/keyPlayDialog.js';
+import { recordOpponentScore, handlePbpRulesEnd, refreshRulesEndButton } from './scrimmageVariations.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -696,7 +697,13 @@ function wirePlayByPlayEvents() {
     if (keyPlayBtn) {
         keyPlayBtn.addEventListener('click', handlePbpKeyPlay);
     }
-    
+
+    // No Score / Missed (scrimmage variations)
+    const rulesEndBtn = document.getElementById('pbpRulesEndBtn');
+    if (rulesEndBtn) {
+        rulesEndBtn.addEventListener('click', handlePbpRulesEnd);
+    }
+
     // More button (toggle expanded row)
     const moreBtn = document.getElementById('pbpMoreBtn');
     if (moreBtn) {
@@ -829,17 +836,12 @@ function handlePbpTheyScore() {
     // attribution leaves the stoppage — and its toast — in place.
     stopPointTimeAccrual();
 
-    // Update score and move to next point
-    if (typeof updateScore === 'function' && typeof Role !== 'undefined') {
-        updateScore(Role.OPPONENT);
-    }
-    
-    if (typeof moveToNextPoint === 'function') {
-        moveToNextPoint();
-    }
-    
-    // Update UI for between-points state
-    transitionToBetweenPoints();
+    // Record the score under the game's rules (gameLogic.recordScore: ends
+    // the point and advances, or leaves a scrimmage conversion pending).
+    // With two-point plays on, a chooser asks how much the score was worth
+    // first (game/scrimmageVariations.js); moveToNextPoint already runs the
+    // between-points transition.
+    recordOpponentScore();
 }
 
 /**
@@ -2219,6 +2221,9 @@ function updatePlayByPlayPanelState() {
             btn.classList.toggle('disabled', !scoreButtonsEnabled);
         }
     });
+    // No Score / Missed (scrimmage variations): shown only when the rules
+    // call for it, enabled on the same terms as the score buttons.
+    refreshRulesEndButton(scoreButtonsEnabled);
     
     // Action buttons (Undo, Events, More) - enabled anytime if Active Coach
     const undoBtn = document.getElementById('pbpUndoBtn');
