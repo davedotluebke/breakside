@@ -35,6 +35,11 @@ function takeBackPendingScore(point) {
     }
 }
 
+/** An Other event recorded after its point ended (timeout, halftime, …). */
+function isBetweenPointsEvent(evt) {
+    return evt instanceof Other && !!evt.betweenPoints;
+}
+
 /** Decrement a stat, clamping at zero. */
 function decrementStat(obj, field) {
     if (!obj) return;
@@ -46,6 +51,12 @@ function decrementStat(obj, field) {
  * Undo the most recent event of the game's latest point.
  *
  * Branches (in order):
+ *  0. Scored point whose last event was recorded AFTER it ended (a
+ *     between-points timeout, halftime, switch sides or swap — flagged
+ *     `betweenPoints`): pop that event alone, leaving the score in place.
+ *     Between points, Undo means "undo the timeout", not "reopen the
+ *     point". An emptied possession is dropped (the handlers create one
+ *     to host the event when the point had none). → outcome 'event-undone'
  *  1. Scored point whose last event is NOT a scoring event ("They Score" /
  *     "Skip"): revert only the score; if the point has no possessions at
  *     all, remove the whole point. → outcome 'score-reverted'
@@ -80,6 +91,20 @@ function applyUndoToGame(game, deps) {
         takeBackPendingScore(point);
         result.outcome = 'score-reverted';
         return result;
+    }
+
+    // ── Branch 0, between points: an event recorded after the score on the
+    // finished point (timeout, halftime, …) — pop it alone
+    if (point.winner && point.possessions.length > 0) {
+        const lastPoss = getActivePossession(point);
+        const lastEvt = lastPoss.events[lastPoss.events.length - 1];
+        if (lastEvt && isBetweenPointsEvent(lastEvt)) {
+            lastPoss.events.pop();
+            if (lastPoss.events.length === 0) point.possessions.pop();
+            result.outcome = 'event-undone';
+            result.undoneEvent = lastEvt;
+            return result;
+        }
     }
 
     // ── Branch 1: scored point, but the last event isn't a scoring event —
@@ -232,4 +257,154 @@ function applyUndoToGame(game, deps) {
     return result;
 }
 
-export { applyUndoToGame };
+// =============================================================================
+// Undo across point boundaries ("Undo to here" from the Log tab)
+// =============================================================================
+//
+// A target names a position in the game's points → possessions → events
+// stream; undoToTarget runs the single-step tree above until that position
+// no longer exists, so every step is one the coach could have taken by hand
+// and the live counters are reverted exactly as a hand-chained Undo would.
+// The one thing the loop adds is backing out a started-but-empty point on
+// its own (the double-tap Undo does that interactively; here the confirm
+// before the batch already covered it).
+
+/**
+ * The undo target a game-log entry (utils/gameLogRenderer.js
+ * buildGameLogEntries) stands for, or null when the line is not a thing
+ * that can be undone (headers, the roster line, the period note, an
+ * inline turnover delimiter with no possession of its own yet).
+ *
+ * Kinds: 'event' (this event and everything after it), 'possession'
+ * (this possession's start and everything after it), 'score' (the point's
+ * score — a "They Score" / Skip with no scoring event — and everything
+ * after it), 'point' (the point itself, from its roster line).
+ */
+function targetFromEntry(entry) {
+    if (!entry || entry.pointIdx == null) return null;
+    switch (entry.kind) {
+        case 'event':
+        case 'after':
+            return { kind: 'event', pointIdx: entry.pointIdx, possIdx: entry.possIdx, eventIdx: entry.eventIdx };
+        case 'possession':
+            if (entry.possIdx == null) return null;
+            return { kind: 'possession', pointIdx: entry.pointIdx, possIdx: entry.possIdx };
+        case 'score':
+        case 'currentscore':
+            return { kind: 'score', pointIdx: entry.pointIdx };
+        case 'roster':
+        case 'pullnote':
+            return { kind: 'point', pointIdx: entry.pointIdx };
+        default:
+            return null;
+    }
+}
+
+/** Does the target position still exist in the game? */
+function targetPresent(game, target) {
+    const point = game.points[target.pointIdx];
+    if (!point) return false;
+    switch (target.kind) {
+        case 'point': return true;
+        case 'score': return !!point.winner;
+        case 'possession': return point.possessions.length > target.possIdx;
+        case 'event': {
+            const poss = point.possessions[target.possIdx];
+            return !!poss && poss.events.length > target.eventIdx;
+        }
+        default: return false;
+    }
+}
+
+/**
+ * Undo single steps until `target` is gone. Mutates the game like
+ * applyUndoToGame (same deps), no UI.
+ *
+ * @returns {{done: boolean, steps: number, eventsUndone: number,
+ *            pointsRemoved: number, targetPointReopened: boolean,
+ *            removedEvents: object[]}}
+ *   done=false means the loop stalled before reaching the target (a
+ *   malformed game); the caller should treat the game as changed anyway.
+ *   targetPointReopened: the target's point was scored and survives, live.
+ */
+function undoToTarget(game, target, deps, { maxSteps = 5000 } = {}) {
+    const summary = {
+        done: false, steps: 0, eventsUndone: 0, pointsRemoved: 0,
+        targetPointReopened: false, removedEvents: [],
+    };
+    if (!game || !target || !targetPresent(game, target)) { summary.done = true; return summary; }
+    const targetPoint = game.points[target.pointIdx];
+    const targetWasScored = !!targetPoint.winner;
+
+    while (summary.steps < maxSteps) {
+        if (!targetPresent(game, target)) { summary.done = true; break; }
+        const pointsBefore = game.points.length;
+        const r = applyUndoToGame(game, deps);
+        summary.steps++;
+        if (r.outcome === 'none') {
+            // A started point with nothing recorded: back it out, as the
+            // Undo double-tap would.
+            const last = game.points[game.points.length - 1];
+            if (last && !last.winner && last.possessions.length === 0) {
+                game.points.pop();
+                summary.pointsRemoved++;
+                continue;
+            }
+            break;   // stalled
+        }
+        if (r.outcome === 'event-undone') {
+            summary.eventsUndone++;
+            summary.removedEvents.push(r.undoneEvent);
+        } else if (r.outcome === 'score-reverted') {
+            summary.eventsUndone++;   // a "They Score" is one log line, one step
+        }
+        if (game.points.length < pointsBefore) summary.pointsRemoved++;
+    }
+    summary.targetPointReopened = summary.done && targetWasScored
+        && game.points.length > target.pointIdx && !game.points[target.pointIdx].winner;
+    return summary;
+}
+
+/**
+ * A throwaway copy of the game that applyUndoToGame can walk without
+ * touching real state: events keep their prototypes (the tree checks
+ * instanceof) but their player references become scratch objects, and the
+ * score/points arrays are copied. Deep enough for counting, nothing more.
+ */
+function cloneForSimulation(game) {
+    const PLAYER_FIELDS = ['thrower', 'receiver', 'defender', 'puller', 'assist', 'hockeyAssist'];
+    const cloneEvent = e => {
+        const c = Object.assign(Object.create(Object.getPrototypeOf(e)), e);
+        PLAYER_FIELDS.forEach(f => { if (c[f]) c[f] = {}; });
+        return c;
+    };
+    const clonePossession = p => Object.assign({}, p, { events: (p.events || []).map(cloneEvent) });
+    const clonePoint = pt => Object.assign({}, pt, {
+        possessions: (pt.possessions || []).map(clonePossession),
+        players: [...(pt.players || [])],
+        substitutedOutPlayers: [...(pt.substitutedOutPlayers || [])],
+        substitutedInPlayers: [...(pt.substitutedInPlayers || [])],
+    });
+    return {
+        points: (game.points || []).map(clonePoint),
+        scores: Object.assign({}, game.scores),
+    };
+}
+
+/**
+ * What undoToTarget would do, without doing it: the same loop on a
+ * simulation clone. For the confirm text.
+ */
+function describeUndoTo(game, target) {
+    const sim = cloneForSimulation(game);
+    return undoToTarget(sim, target, {
+        getActivePossession: point => point.possessions[point.possessions.length - 1],
+        resolvePlayer: () => null,
+        revertPointScore: point => {
+            if (isScoringSide(point.winner)) sim.scores[point.winner] -= pointValueOf(point);
+            point.winner = '';
+        },
+    });
+}
+
+export { applyUndoToGame, targetFromEntry, targetPresent, undoToTarget, describeUndoTo, isBetweenPointsEvent };

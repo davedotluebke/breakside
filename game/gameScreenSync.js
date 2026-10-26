@@ -6,7 +6,7 @@
  * at the end of updateControllerUI — replaced the old monkey-patch wrapper).
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
-import { Role } from '../store/models.js';
+import { Role, isTestGame } from '../store/models.js';
 import {
     currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
     saveAllTeamsData,
@@ -30,9 +30,13 @@ import { showSelectTeamScreen } from '../teams/teamList.js';
 import {
     getControllerState, getCurrentUserId, startControllerPolling,
     stopControllerPolling, showControllerToast, dismissToast, getPingGameStamp,
+    canEditPlayByPlay,
 } from './controllerState.js';
-import { summarizeGameEntries, gameLogEntryOptions } from './gameLogic.js';
+import {
+    summarizeGameEntries, gameLogEntryOptions, undoToLogEntry, describeUndoToEntry,
+} from './gameLogic.js';
 import { mountReplayView } from '../playByPlay/replayView.js';
+import { wireLongPress } from '../ui/longPress.js';
 import { currentGame as currentGameFn, getPlayerFromName } from '../utils/helpers.js';
 import { renderGameLogEntriesHTML, escapeHtml } from '../utils/gameLogRenderer.js';
 import {
@@ -152,6 +156,7 @@ function updateGameLogEvents() {
     // Format for display — line classification + escaping live in the shared
     // renderer (utils/gameLogRenderer.js, G6 merge).
     const html = renderGameLogEntriesHTML(entries, getTeamName());
+    wireLogUndoToHere(eventsEl);
 
     // Only update DOM and auto-scroll if content actually changed
     if (eventsEl.innerHTML !== html) {
@@ -163,6 +168,70 @@ function updateGameLogEvents() {
     } else {
         ensureReplayView();
     }
+}
+
+// ---------------------------------------------------------------------------
+// "Undo to here" — press and hold a Log line to undo its event and everything
+// after it, across point boundaries (ARCHITECTURE.md § Undo). Wired once on
+// the log container (delegated: the lines are rebuilt on every update) and
+// gated at press time: play-by-play control, a game still in progress, a
+// line that stands for something undoable, and the mic not recording (the
+// engine holds references into the possessions the batch would remove).
+// ---------------------------------------------------------------------------
+function wireLogUndoToHere(eventsEl) {
+    wireLongPress(eventsEl, { selector: '[data-entry]', onLongPress: onLogLineLongPress });
+}
+
+function micRecording() {
+    // The mic button carries the engine's phase as a class (as
+    // ui/standbyTimer.js reads it) — no import of narration/ from here.
+    const btn = document.getElementById('narrationMicBtn');
+    return !!btn && (btn.classList.contains('mic-recording') || btn.classList.contains('mic-connecting'));
+}
+
+/** The confirm question for an undo-to-here summary (gameLogic.describeUndoToEntry). */
+function undoToHereQuestion(d) {
+    const n = d.eventsUndone;
+    const p = d.pointNumber;
+    const last = p + d.pointsRemoved - (d.targetPointReopened ? 0 : 1);
+    let s = n > 0 ? `Undo ${n} event${n === 1 ? '' : 's'} back to here?` : 'Undo back to here?';
+    if (d.targetPointReopened) {
+        s += ` Point ${p} is reopened`;
+        if (d.pointsRemoved === 1) s += ` and point ${p + 1} is removed`;
+        else if (d.pointsRemoved > 1) s += ` and points ${p + 1}–${last} are removed`;
+        s += '.';
+    } else if (d.pointsRemoved === 1) {
+        s += ` Point ${p} is removed.`;
+    } else if (d.pointsRemoved > 1) {
+        s += ` Points ${p}–${last} are removed.`;
+    }
+    return s;
+}
+
+function onLogLineLongPress(lineEl) {
+    const game = currentGameFn();
+    if (!game || game.gameEndTimestamp) return;
+    if (typeof window.isViewer === 'function' && window.isViewer()) return;
+    const entryIndex = Number(lineEl.dataset.entry);
+    const d = describeUndoToEntry(entryIndex);
+    if (!d) return;   // a header, the period note — nothing to undo
+    if (!canEditPlayByPlay()) {
+        showControllerToast('You need Play-by-Play control to undo', 'warning');
+        return;
+    }
+    if (micRecording()) {
+        showControllerToast('Stop the mic before undoing past plays', 'warning');
+        return;
+    }
+    // The app's plain confirm() convention (as for End Game); skipped for
+    // test games (throwaway dev data).
+    if (!isTestGame(game) && !confirm(undoToHereQuestion(d))) return;
+    const r = undoToLogEntry(entryIndex);
+    if (!r) return;
+    const n = r.eventsUndone;
+    const what = r.targetPointReopened ? `point ${d.pointNumber} reopened`
+        : r.pointsRemoved ? `point ${d.pointNumber} removed` : `back to point ${d.pointNumber}`;
+    showControllerToast(`Undid ${n} event${n === 1 ? '' : 's'} — ${what}`, 'info');
 }
 
 // ---------------------------------------------------------------------------

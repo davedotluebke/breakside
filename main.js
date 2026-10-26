@@ -124,6 +124,7 @@ import { dismissSplash } from './ui/splashScreen.js';
 import './ui/activePlayersDisplay.js';
 import './ui/eventLogDisplay.js';
 import './ui/setPicker.js';
+import './ui/longPress.js';
 import './ui/gameFlowChart.js';
 import './ui/summarySections.js';
 import './ui/exportDialog.js';

@@ -2579,10 +2579,20 @@ body.mic-button-visible .panel-selectLine.tab-fullscreen .select-line-table-cont
     font-size: 0.85rem;
 }
 
-/* Individual event lines */
+/* Individual event lines. Press and hold one to undo back to it
+   (game/gameScreenSync.js wireLogUndoToHere): no text selection or OS
+   callout on the hold, and a tint while the finger is down. */
 .game-log-line {
     padding: 4px 0;
     border-bottom: 1px solid var(--border-lighter);
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    transition: background-color 0.15s;
+}
+
+.game-log-line.pressing {
+    background-color: var(--color-warning-surface);
 }
 
 .game-log-line:last-child {
