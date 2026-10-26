@@ -13,9 +13,9 @@ import assert from 'node:assert/strict';
 
 import {
     NO_SCORE, VARIATIONS, variationById, normalizeRules, gameRules,
-    possessionLimit, conversionRule, twoPointPlaysEnabled, fixedPointStart,
-    scoreOutcome, turnoverOutcome, manualEndControl,
-    pointValueOf, recountScores, rulesSummary,
+    possessionLimit, conversionRule, noPull, twoPointPlaysEnabled, fixedPointStart,
+    scoreOutcome, turnoverOutcome, bankOutcome, manualControls,
+    pendingValueOf, pointValueOf, recountScores, rulesSummary,
 } from '../../store/scrimmageRules.js';
 
 // ── fixtures ────────────────────────────────────────────────────────────
@@ -30,14 +30,15 @@ function squadGame(rules, squad = 'X') {
 }
 
 /** A live point with `n` possessions played and an optional pending conversion. */
-function point(n = 0, pendingConversion = null) {
-    return { winner: '', possessions: Array.from({ length: n }, () => ({ events: [] })), pendingConversion, pointValue: 1 };
+function point(n = 0, pendingConversion = null, pendingValue = 0) {
+    return { winner: '', possessions: Array.from({ length: n }, () => ({ events: [] })), pendingConversion, pendingValue, pointValue: 1 };
 }
 
 const TEN_PULL = { variation: 'tenPull', twoPointPlays: false, puller: 'X' };
 const TEN_POSS = { variation: 'tenPossession', twoPointPlays: false, puller: 'Y' };
 const DOUBLE = { variation: 'doubleScore', twoPointPlays: false, puller: null };
 const EXTRA = { variation: 'extraPoint', twoPointPlays: true, puller: null };
+const BANK = { variation: 'bank', twoPointPlays: false, puller: 'Y' };
 
 // ── the catalogue and normalization ─────────────────────────────────────
 
@@ -51,6 +52,8 @@ test('every variation has an id, a label and a hint; standard is the fallback', 
     assert.equal(variationById('tenPossession').possessionLimit, 1);
     assert.equal(variationById('doubleScore').conversion, 'double');
     assert.equal(variationById('extraPoint').conversion, 'extraPoint');
+    assert.equal(variationById('bank').conversion, 'bank');
+    assert.equal(variationById('bank').noPull, true);
 });
 
 test('normalizeRules: nothing varying from a plain scrimmage reads as null', () => {
@@ -79,6 +82,10 @@ test('knob readers: possession limit, conversion, two-point plays', () => {
     assert.equal(conversionRule(squadGame(DOUBLE)), 'double');
     assert.equal(conversionRule(squadGame(EXTRA)), 'extraPoint');
     assert.equal(conversionRule(squadGame(TEN_PULL)), null);
+    assert.equal(conversionRule(squadGame(BANK)), 'bank');
+    assert.equal(noPull(squadGame(BANK)), true);
+    assert.equal(noPull(squadGame(TEN_PULL)), false);
+    assert.equal(noPull(squadGame(null)), false);
     assert.equal(twoPointPlaysEnabled(squadGame(EXTRA)), true);
     assert.equal(twoPointPlaysEnabled(squadGame(DOUBLE)), false);
     assert.equal(twoPointPlaysEnabled({ scrimmageRules: { variation: 'standard', twoPointPlays: true } }), true);
@@ -98,6 +105,7 @@ test('fixedPointStart: null without a drill, a puller or a squad', () => {
     assert.equal(fixedPointStart(squadGame(null)), null);
     assert.equal(fixedPointStart(squadGame({ variation: 'tenPull', puller: null })), null);
     assert.equal(fixedPointStart({ scrimmageRules: TEN_PULL }), null, 'a real game has no squad');
+    assert.equal(fixedPointStart(squadGame(BANK)), null, 'Bank: whoever banked gives up the disc, the normal rule');
 });
 
 // ── scores ──────────────────────────────────────────────────────────────
@@ -117,19 +125,19 @@ test('scoreOutcome: a two-point play is worth two on the score that ends the poi
 
 test('scoreOutcome: double score — the first score is pending, the second ends the point for one', () => {
     const game = squadGame(DOUBLE);
-    assert.deepEqual(scoreOutcome(game, point(1), 'team'), { action: 'pending', by: 'team' });
+    assert.deepEqual(scoreOutcome(game, point(1), 'team'), { action: 'pending', by: 'team', value: 1 });
     assert.deepEqual(scoreOutcome(game, point(1, 'team'), 'team'), { action: 'end', winner: 'team', value: 1, converted: true });
     assert.deepEqual(scoreOutcome(game, point(2, 'opponent'), 'opponent'), { action: 'end', winner: 'opponent', value: 1, converted: true });
 });
 
 test('scoreOutcome: double score — the other side scoring while a conversion is pending voids it and goes pending itself', () => {
     const game = squadGame(DOUBLE);
-    assert.deepEqual(scoreOutcome(game, point(2, 'team'), 'opponent'), { action: 'pending', by: 'opponent', voided: 'team' });
+    assert.deepEqual(scoreOutcome(game, point(2, 'team'), 'opponent'), { action: 'pending', by: 'opponent', value: 1, voided: 'team' });
 });
 
 test('scoreOutcome: extra point — pending first, then two when converted', () => {
     const game = squadGame({ ...EXTRA, twoPointPlays: false });
-    assert.deepEqual(scoreOutcome(game, point(1), 'team'), { action: 'pending', by: 'team' });
+    assert.deepEqual(scoreOutcome(game, point(1), 'team'), { action: 'pending', by: 'team', value: 1 });
     assert.deepEqual(scoreOutcome(game, point(1, 'team'), 'team'), { action: 'end', winner: 'team', value: 2, converted: true });
 });
 
@@ -141,7 +149,7 @@ test('scoreOutcome: extra point — the other side scoring while a conversion is
 
 test('scoreOutcome: the two-point box only counts on the ending score', () => {
     const game = squadGame(EXTRA);
-    assert.deepEqual(scoreOutcome(game, point(1), 'team', { twoPoint: true }), { action: 'pending', by: 'team' });
+    assert.deepEqual(scoreOutcome(game, point(1), 'team', { twoPoint: true }), { action: 'pending', by: 'team', value: 1 });
     assert.deepEqual(scoreOutcome(game, point(1, 'team'), 'team', { twoPoint: true }),
         { action: 'end', winner: 'team', value: 3, converted: true });
 });
@@ -172,14 +180,58 @@ test('turnoverOutcome: a missed extra point ends the point at one', () => {
     assert.deepEqual(turnoverOutcome(squadGame(EXTRA), point(1, 'opponent')), { action: 'end', winner: 'opponent', value: 1, missed: true });
 });
 
-test('manualEndControl: Missed while a conversion is pending, No Score under a possession limit, else nothing', () => {
-    assert.equal(manualEndControl(squadGame(DOUBLE), point(1)), null);
-    assert.equal(manualEndControl(squadGame(DOUBLE), point(1, 'team')).kind, 'missed');
-    assert.equal(manualEndControl(squadGame(EXTRA), point(1, 'opponent')).kind, 'missed');
-    assert.equal(manualEndControl(squadGame(TEN_PULL), point(0)).kind, 'dead');
-    assert.equal(manualEndControl(squadGame(TEN_POSS), point(1)).kind, 'dead');
-    assert.equal(manualEndControl(squadGame(null), point(1)), null);
-    assert.equal(manualEndControl({ scrimmageRules: { variation: 'standard', twoPointPlays: true } }, point(1)), null);
+test('manualControls: Missed while a conversion is pending, No Score under a possession limit, else nothing', () => {
+    assert.deepEqual(manualControls(squadGame(DOUBLE), point(1)), []);
+    assert.equal(manualControls(squadGame(DOUBLE), point(1, 'team'))[0].kind, 'missed');
+    assert.equal(manualControls(squadGame(EXTRA), point(1, 'opponent'))[0].kind, 'missed');
+    assert.equal(manualControls(squadGame(TEN_PULL), point(0))[0].kind, 'dead');
+    assert.equal(manualControls(squadGame(TEN_POSS), point(1))[0].kind, 'dead');
+    assert.deepEqual(manualControls(squadGame(null), point(1)), []);
+    assert.deepEqual(manualControls({ scrimmageRules: { variation: 'standard', twoPointPlays: true } }, point(1)), []);
+});
+
+// ── Bank ────────────────────────────────────────────────────────────────
+
+test('Bank: every score adds to the run; the run is pending, never an end', () => {
+    const game = squadGame(BANK);
+    assert.deepEqual(scoreOutcome(game, point(1), 'team'), { action: 'pending', by: 'team', value: 1 });
+    assert.deepEqual(scoreOutcome(game, point(1, 'team', 1), 'team'), { action: 'pending', by: 'team', value: 2 });
+    assert.deepEqual(scoreOutcome(game, point(1, 'team', 2), 'team', { twoPoint: true }), { action: 'pending', by: 'team', value: 4 });
+    assert.deepEqual(scoreOutcome(game, point(1, 'opponent', 3), 'opponent'), { action: 'pending', by: 'opponent', value: 4 });
+});
+
+test('Bank: the other side scoring forfeits a run that was never recorded as turned over', () => {
+    const game = squadGame(BANK);
+    assert.deepEqual(scoreOutcome(game, point(2, 'team', 3), 'opponent'), { action: 'pending', by: 'opponent', value: 1, voided: 'team' });
+});
+
+test('Bank: a turnover forfeits the unbanked run and play goes on', () => {
+    const game = squadGame(BANK);
+    assert.deepEqual(turnoverOutcome(game, point(2, 'team', 3)), { action: 'clearPending', missedBy: 'team', forfeited: 3 });
+    assert.deepEqual(turnoverOutcome(game, point(2)), { action: 'none' }, 'nothing at stake');
+});
+
+test('bankOutcome: ends the point for the side with the run, worth the run', () => {
+    const game = squadGame(BANK);
+    assert.deepEqual(bankOutcome(game, point(1, 'team', 3)), { action: 'end', winner: 'team', value: 3, banked: true });
+    assert.deepEqual(bankOutcome(game, point(1, 'opponent', 1)), { action: 'end', winner: 'opponent', value: 1, banked: true });
+    assert.deepEqual(bankOutcome(game, point(1)), { action: 'none' }, 'nothing to bank');
+    assert.deepEqual(bankOutcome(squadGame(DOUBLE), point(1, 'team', 1)), { action: 'none' }, 'not a Bank game');
+});
+
+test('Bank: the manual controls are Bank N and Turnover while a run is pending', () => {
+    const game = squadGame(BANK);
+    assert.deepEqual(manualControls(game, point(1)), []);
+    const controls = manualControls(game, point(1, 'team', 3));
+    assert.deepEqual(controls.map(c => [c.kind, c.label]), [['bank', 'Bank 3'], ['turnover', 'Turnover']]);
+    assert.equal(manualControls(game, point(1, 'opponent', 1))[0].label, 'Bank 1');
+});
+
+test('pendingValueOf: the unbanked run, 1 under a conversion rule, 0 with nothing pending', () => {
+    assert.equal(pendingValueOf(point(1, 'team', 3)), 3);
+    assert.equal(pendingValueOf(point(1, 'team')), 1, 'absent on a conversion pending');
+    assert.equal(pendingValueOf(point(1)), 0);
+    assert.equal(pendingValueOf(null), 0);
 });
 
 // ── the scoreboard ──────────────────────────────────────────────────────
@@ -212,4 +264,5 @@ test('rulesSummary: one line per rule in play, empty without rules', () => {
     assert.equal(rulesSummary(squadGame(TEN_PULL)), 'Ten-pull drill · Squad X pulls');
     assert.equal(rulesSummary(squadGame(EXTRA)), 'Extra point · two-point plays');
     assert.equal(rulesSummary({ scrimmageRules: { variation: 'standard', twoPointPlays: true } }), 'two-point plays');
+    assert.equal(rulesSummary(squadGame(BANK)), 'Bank', 'no fixed puller to name');
 });

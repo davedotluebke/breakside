@@ -20,6 +20,21 @@ function isScoreEvent(evt) {
         (evt instanceof Defense && evt.Callahan_flag);
 }
 
+/**
+ * One pending score taken back (scrimmage variations): a conversion pending
+ * is simply cleared; an unbanked Bank run loses one point and is cleared at
+ * zero. A two-point score needs two taps, which the coach can see.
+ */
+function takeBackPendingScore(point) {
+    const left = (Number(point.pendingValue) || 1) - 1;
+    if (left > 0) {
+        point.pendingValue = left;
+    } else {
+        point.pendingConversion = null;
+        point.pendingValue = 0;
+    }
+}
+
 /** Decrement a stat, clamping at zero. */
 function decrementStat(obj, field) {
     if (!obj) return;
@@ -58,16 +73,19 @@ function applyUndoToGame(game, deps) {
     const point = game.points[game.points.length - 1];
 
     // ── Branch 0: the opponent scored under a conversion rule (scrimmage
-    // variations) and must convert — their score is the last thing recorded
-    // (it leaves no event), so Undo takes it back and the point plays on.
+    // variations) and must convert, or is on an unbanked run — their score
+    // is the last thing recorded (it leaves no event), so Undo takes it back
+    // (one score of the run at a time) and the point plays on.
     if (!point.winner && point.pendingConversion === Role.OPPONENT) {
-        point.pendingConversion = null;
+        takeBackPendingScore(point);
         result.outcome = 'score-reverted';
         return result;
     }
 
     // ── Branch 1: scored point, but the last event isn't a scoring event —
-    // revert only the score (handles "They Score" and "Skip" without event)
+    // revert only the score (handles "They Score" and "Skip" without event,
+    // and a Bank: the bank itself left no event, so the scoring throw before
+    // it stays)
     if (point.winner) {
         let hasScoreEvent = false;
         if (point.possessions.length > 0) {
@@ -76,7 +94,7 @@ function applyUndoToGame(game, deps) {
                 hasScoreEvent = isScoreEvent(lastPoss.events[lastPoss.events.length - 1]);
             }
         }
-        if (!hasScoreEvent) {
+        if (!hasScoreEvent || point.banked) {
             revertPointScore(point);
             // If the point has no possessions (e.g. "They Score" with no
             // prior events), remove the entire point and go between-points
@@ -128,8 +146,9 @@ function applyUndoToGame(game, deps) {
         if (point.winner && isScoreEvent(undoneEvent)) {
             revertPointScore(point);
         } else if (isScoreEvent(undoneEvent) && point.pendingConversion === Role.TEAM) {
-            // Our score awaiting its conversion (scrimmage variations) — taken back.
-            point.pendingConversion = null;
+            // Our score awaiting its conversion, or one score of our unbanked
+            // run (scrimmage variations) — taken back.
+            takeBackPendingScore(point);
         }
 
         // If the possession is now empty after undoing (e.g. pull was only

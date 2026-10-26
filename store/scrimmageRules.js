@@ -19,9 +19,14 @@
  * Two Point fields carry the variation state:
  *   point.pendingConversion  'team' | 'opponent' | null — the side that has
  *                            scored and must now convert (conversion rules).
+ *   point.pendingValue       the points that side has at stake: 1 under a
+ *                            conversion rule; the unbanked run under Bank.
  *   point.pointValue         the points the winner earned when the point
  *                            ended (1 ordinarily; 2 for a two-point play or
- *                            a converted extra point; 0 for NO_SCORE).
+ *                            a converted extra point; the banked run; 0 for
+ *                            NO_SCORE).
+ *   point.banked             true when the point ended on a Bank — nothing
+ *                            on the event stream marks it, so Undo needs this.
  *
  * See ARCHITECTURE.md § Scrimmage variations; tests/unit/scrimmageRules.test.mjs.
  */
@@ -39,7 +44,13 @@ const NO_SCORE = 'none';
  *                    brings the disc out and scores again; a turn voids it
  *                    and play goes on. 'extraPoint' — a score counts for one
  *                    and the scoring squad gets one more possession worth a
- *                    second point; the point ends either way.
+ *                    second point; the point ends either way. 'bank' — a
+ *                    score goes onto the scoring squad's unbanked run and
+ *                    they choose: bank it (the point ends, the run is theirs,
+ *                    the other squad takes the disc with no pull) or press on
+ *                    for more; a turn forfeits the run and play goes on
+ *   noPull           no point starts with a pull: the side on offense simply
+ *                    has the disc (Bank: from outside the endzone)
  */
 const VARIATIONS = [
     {
@@ -66,6 +77,12 @@ const VARIATIONS = [
         id: 'extraPoint', label: 'Extra point', conversion: 'extraPoint',
         hint: 'A score counts for one. The scoring squad then brings the disc out for one more '
             + 'possession worth a second point; the point ends either way.',
+    },
+    {
+        id: 'bank', label: 'Bank', conversion: 'bank', noPull: true,
+        hint: 'One squad has the disc, no pull. Each score adds to their unbanked run; after it they '
+            + 'choose to bank the run (the other squad then takes the disc) or press on for more. '
+            + 'A turn forfeits the unbanked run and the other squad plays on.',
     },
 ];
 
@@ -108,7 +125,13 @@ function possessionLimit(game) {
     return (def && def.possessionLimit) || null;
 }
 
-/** 'double' | 'extraPoint' | null */
+/** True when no point starts with a pull (Bank). */
+function noPull(game) {
+    const def = definitionOf(game);
+    return !!(def && def.noPull);
+}
+
+/** 'double' | 'extraPoint' | 'bank' | null */
 function conversionRule(game) {
     const def = definitionOf(game);
     return (def && def.conversion) || null;
@@ -135,28 +158,48 @@ function fixedPointStart(game) {
  * The decision for a score by `scorer` ('team' | 'opponent') in the current
  * point, with the two-point box ticked or not.
  *   { action: 'end', winner, value }        the point is over, winner scores value
- *   { action: 'pending', by, voided? }      the scorer must now convert; `voided`
- *                                           names a side whose own pending score
- *                                           this one wiped (double score)
+ *   { action: 'pending', by, value, voided? } the scorer must now convert (value 1),
+ *                                           or under Bank has `value` unbanked;
+ *                                           `voided` names a side whose own
+ *                                           pending score this one wiped (double
+ *                                           score, or a Bank run that was never
+ *                                           recorded as turned over)
  *   { action: 'end', winner, value, missed: true, dropped }
  *                                           extra point: the other side scored while
  *                                           a conversion was pending, so the pending
  *                                           side's point ends at one and the new
  *                                           score (`dropped`) is not recorded — the
  *                                           coach should have tapped the miss first
- * The two-point bonus is read on the score that ends the point only.
+ * Under a conversion rule the two-point bonus is read on the score that
+ * ends the point only; under Bank every score adds 1 + bonus to the run.
  */
 function scoreOutcome(game, point, scorer, { twoPoint = false } = {}) {
     const bonus = twoPoint ? 1 : 0;
     const conversion = conversionRule(game);
     const pending = (point && point.pendingConversion) || null;
     if (!conversion) return { action: 'end', winner: scorer, value: 1 + bonus };
-    if (!pending) return { action: 'pending', by: scorer };
+    if (conversion === 'bank') {
+        const run = pending === scorer ? pendingValueOf(point) : 0;
+        const out = { action: 'pending', by: scorer, value: run + 1 + bonus };
+        if (pending && pending !== scorer) out.voided = pending;
+        return out;
+    }
+    if (!pending) return { action: 'pending', by: scorer, value: 1 };
     if (pending === scorer) {
         return { action: 'end', winner: scorer, value: (conversion === 'extraPoint' ? 2 : 1) + bonus, converted: true };
     }
-    if (conversion === 'double') return { action: 'pending', by: scorer, voided: pending };
+    if (conversion === 'double') return { action: 'pending', by: scorer, value: 1, voided: pending };
     return { action: 'end', winner: pending, value: 1, missed: true, dropped: scorer };
+}
+
+/**
+ * Bank the unbanked run: the point ends for the side with the run.
+ *   { action: 'end', winner, value, banked: true } | { action: 'none' }
+ */
+function bankOutcome(game, point) {
+    const pending = (point && point.pendingConversion) || null;
+    if (conversionRule(game) !== 'bank' || !pending) return { action: 'none' };
+    return { action: 'end', winner: pending, value: pendingValueOf(point), banked: true };
 }
 
 /**
@@ -165,6 +208,7 @@ function scoreOutcome(game, point, scorer, { twoPoint = false } = {}) {
  * over, and under a possession limit the rep may be too.
  *   { action: 'none' }
  *   { action: 'clearPending', missedBy }   double score: the score is void, play on
+ *   { action: 'clearPending', missedBy, forfeited }  Bank: the unbanked run is lost, play on
  *   { action: 'end', winner, value: 1, missed: true }  extra point: one point, point over
  *   { action: 'end', winner: NO_SCORE, value: 0, dead: true }  possessions used up
  */
@@ -172,6 +216,7 @@ function turnoverOutcome(game, point) {
     const conversion = conversionRule(game);
     const pending = (point && point.pendingConversion) || null;
     if (conversion && pending) {
+        if (conversion === 'bank') return { action: 'clearPending', missedBy: pending, forfeited: pendingValueOf(point) };
         return conversion === 'double'
             ? { action: 'clearPending', missedBy: pending }
             : { action: 'end', winner: pending, value: 1, missed: true };
@@ -182,20 +227,45 @@ function turnoverOutcome(game, point) {
     return { action: 'none' };
 }
 
-/** Whether the coach needs a manual "no score" / "missed" control right now. */
-function manualEndControl(game, point) {
-    if (point && point.pendingConversion && conversionRule(game)) {
-        return { kind: 'missed', label: 'Missed', title: 'The conversion was missed' };
+/**
+ * The manual controls the coach needs right now (Simple mode records no
+ * turnovers, so these are its only way to say so), in display order:
+ *   bank      Bank the unbanked run (Bank, a run pending)
+ *   turnover  the run was turned over and forfeited (Bank, a run pending)
+ *   missed    the conversion was missed (double score / extra point, pending)
+ *   dead      the possessions are used up, no score (possession limit)
+ * @returns {Array<{kind: string, label: string, title: string}>}
+ */
+function manualControls(game, point) {
+    const conversion = conversionRule(game);
+    const pending = !!(point && point.pendingConversion);
+    if (conversion === 'bank') {
+        if (!pending) return [];
+        const n = pendingValueOf(point);
+        return [
+            { kind: 'bank', label: `Bank ${n}`, title: `Bank the ${n} unbanked point${n === 1 ? '' : 's'}: the point ends, the other squad takes the disc` },
+            { kind: 'turnover', label: 'Turnover', title: `The run was turned over: the ${n} unbanked point${n === 1 ? '' : 's'} are forfeited, play on` },
+        ];
+    }
+    if (conversion && pending) {
+        return [{ kind: 'missed', label: 'Missed', title: 'The conversion was missed' }];
     }
     if (possessionLimit(game)) {
-        return { kind: 'dead', label: 'No Score', title: 'The possessions are used up: end the point with no score' };
+        return [{ kind: 'dead', label: 'No Score', title: 'The possessions are used up: end the point with no score' }];
     }
-    return null;
+    return [];
 }
 
 /** True for the two sides that can hold the disc. */
 function isScoringSide(winner) {
     return winner === Role.TEAM || winner === Role.OPPONENT;
+}
+
+/** What the pending side has at stake: the unbanked run under Bank, 1 under a conversion rule. */
+function pendingValueOf(point) {
+    if (!point || !point.pendingConversion) return 0;
+    const v = Number(point.pendingValue);
+    return Number.isFinite(v) && v > 0 ? v : 1;
 }
 
 /** The points an ended point put on the board (0 for NO_SCORE, 1 by default). */
@@ -236,7 +306,7 @@ function rulesSummary(game, squadNames) {
 export {
     NO_SCORE, VARIATIONS, TWO_POINT_HINT,
     variationById, normalizeRules, gameRules,
-    possessionLimit, conversionRule, twoPointPlaysEnabled, fixedPointStart,
-    scoreOutcome, turnoverOutcome, manualEndControl,
-    isScoringSide, pointValueOf, recountScores, rulesSummary,
+    possessionLimit, conversionRule, noPull, twoPointPlaysEnabled, fixedPointStart,
+    scoreOutcome, turnoverOutcome, bankOutcome, manualControls,
+    isScoringSide, pendingValueOf, pointValueOf, recountScores, rulesSummary,
 };

@@ -191,7 +191,9 @@ function serializeGame(game) {
             ...(point.clockStopped ? { clockStopped: point.clockStopped } : {}),
             // Scrimmage variations (store/scrimmageRules.js); same rule.
             ...(point.pendingConversion ? { pendingConversion: point.pendingConversion } : {}),
+            ...(point.pendingConversion && point.pendingValue ? { pendingValue: point.pendingValue } : {}),
             ...(point.winner && point.pointValue !== 1 ? { pointValue: point.pointValue } : {}),
+            ...(point.banked ? { banked: true } : {}),
             substitutedOutPlayers: point.substitutedOutPlayers || [],  // Players subbed out mid-point
             substitutedInPlayers: point.substitutedInPlayers || [],    // Players subbed in mid-point
             playerStatsCounted: !!point.playerStatsCounted,  // live counters applied id-aware (pointStats.js)
@@ -517,7 +519,9 @@ function deserializePointsFromServer(pointsData) {
         point.clockStopped = typeof pointData.clockStopped === 'string' ? pointData.clockStopped : null;
         point.pendingConversion = (pointData.pendingConversion === Role.TEAM || pointData.pendingConversion === Role.OPPONENT)
             ? pointData.pendingConversion : null;
+        point.pendingValue = Number.isFinite(Number(pointData.pendingValue)) ? Number(pointData.pendingValue) : 0;
         point.pointValue = Number.isFinite(Number(pointData.pointValue)) ? Number(pointData.pointValue) : 1;
+        point.banked = pointData.banked === true;
         point.substitutedOutPlayers = pointData.substitutedOutPlayers || [];  // Players subbed out mid-point
         point.substitutedInPlayers = pointData.substitutedInPlayers || [];    // Players subbed in mid-point
         point.playerStatsCounted = !!pointData.playerStatsCounted;  // absent on pre-fix data → legacy revert path

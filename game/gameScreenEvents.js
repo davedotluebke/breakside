@@ -62,7 +62,7 @@ import {
 // so these back-edge imports are safe.
 import { showScoreAttributionDialog } from '../playByPlay/scoreAttribution.js';
 import { showKeyPlayDialog } from '../playByPlay/keyPlayDialog.js';
-import { recordOpponentScore, handlePbpRulesEnd, refreshRulesEndButton } from './scrimmageVariations.js';
+import { recordOpponentScore, handlePbpRulesControl, refreshRulesButtons } from './scrimmageVariations.js';
 import { log } from '../utils/logger.js';
 
 // =============================================================================
@@ -698,11 +698,11 @@ function wirePlayByPlayEvents() {
         keyPlayBtn.addEventListener('click', handlePbpKeyPlay);
     }
 
-    // No Score / Missed (scrimmage variations)
-    const rulesEndBtn = document.getElementById('pbpRulesEndBtn');
-    if (rulesEndBtn) {
-        rulesEndBtn.addEventListener('click', handlePbpRulesEnd);
-    }
+    // Bank / Turnover / Missed / No Score (scrimmage variations)
+    ['pbpRulesBankBtn', 'pbpRulesEndBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', () => handlePbpRulesControl(btn));
+    });
 
     // More button (toggle expanded row)
     const moreBtn = document.getElementById('pbpMoreBtn');
@@ -2221,9 +2221,9 @@ function updatePlayByPlayPanelState() {
             btn.classList.toggle('disabled', !scoreButtonsEnabled);
         }
     });
-    // No Score / Missed (scrimmage variations): shown only when the rules
-    // call for it, enabled on the same terms as the score buttons.
-    refreshRulesEndButton(scoreButtonsEnabled);
+    // Bank / Turnover / Missed / No Score (scrimmage variations): shown only
+    // when the rules call for them, enabled on the same terms as the score buttons.
+    refreshRulesButtons(scoreButtonsEnabled);
     
     // Action buttons (Undo, Events, More) - enabled anytime if Active Coach
     const undoBtn = document.getElementById('pbpUndoBtn');

@@ -817,7 +817,9 @@ class Point {
         // extra point, 0 for a no-score rep). Both absent on stored points
         // recorded before the fields existed.
         this.pendingConversion = null;
+        this.pendingValue = 0;   // what the pending side has at stake (the unbanked run under Bank)
         this.pointValue = 1;
+        this.banked = false;     // the point ended on a Bank (no event marks it; Undo needs this)
         this.startTimestamp = null;
         this.endTimestamp = null;
         this.totalPointTime = 0;  // Accumulated time tracking

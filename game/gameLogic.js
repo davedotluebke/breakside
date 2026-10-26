@@ -9,7 +9,8 @@ import { currentTeam, currentEvent, saveAllTeamsData, getActiveRoster } from '..
 import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     NO_SCORE, VARIATIONS, TWO_POINT_HINT, variationById, normalizeRules, gameRules,
-    conversionRule, scoreOutcome, turnoverOutcome, isScoringSide, pointValueOf,
+    conversionRule, scoreOutcome, turnoverOutcome, bankOutcome, isScoringSide,
+    pendingValueOf, pointValueOf,
 } from '../store/scrimmageRules.js';
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import {
@@ -274,7 +275,7 @@ document.getElementById('applyGameSettingsBtn')?.addEventListener('click', funct
  * scoring surface reaches this through recordScore below, which applies the
  * scrimmage variation first.
  */
-function updateScore(winner, value = 1) {
+function updateScore(winner, value = 1, { banked = false } = {}) {
     if (winner !== Role.TEAM && winner !== Role.OPPONENT && winner !== NO_SCORE) {
         throw new Error("inactive role");
     }
@@ -304,6 +305,8 @@ function updateScore(winner, value = 1) {
     point.endTimestamp = new Date();
     point.winner = winner; // Setting the winning team for the current point
     point.pendingConversion = null;
+    point.pendingValue = 0;
+    point.banked = !!banked;
     point.pointValue = winner === NO_SCORE ? 0 : Math.max(0, Number(value) || 0);
     if (winner !== NO_SCORE) currentGame().scores[winner] += point.pointValue;
 
@@ -342,11 +345,12 @@ function sideName(game, side) {
     return side === Role.TEAM ? (game.team || 'We') : (game.opponent || 'They');
 }
 
-function announceRulesState() {
-    // The Simple panel's Missed / No Score control follows the point state
+function announceRulesState(detail = {}) {
+    // The Simple panel's Bank / Missed / No Score controls follow the point
+    // state, and a Bank score opens the bank-or-press chooser
     // (game/scrimmageVariations.js listens). A CustomEvent rather than an
     // import: the UI layer sits above this one.
-    document.dispatchEvent(new CustomEvent('breakside:scrimmage-rules-changed'));
+    document.dispatchEvent(new CustomEvent('breakside:scrimmage-rules-changed', { detail }));
 }
 
 /**
@@ -361,16 +365,30 @@ function recordScore(scorer, { twoPoint = false } = {}) {
     const point = getLatestPoint();
     const outcome = scoreOutcome(game, point, scorer, { twoPoint });
     if (outcome.action === 'pending') {
+        const rule = conversionRule(game);
+        if (outcome.voided) {
+            logEvent(rule === 'bank'
+                ? `${sideName(game, outcome.voided)}'s unbanked run forfeited`
+                : `${sideName(game, outcome.voided)} missed the conversion — score voided`);
+        }
         point.pendingConversion = outcome.by;
+        point.pendingValue = outcome.value || 1;
+        // The score handlers fold the running segment and null startTimestamp
+        // before calling here (they assume the point ends); it plays on, so
+        // the clock runs again — unless a stoppage holds it.
+        if (point.startTimestamp === null && !point.clockStopped && !point.clockPending) {
+            point.startTimestamp = new Date();
+        }
         const who = sideName(game, outcome.by);
-        const text = conversionRule(game) === 'double'
-            ? `${who} scored — bring it out and score again to make it count`
-            : `${who} scored — bring it out for the extra point`;
-        if (outcome.voided) logEvent(`${sideName(game, outcome.voided)} missed the conversion — score voided`);
+        const text = rule === 'bank'
+            ? `${who} scored — ${point.pendingValue} unbanked: bank or press on?`
+            : rule === 'double'
+                ? `${who} scored — bring it out and score again to make it count`
+                : `${who} scored — bring it out for the extra point`;
         logEvent(text);
         showControllerToast(text, 'info');
         saveAllTeamsData();
-        announceRulesState();
+        announceRulesState({ reason: 'score', by: outcome.by });
         return outcome;
     }
     if (outcome.missed && outcome.dropped) {
@@ -401,7 +419,10 @@ function settlePointAfterTurnover() {
     const outcome = turnoverOutcome(game, point);
     if (outcome.action === 'clearPending') {
         point.pendingConversion = null;
-        const text = `${sideName(game, outcome.missedBy)} missed the conversion — score voided, play on`;
+        point.pendingValue = 0;
+        const text = outcome.forfeited !== undefined
+            ? `${sideName(game, outcome.missedBy)} turned it over — ${outcome.forfeited} unbanked point${outcome.forfeited === 1 ? '' : 's'} forfeited, play on`
+            : `${sideName(game, outcome.missedBy)} missed the conversion — score voided, play on`;
         logEvent(text);
         showControllerToast(text, 'info');
         saveAllTeamsData();
@@ -413,6 +434,19 @@ function settlePointAfterTurnover() {
         updateScore(outcome.winner, outcome.value);
         moveToNextPoint();
     }
+    return outcome;
+}
+
+/** Bank the unbanked run (Bank): the point ends for the side with the run, which the other squad then takes the disc from. */
+function bankPendingPoints() {
+    const game = currentGame();
+    const point = getLatestPoint();
+    if (!game || !point || point.winner) return { action: 'none' };
+    const outcome = bankOutcome(game, point);
+    if (outcome.action !== 'end') return outcome;
+    logEvent(`${sideName(game, outcome.winner)} banks ${outcome.value}`);
+    updateScore(outcome.winner, outcome.value, { banked: true });
+    moveToNextPoint();
     return outcome;
 }
 
@@ -550,8 +584,12 @@ function revertPointScore(point) {
     revertPointPlayerStats(point, currentTeam.teamRoster, buildPointMembership(game));
 
     // Under a conversion rule every scored point went through "conversion
-    // pending" first, so that is the state the point returns to.
-    point.pendingConversion = (conversionRule(game) && isScoringSide(point.winner)) ? point.winner : null;
+    // pending" first, so that is the state the point returns to; a banked
+    // run comes back whole, unbanked.
+    const rule = conversionRule(game);
+    point.pendingConversion = (rule && isScoringSide(point.winner)) ? point.winner : null;
+    point.pendingValue = point.pendingConversion ? (point.banked ? pointValueOf(point) : 1) : 0;
+    point.banked = false;
     point.winner = "";
     point.pointValue = 1;
     point.endTimestamp = null;
@@ -702,7 +740,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // --- ES-module exports ---
 export {
-    updateScore, recordScore, settlePointAfterTurnover, endPointWithoutScore,
+    updateScore, recordScore, settlePointAfterTurnover, bankPendingPoints, endPointWithoutScore,
     summarizeGame, summarizeGameEntries, gameLogEntryOptions, downloadJSON, undoEvent,
     configureStartGameMode, appVersion,
 };

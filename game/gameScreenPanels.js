@@ -382,6 +382,10 @@ function createPlayByPlayContent() {
                 <i class="fas fa-ban"></i>
                 <span class="pbp-btn-label" id="pbpRulesEndLabel">No Score</span>
             </button>
+            <button id="pbpRulesBankBtn" class="pbp-btn pbp-btn-rules-end" style="display: none;">
+                <i class="fas fa-piggy-bank"></i>
+                <span class="pbp-btn-label" id="pbpRulesBankLabel">Bank</span>
+            </button>
         </div>
         <div class="pbp-action-buttons">
             <button id="pbpUndoBtn" class="pbp-btn pbp-btn-action" title="Undo">

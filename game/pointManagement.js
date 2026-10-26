@@ -14,6 +14,7 @@ import { canEditPlayByPlay, showControllerToast } from './controllerState.js';
 // showPullDialog is only called at point-start time — safe back-edge import.
 import { showPullDialog } from '../playByPlay/pullDialog.js';
 import { clockWaitsForFirstTouch, armPointClock } from '../store/pointClock.js';
+import { noPull } from '../store/scrimmageRules.js';
 import { log } from '../utils/logger.js';
 
 let countdownInterval = null;
@@ -170,7 +171,11 @@ function startNextPoint() {
         console.warn("Warning: startTimestamp was already set when starting point");
     }
     const recordingMode = (typeof window.getCurrentMode === 'function') ? window.getCurrentMode() : 'simple';
-    if (clockWaitsForFirstTouch(point, recordingMode)) {
+    // A Bank point starts with the disc in hand, no pull (store/scrimmageRules.js).
+    const pullLess = noPull(game);
+    if (pullLess) {
+        point.startTimestamp = new Date();
+    } else if (clockWaitsForFirstTouch(point, recordingMode)) {
         armPointClock(point);
         log(`⏱ Point clock armed (${recordingMode}) — starts on the first touch`);
     } else {
@@ -205,7 +210,9 @@ function startNextPoint() {
     // dialog. When the Field tab is the active surface we suppress the modal
     // and let fieldPbp drive the in-field pull flow instead.
     const fieldTabActiveForPull = (typeof window.getActiveTab === 'function') && window.getActiveTab() === 'field';
-    if (startPointOn === 'defense' && fieldTabActiveForPull
+    if (pullLess) {
+        // The other squad brings it out: nothing to record.
+    } else if (startPointOn === 'defense' && fieldTabActiveForPull
         && window.fieldPbp && typeof window.fieldPbp.beginPull === 'function') {
         window.fieldPbp.beginPull();
     } else if (startPointOn === 'defense' && typeof showPullDialog === 'function') {

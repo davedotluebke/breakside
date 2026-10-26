@@ -586,7 +586,10 @@ function renderNames() {
     // Under a drill the pull toggle names who pulls EVERY point.
     const variation = variationById(state.variation);
     const pullLabel = modal.querySelector('#scrimmagePullLabel');
-    if (pullLabel) pullLabel.textContent = variation.fixedPuller ? 'Pulls every point' : 'First pull by';
+    if (pullLabel) {
+        pullLabel.textContent = variation.fixedPuller ? 'Pulls every point'
+            : variation.noPull ? 'Starts with the disc' : 'First pull by';
+    }
     const rulesHint = modal.querySelector('#scrimmageVariationHint');
     if (rulesHint) {
         rulesHint.textContent = (variation.id === 'standard' ? '' : `${variation.hint} `)
@@ -757,8 +760,11 @@ function startScrimmage(trackSquad) {
         const rules = normalizeRules({
             variation: state.variation, twoPointPlays: state.twoPointPlays, puller: state.pulling,
         });
+        // Under a variation with no pull the toggle names who STARTS WITH the
+        // disc, so the other squad is the one "pulling" (starting on defense).
+        const pullingSquad = variationById(state.variation).noPull ? otherSquad(state.pulling) : state.pulling;
         const games = createSquadGames(currentTeam, {
-            names, ids, label, pullingSquad: state.pulling, trackSquad, rules,
+            names, ids, label, pullingSquad, trackSquad, rules,
         });
         const tracked = games[trackSquad];
         log(`🥏 Scrimmage created: ${names.X} vs ${names.Y} (${tracked.scrimmageId}); tracking ${names[trackSquad]}`);
