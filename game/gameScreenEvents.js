@@ -35,7 +35,7 @@ import { showGameSummaryPostGame } from '../teams/gameSummary.js';
 import { showShareGameDialog } from './shareGame.js';
 import { showConnectionInfo } from '../teams/syncStatusUI.js';
 import { moveToNextPoint, stopCountdown } from './pointManagement.js';
-import { updateScore, undoEvent, appVersion } from './gameLogic.js';
+import { undoEvent, appVersion } from './gameLogic.js';
 import {
     getControllerState, isActiveCoach, isLineCoach, releaseControllerRole,
     stopControllerPolling, getPollingGameId, showControllerToast,

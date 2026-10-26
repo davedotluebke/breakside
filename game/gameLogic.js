@@ -622,6 +622,8 @@ function undoEvent() {
         resolvePlayer: getPlayerFromName,
         revertPointScore,
     });
+    // A pending conversion may have been taken back (scrimmage variations).
+    announceRulesState();
 
     // Undoing the first touch of an offensive point puts the clock back to
     // waiting for it (store/pointClock.js): the time since the mistaken tap
