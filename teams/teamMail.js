@@ -13,7 +13,6 @@ import { currentTeam } from '../store/storage.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
 import { showTeamSettingsScreen, getTeamSettingsReturnScreen } from './teamSettings.js';
-import { log } from '../utils/logger.js';
 import { parseEmailList } from './mailAddressInput.js';
 import { matches, contactFields, playerFields, highlight, looksLikeAddress, joinLabels, tokens } from './mailSearch.js';
 
@@ -135,7 +134,7 @@ async function refresh() {
         lookupCache.clear();
         render();
     } catch (error) {
-        log.error('teamMail: load failed', error);
+        console.error('teamMail: load failed', error);
         content.innerHTML = `<p class="error-message">${esc(error.message)}</p>`;
     }
 }
@@ -333,7 +332,7 @@ function updateLookup(immediate = false) {
                 lookupCache.set(q, r);
             }
         } catch (error) {
-            log.warn('teamMail: lookup failed', error);
+            console.warn('teamMail: lookup failed', error);
             return;
         }
         if (seq !== lookupSeq || peopleQuery.trim().toLowerCase() !== q) return;   // typed on
@@ -379,10 +378,13 @@ function renderLookup(r) {
     const postLabels = (r.mayPost || []).map(k => LIST_LABELS[k] || k);
     if (r.mayPostToPlayerAddresses) postLabels.push("any player's address");
     const receiveLabels = (r.receives || []).map(k => LIST_LABELS[k] || k);
-    for (const p of r.playerAddresses || []) receiveLabels.push(`${esc(p.playerName)}'s address`);
+    const behind = r.playerAddresses || [];
+    const aliasCount = (state?.roster || []).filter(p => p.alias).length;
+    if (behind.length > 1 && behind.length >= aliasCount) receiveLabels.push("every player's address");   // a coach
+    else for (const p of behind) receiveLabels.push(`${esc(p.playerName)}'s address`);
     lines.push(postLabels.length ? `May post to: ${esc(joinLabels(postLabels))}.` : 'May not post to any list; mail from it is held for your review.');
     lines.push(receiveLabels.length ? `Receives: ${joinLabels(receiveLabels)}.` : 'Receives nothing right now.');
-    if (r.member) lines.push(`Also a team member (${esc(r.member.displayName || r.email)}, ${esc(r.member.role || 'member')}).`);
+    if (r.member && !(r.contacts || []).some(c => c.derived)) lines.push(`Also a team member (${esc(r.member.displayName || r.email)}, ${esc(r.member.role || 'member')}).`);
     return `<p>${lines.join('</p><p>')}</p>`;
 }
 
@@ -1287,7 +1289,7 @@ function onFieldBlur(event) {
 }
 
 function queueSave(input) {
-    pendingSave = pendingSave.then(() => saveField(input)).catch(error => log.error('teamMail: save failed', error));
+    pendingSave = pendingSave.then(() => saveField(input)).catch(error => console.error('teamMail: save failed', error));
     return pendingSave;
 }
 
