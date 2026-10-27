@@ -925,6 +925,22 @@ which for relayed mail is the list address, and would come back through
 the receipt rule as a post. There is no inbound HTTP endpoint and no port
 25 on the box; if the API is down, mail waits in the queue.
 
+**Directory search.** One box above the Directory and Player addresses
+cards on the admin screen filters both (`teams/mailSearch.js`, pure and
+unit-tested): every token of the query must appear in one of a row's
+strings (name, every address, linked players, role label, notes; for a
+player row the name, alias, address, own emails and guardian names), and
+the hits are marked in place. The case it exists for is a parent entered
+as the second address on their partner's card: the row is named for
+someone else, so in a long list the address was invisible until a reply
+from it arrived. A query that is an address also calls
+`GET /api/teams/{id}/mail/lookup?email=`, which answers with the relay's
+own policy functions: the contacts carrying it (and its position among
+their addresses), the lists it may post to and the ones that deliver to it,
+the player addresses it is behind, and any team member it belongs to. A
+sender's name in the activity log or on a held message is a button that
+puts their address into the search.
+
 **Policy order.** Loop guards (our own `X-Breakside-List`, `Precedence:
 list|bulk`, `Auto-Submitted`, mail from a list address) and automated-mail
 guards (`multipart/report` delivery reports, `mailer-daemon`/`postmaster`

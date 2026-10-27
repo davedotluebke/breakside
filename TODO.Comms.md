@@ -92,6 +92,7 @@ SES identity + DKIM + MAIL FROM, S3 bucket, SNS topic, SQS queue, receipt rule s
 - [x] PWA: `teams/teamMail.js` screen (slug, directory with "import from team members", lists, quarantine, log, bounces) + Team Settings entry point
 - [x] `scripts/setup-mail-aws.sh` + DNS record list; ops notes to breakside-ops
 - [x] ARCHITECTURE.md § Team mailing lists; `boto3` in requirements
+- [x] Directory search on the admin screen + `GET …/mail/lookup?email=` (2026-10-27, branch `mail-search`): finds a person by any address, linked player or note, and says what the relay would do with mail from an address; log senders click through to it
 - [ ] Publish the DNS records and set the box environment (ops runbook checklist), then field test with the maintainer's team for a season before considering the apex cutover
 - [x] Event lists (`<slug>-<event>@`, 2026-11-02, branch `event-mail`): a roster subset plus pickup players with any number of parent addresses, linked to a tournament event to copy its roster; see ARCHITECTURE.md § Team mailing lists "Event lists"
 
