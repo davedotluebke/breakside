@@ -175,6 +175,10 @@ const squadNarration = (function() {
             toast('Open the squad picker to narrate squads', 'warning');
             return;
         }
+        if (!ctx.roster.length) {
+            toast('The roster is still loading — try again in a moment', 'warning');
+            return;
+        }
         if ((narrationEngine && narrationEngine.getPhase && narrationEngine.getPhase() !== 'idle')
             || (lineupNarration && lineupNarration.getPhase && lineupNarration.getPhase() !== 'idle')
             || (narrationRealtimeSession && narrationRealtimeSession.isActive())) {
@@ -273,7 +277,7 @@ const squadNarration = (function() {
             return;
         }
         const ctx = getSquadDialogContext();
-        if (!ctx) {
+        if (!ctx || !ctx.roster.length) {
             toast('Squad picker closed — nothing applied', 'info');
             return;
         }
@@ -327,7 +331,7 @@ const squadNarration = (function() {
             return false;
         }
         const ctx = getSquadDialogContext();
-        if (!ctx) {
+        if (!ctx || !ctx.roster.length) {
             toast('Squad picker closed — nothing applied', 'info');
             return false;
         }

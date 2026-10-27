@@ -337,12 +337,13 @@ function escapeAttr(s) {
 
 /**
  * The open picker's state for squad narration, or null when no dialog is
- * open (or its roster has not landed yet).
+ * open. The roster is empty until the team lands (a moment after opening);
+ * the narration layer refuses to start until then.
  * @returns {{teamId: string|null, roster: Array<object>, names: {X: string, Y: string},
  *            assignment: Map<string, 'X'|'Y'>, absent: Set<string>, mode: 'new'|'edit'}|null}
  */
 function getSquadDialogContext() {
-    if (!state || !state.roster.length) return null;
+    if (!state) return null;
     return {
         teamId: (currentTeam && currentTeam.id) || state.team?.id || null,
         roster: state.roster.slice(),
