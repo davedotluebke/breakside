@@ -14,6 +14,19 @@ POST /api/narration/lineup
     transcript and roster: the request is forwarded to Anthropic on the
     operator's key.
 
+POST /api/narration/squads
+    The same idea for a scrimmage's two squads (teams/scrimmageDialogs.js):
+    the coach names players and which squad they go on — "Alice and Bob on
+    Orange, Dana on Black", "Eve sits out", "everyone else on Black" — and
+    the model returns only those placements, each with the squad as spoken
+    or blank when none was said. The endpoint maps squad words to the two
+    squad keys, puts every UNSTATED placement on the FIRST squad (the one
+    rule a coach who just rattles off names relies on), verifies the
+    evidence for sit-outs, a clear and an "everyone else", and derives the
+    resulting squads itself (_apply_squad_changes). Requires Coach access
+    to the ``teamId`` in the body — there is no game yet when a scrimmage
+    is being set up.
+
 This is a SEPARATE layer from the in-point narration pipeline in
 narration.py (token minting + play-by-play finalize). It deliberately
 lives in its own module with its own router so lineup work and in-point
@@ -43,11 +56,12 @@ logger = logging.getLogger(__name__)
 
 # Dual-import pattern, mirroring narration.py / the rest of the backend.
 try:
-    from auth import get_json_body, require_body_game_recorder  # type: ignore
+    from auth import get_json_body, require_body_game_recorder, require_body_team_coach  # type: ignore
 except ImportError:
     from breakside_server.auth import (  # type: ignore
         get_json_body,
         require_body_game_recorder,
+        require_body_team_coach,
     )
 
 try:
@@ -188,7 +202,7 @@ _CLEAR_LEXICON_RE = re.compile(
     r"whole ?sale"
     r"|every(one|body)('?s)?\s+(comes?\s+|goes?\s+)?(off|out)"
     r"|all\s+(the\s+)?players?\s+(come\s+|go\s+)?(off|out)"
-    r"|clear\s+(the\s+)?(line|list|selection)"
+    r"|clear\s+(the\s+|both\s+)?(line|list|selection|squads?|teams?)"
     r"|clear\s+every(one|body)"
     r"|(take|start)\s+every(one|body)\s+(off|over)"
     r"|start\s+(over|fresh)"
@@ -499,6 +513,367 @@ def _parse_lineup_json(text: str) -> Dict[str, Any]:
     parsed["clear_said"] = str(parsed.get("clear_said") or "")
     # Normalize out entries to {name, said} dicts; bare strings mean the
     # model skipped the evidence field (treated as no evidence).
+    outs = []
+    for entry in parsed.get("out", []):
+        if isinstance(entry, dict) and entry.get("name"):
+            outs.append({"name": str(entry["name"]), "said": str(entry.get("said") or "")})
+        elif isinstance(entry, (str, int)):
+            outs.append({"name": str(entry), "said": ""})
+    parsed["out"] = outs
+    return parsed
+
+
+# =============================================================================
+# Squads — speech-to-squads for the scrimmage dialog
+#
+# POST /api/narration/squads. Same contract shape as /lineup: the model
+# returns tap-equivalent placements, the server applies them. Here a "tap"
+# is a pick button in the New Scrimmage / Edit Squads picker: a player goes
+# on squad X, on squad Y, or on neither (sitting out). The one extra rule
+# is the DEFAULT SQUAD — a coach reading out a list without naming squads
+# means the first squad, and the server applies that, not the model: the
+# model leaves the squad blank when none was spoken.
+# =============================================================================
+
+SQUAD_KEYS = ("X", "Y")
+
+
+class SquadsRequest(BaseModel):
+    # Authorization is against the TEAM (require_body_team_coach): a new
+    # scrimmage has no game yet when its squads are being called.
+    teamId: str
+    transcript: str = Field(max_length=8000)
+    # The whole team roster (everyone the picker lists), not one squad's.
+    roster: List[LineupRosterPlayer] = Field(max_length=60)
+    # {"X": "Dark", "Y": "Light"} — what the coach calls the two squads.
+    squad_names: Dict[str, str]
+    # Who is on each squad now, by roster name — the picker's current state,
+    # which the voiced placements are applied to (an unnamed player stays put).
+    current_squads: Dict[str, List[str]] = {}
+
+
+class SquadPlacement(BaseModel):
+    name: str
+    squad: str  # "X" | "Y"
+
+
+class SquadsResponse(BaseModel):
+    # The resulting squads, derived server-side: {"X": [...], "Y": [...]}.
+    squads: Dict[str, List[str]]
+    # Players voiced off both squads (evidence-verified), in spoken order.
+    out: List[str] = []
+    unmatched: List[str] = []
+    note: str = ""
+    error: Optional[str] = None
+    # Observability: what the model voiced, after the default-squad rule.
+    voiced_assign: List[SquadPlacement] = []
+    voiced_clear: bool = False
+    # The squad an honored "everyone else on …" sent the unnamed players to.
+    voiced_rest: Optional[str] = None
+
+
+async def _squads_request(
+    body: Dict[str, Any] = Depends(get_json_body)
+) -> SquadsRequest:
+    return parse_body(SquadsRequest, body)
+
+
+@router.post("/squads", response_model=SquadsResponse)
+async def extract_squads(
+    user: dict = Depends(require_body_team_coach),
+    req: SquadsRequest = Depends(_squads_request),
+):
+    """
+    Place players on a scrimmage's squads from the coach's spoken narration.
+
+    Same error contract as /lineup: 503 without a key, 200 with ``error``
+    set (and the current squads echoed back unchanged) when the model call
+    fails — the client applies nothing that carries an error.
+    """
+    anthropic_key = _anthropic_key()
+    if not anthropic_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Lineup narration unavailable: ANTHROPIC_API_KEY not configured",
+        )
+
+    unchanged = _current_squads(req)
+    if not req.transcript.strip():
+        return SquadsResponse(squads=unchanged, error="Empty transcript")
+    if not req.roster:
+        return SquadsResponse(squads=unchanged, error="Empty roster")
+    if not all(str(req.squad_names.get(k) or "").strip() for k in SQUAD_KEYS):
+        return SquadsResponse(squads=unchanged, error="Both squad names are required")
+
+    prompt = _build_squads_prompt(req)
+    try:
+        result = await _call_claude_squads(anthropic_key, prompt)
+    except Exception as e:  # noqa: BLE001 — degrade to an error payload, never a 500
+        logger.exception("Squad extraction LLM call failed")
+        return SquadsResponse(squads=unchanged, error=str(e))
+
+    squads, assign, outs, cleared, rest, dropped = _derive_squads(result, req)
+    if dropped:
+        logger.info("Squad outs/clear/rest dropped (missing/unrelated evidence): %s", dropped)
+    unmatched = [str(u) for u in result.get("unmatched", []) if isinstance(u, (str, int))]
+    note = str(result.get("note") or "")
+    return SquadsResponse(
+        squads=squads, out=outs, unmatched=unmatched, note=note,
+        voiced_assign=[SquadPlacement(name=n, squad=s) for n, s in assign],
+        voiced_clear=cleared, voiced_rest=rest,
+    )
+
+
+def _current_squads(req: SquadsRequest) -> Dict[str, List[str]]:
+    return {k: [str(n) for n in (req.current_squads.get(k) or [])] for k in SQUAD_KEYS}
+
+
+# "everyone else on Black" — the one collective phrase that places players the
+# coach did not name. Honored only with a quote from the transcript that
+# contains one of these.
+_REST_LEXICON_RE = re.compile(
+    r"every(one|body)\s+else"
+    r"|(the\s+)?rest\s+(of\s+)?"
+    r"|(all\s+)?the\s+others"
+    r"|(all\s+)?the\s+remaining"
+    r"|the\s+remainder"
+)
+
+
+def _rest_evidence_ok(said: str, transcript: str) -> bool:
+    if not said or not _evidence_in_transcript(said, transcript):
+        return False
+    return bool(_REST_LEXICON_RE.search(_light_normalize(said)))
+
+
+def _squad_key(spoken: str, squad_names: Dict[str, str]) -> Optional[str]:
+    """Map the model's squad field to "X" / "Y".
+
+    Accepts the squad's name (case-insensitive, decoration-tolerant), the
+    key letter itself, or a blank — which is the default-squad rule: None
+    is returned ONLY for a non-empty string that names neither squad, so
+    the caller can tell "unstated" (→ first squad) from "unrecognised".
+    """
+    raw = str(spoken or "").strip()
+    if not raw:
+        return SQUAD_KEYS[0]
+    norm = _normalize_name(raw)
+    for key in SQUAD_KEYS:
+        if norm and norm == _normalize_name(squad_names.get(key, "")):
+            return key
+    if raw.upper() in SQUAD_KEYS:
+        return raw.upper()
+    for key in SQUAD_KEYS:
+        name_norm = _normalize_name(squad_names.get(key, ""))
+        if norm and name_norm and (norm in name_norm.split() or name_norm in norm.split()):
+            return key
+    return None
+
+
+def _derive_squads(result: Dict[str, Any], req: SquadsRequest):
+    """The complete post-model derivation for /squads, in one place (the
+    same reason as _derive_players): shape the reply defensively, verify
+    the evidence for a clear, the sit-outs and an "everyone else", apply
+    the default-squad rule, then the tap-equivalent set arithmetic.
+
+    Returns (squads, assign, honored_outs, cleared, rest, dropped), where
+    assign is [(name, key)] after defaulting.
+    """
+    dropped: List[str] = []
+
+    cleared = bool(result.get("clear"))
+    if cleared and not _clear_evidence_ok(str(result.get("clear_said") or ""), req.transcript):
+        cleared = False
+        dropped.append("<clear>")
+
+    assign: List[tuple] = []
+    for entry in result.get("assign", []):
+        if not isinstance(entry, dict) or not entry.get("name"):
+            continue
+        key = _squad_key(entry.get("squad"), req.squad_names)
+        if key is None:
+            # Named a squad that is not one of the two: the player was still
+            # placed on purpose, so the first squad is the honest fallback,
+            # and the note says why.
+            dropped.append(f"{entry['name']}:squad={entry.get('squad')!r}")
+            key = SQUAD_KEYS[0]
+        assign.append((str(entry["name"]), key))
+
+    outs: List[str] = []
+    for e in result.get("out", []):
+        if not isinstance(e, dict) or not e.get("name"):
+            continue
+        said = str(e.get("said") or "").strip()
+        if (said and _evidence_in_transcript(said, req.transcript)
+                and _evidence_references_player(said, e["name"], req.roster)):
+            outs.append(str(e["name"]))
+        else:
+            dropped.append(str(e["name"]))
+
+    rest = None
+    rest_raw = str(result.get("rest") or "").strip()
+    if rest_raw:
+        rest_key = _squad_key(rest_raw, req.squad_names)
+        if rest_key is None or not _rest_evidence_ok(str(result.get("rest_said") or ""), req.transcript):
+            dropped.append("<rest>")
+        else:
+            rest = rest_key
+
+    base = {k: [] for k in SQUAD_KEYS} if cleared else _current_squads(req)
+    squads = _apply_squad_changes(base, assign, outs, rest, [p.name for p in req.roster])
+    return squads, assign, outs, cleared, rest, dropped
+
+
+def _apply_squad_changes(
+    current: Dict[str, List[str]],
+    assign: List[tuple],
+    outs: List[str],
+    rest: Optional[str],
+    roster_names: List[str],
+) -> Dict[str, List[str]]:
+    """squads = current, with every named player moved to the squad voiced
+    for them, every out taken off both, and — when an "everyone else" was
+    honored — every roster player NOT named sent to that squad.
+
+    A later statement about a player wins (the model is asked to resolve
+    that, but a duplicate name is kept to the last placement anyway), and
+    an out beats a placement for the same name. Name matching is the same
+    exact → casefold → unique-normalized ladder as _apply_changes.
+    """
+    def _matches(a: str, b: str) -> bool:
+        if a == b or a.casefold() == b.casefold():
+            return True
+        na, nb = _normalize_name(a), _normalize_name(b)
+        return bool(na) and na == nb
+
+    # Last placement per name wins; an out cancels a placement.
+    final: List[tuple] = []
+    for name, key in assign:
+        final = [(n, k) for n, k in final if not _matches(n, name)]
+        final.append((name, key))
+    final = [(n, k) for n, k in final if not any(_matches(n, o) for o in outs)]
+
+    def _remove(lst: List[str], name: str) -> List[str]:
+        hit = next((x for x in lst if x == name), None)
+        if hit is None:
+            hit = next((x for x in lst if x.casefold() == name.casefold()), None)
+        if hit is None:
+            norm = _normalize_name(name)
+            hits = [x for x in lst if norm and _normalize_name(x) == norm]
+            hit = hits[0] if len(hits) == 1 else None
+        return [x for x in lst if x != hit] if hit is not None else lst
+
+    squads = {k: list(current.get(k) or []) for k in SQUAD_KEYS}
+    named = [n for n, _ in final] + list(outs)
+
+    if rest:
+        # Everyone the coach did not name goes to the rest squad — the
+        # placements and outs below then override for the named ones.
+        others = [n for n in roster_names if not any(_matches(n, m) for m in named)]
+        for k in SQUAD_KEYS:
+            for n in others:
+                squads[k] = _remove(squads[k], n)
+        for n in others:
+            if not any(_matches(n, x) for x in squads[rest]):
+                squads[rest].append(n)
+
+    for name in outs:
+        for k in SQUAD_KEYS:
+            squads[k] = _remove(squads[k], name)
+    for name, key in final:
+        for k in SQUAD_KEYS:
+            squads[k] = _remove(squads[k], name)
+        squads[key].append(name)
+    return squads
+
+
+def _build_squads_prompt(req: SquadsRequest) -> str:
+    roster_block = "\n".join(_roster_line(p) for p in req.roster)
+    first = req.squad_names["X"].strip()
+    second = req.squad_names["Y"].strip()
+
+    def squad_block(key: str) -> str:
+        names = req.current_squads.get(key) or []
+        return "\n".join(f"- {n}" for n in names) if names else "(empty)"
+
+    return f"""You are the voice-input layer for a scrimmage set-up screen in an ultimate frisbee app. The team is split into two squads, "{first}" and "{second}". The coach speaks; you extract WHICH PLAYERS GO ON WHICH SQUAD and WHO SITS OUT — the verbal equivalent of tapping a player's "{first}" or "{second}" button on the list. You never fill, balance, complete or output a squad: the app applies your placements to the squads on screen.
+
+Team roster. These are the ONLY valid players. Match spoken references against the name, the "nickname" in quotes, and the #jersey-number:
+{roster_block}
+
+Currently on "{first}" (context only — the app applies your placements to this):
+{squad_block("X")}
+
+Currently on "{second}" (context only):
+{squad_block("Y")}
+
+Transcript of what the coach said (speech-to-text; may contain transcription errors and unrelated chatter):
+---
+{req.transcript}
+---
+
+Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
+{{"clear": false, "clear_said": "", "assign": [{{"name": "Name", "squad": "{first}" | "{second}" | ""}}, ...], "rest": "", "rest_said": "", "out": [{{"name": "Name", "said": "the coach's exact words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
+
+How to interpret the transcript:
+1. Every player the coach names goes in "assign", with "squad" set to the squad the coach put them on, spelled exactly "{first}" or "{second}". "Alice and Bob on {first}, Dana {second}" → Alice and Bob with "{first}", Dana with "{second}". Squads may be referred to by name, by colour, or by a word of the name; map them to the two names above.
+2. A name spoken with NO squad gets "squad": "" — leave it blank, never guess. The app puts blank placements on "{first}", so a coach who simply reads out a list ("Alice, Bob, Charlie, Dana") is filling "{first}". A squad named once carries to the names that follow it until another squad is named: "{second} is Eve, Hank and Iris" gives all three "{second}"; "{first}: Alice, Bob. {second}: Dana, Eve" splits them.
+3. "X sits out", "X is out", "X isn't here", "X is injured", "X off", "take X off" — X goes in "out", quoting the coach's exact words in "said". A player never appears in both "assign" and "out": the coach's LAST statement about a player wins ("Alice on {first}… actually Alice is sitting out" → out only). RETRACTED words are void as evidence.
+4. "everyone else on {second}", "the rest on {first}", "the others are {second}" — set "rest" to that squad name and quote the words in "rest_said". The app then sends every roster player you did NOT name to that squad. Do not list those players yourself.
+5. CLEAR-EVERYONE: "clear the squads", "start fresh", "everybody off", "wholesale" — set "clear": true and quote the words in "clear_said". A clear empties both squads before your placements apply.
+6. Later statements override earlier ones ("Dana on {first} — no, {second}" → Dana with "{second}"; "is that Hank? no, Morgan" → Morgan, Hank nowhere). Ignore asides: chatter, the weather, who is late, the score of the last point. Wrap-ups ("that's everyone", "that's the split") add nobody.
+7. Spoken references may be first names, full names, nicknames, jersey numbers ("number 12", "twelve", "#12"), or mispronounced / mistranscribed versions — map each to the closest roster player; a trailing initial disambiguates similar names. Spell every "name" EXACTLY as its roster line spells it, digits and symbols included, with no nickname or #number decoration. A reference that matches nobody goes in "unmatched", never in "assign" or "out".
+8. THE CARDINAL RULE: "assign" and "out" contain ONLY players the coach referred to. Never anyone else, however uneven the squads would be: if the coach named 3 players, "assign" has exactly 3 entries. Reciting names taps those players onto a squad; it moves nobody else. Say anything notable (a retraction, an ambiguous reference) in one short sentence in "note".
+"""
+
+
+async def _call_claude_squads(api_key: str, prompt: str) -> Dict[str, Any]:
+    """Same transport as the lineup call; separate so tests can mock each."""
+    model = _lineup_model()
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+        )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Anthropic API {resp.status_code}: {resp.text[:500]}")
+
+    body = resp.json()
+    text = "".join(
+        block.get("text", "") for block in body.get("content", []) if block.get("type") == "text"
+    ).strip()
+    return _parse_squads_json(text)
+
+
+def _parse_squads_json(text: str) -> Dict[str, Any]:
+    """Parse the model's reply. "assign" is the anchor key; a reply without
+    it is a contract violation and errors out, so the client applies nothing."""
+    parsed = _last_json_object(text, "assign")
+    if not isinstance(parsed.get("assign"), list):
+        raise RuntimeError("Claude squads response missing 'assign' list")
+    if "out" in parsed and not isinstance(parsed.get("out"), list):
+        raise RuntimeError("Claude squads response 'out' is not a list")
+    parsed["clear"] = bool(parsed.get("clear"))
+    parsed["clear_said"] = str(parsed.get("clear_said") or "")
+    parsed["rest"] = str(parsed.get("rest") or "")
+    parsed["rest_said"] = str(parsed.get("rest_said") or "")
+    assign = []
+    for entry in parsed.get("assign", []):
+        if isinstance(entry, dict) and entry.get("name"):
+            assign.append({"name": str(entry["name"]), "squad": str(entry.get("squad") or "")})
+        elif isinstance(entry, (str, int)):
+            # A bare name: the model skipped the squad field — unstated.
+            assign.append({"name": str(entry), "squad": ""})
+    parsed["assign"] = assign
     outs = []
     for entry in parsed.get("out", []):
         if isinstance(entry, dict) and entry.get("name"):
