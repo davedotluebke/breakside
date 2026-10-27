@@ -228,6 +228,42 @@ class TestStorage:
         bob = ms.update_mail_contact(tid, bob["id"], {"emails": ""})
         assert bob["emails"] == [] and bob["email"] is None
 
+    def test_lookup_address_explains_a_second_address(self, configured):
+        """The directory search's "who is this address?" answer. A parent
+        entered as the second address on their partner's card is found,
+        with the position that explains why the list never showed a row
+        under their own name."""
+        from storage import mail_storage as ms
+        from mail import directory as dm
+        tid = configured["team_id"]
+        ms.update_mail_contact(tid, configured["mom"]["id"], {"emails": "mom@x.test, mom.work@x.test"})
+        r = dm.lookup_address(tid, " Mom.Work@x.test ")
+        assert r["email"] == "mom.work@x.test" and r["configured"] is True
+        assert [(c["name"], c["kind"], c["addressIndex"], c["addressCount"], c["playerNames"]) for c in r["contacts"]] \
+            == [("Mom Smith", "guardian", 2, 2, ["Alice Smith"])]
+        assert r["senderKinds"] == ["guardian"]
+        assert r["mayPost"] == ["all", "parents", "coaches", "staff"]       # default policies; players list is off
+        assert r["receives"] == ["all", "parents"]
+        assert [p["playerName"] for p in r["playerAddresses"]] == ["Alice Smith"]
+        assert r["mayPostToPlayerAddresses"] is True
+        assert r["member"] is None
+        # Dad is on two players' addresses; a coach is a member too.
+        dad = dm.lookup_address(tid, "dad@x.test")
+        assert sorted(p["playerName"] for p in dad["playerAddresses"]) == ["Alice Smith", "Bob Jones"]
+        coach = dm.lookup_address(tid, "coach@x.test")
+        assert coach["contacts"][0]["derived"] is True and coach["member"]["role"] == "coach"
+        assert coach["receives"] == ["all", "parents", "coaches", "staff"]
+        # A paused contact still carries the address but may not post and gets nothing.
+        ms.update_mail_contact(tid, configured["mom"]["id"], {"status": "paused"})
+        paused = dm.lookup_address(tid, "mom.work@x.test")
+        assert paused["contacts"][0]["status"] == "paused" and paused["contacts"][0]["deliverable"] is False
+        assert paused["mayPost"] == [] and paused["receives"] == [] and paused["playerAddresses"] == []
+        # Unknown address: nothing, but a team member with that address is named.
+        nobody = dm.lookup_address(tid, "parent-viewer@x.test")
+        assert nobody["contacts"] == [] and nobody["mayPost"] == [] and nobody["receives"] == []
+        assert nobody["member"]["role"] == "viewer"
+        assert dm.lookup_address(configured["other_team"], "x@x.test") == {"email": "x@x.test", "configured": False}
+
     def test_legacy_single_email_directory_reads_cleanly(self, configured):
         """A directory written before multi-address support (one ``email``,
         one ``bounce``) needs no migration."""
@@ -756,6 +792,16 @@ class TestApi:
         assert all("bounces" in e for e in log if e["action"] in ("relayed", "released"))   # the endpoint joins bounces onto relays
         r = client.post(f"/api/teams/{tid}/mail/test")
         assert r.status_code == 200 and r.json()["to"] == "coach@x.test" and r.json()["transport"] == "file"
+
+    def test_lookup_endpoint(self, client, configured, env):
+        tid = configured["team_id"]
+        _as(VIEWER)
+        assert client.get(f"/api/teams/{tid}/mail/lookup?email=mom@x.test").status_code == 403
+        _as(COACH)
+        r = client.get(f"/api/teams/{tid}/mail/lookup?email=mom@x.test")
+        assert r.status_code == 200 and r.json()["contacts"][0]["name"] == "Mom Smith"
+        assert client.get(f"/api/teams/{tid}/mail/lookup").status_code == 422
+        assert client.get(f"/api/teams/{env['other_team']}/mail/lookup?email=mom@x.test").status_code in (403, 404)
 
     def test_dev_inbound_gated(self, client, configured, monkeypatch):
         import config

@@ -243,3 +243,94 @@ def directory_view(team_id: str) -> Dict[str, Any]:
         "createdAt": directory.get("createdAt"),
         "updatedAt": directory.get("updatedAt"),
     }
+
+
+def lookup_address(team_id: str, email: str) -> Dict[str, Any]:
+    """Why one address can (or cannot) post to and receive from each list.
+
+    The answer the admin screen gives when a coach types an address into
+    the directory search: which contacts carry it (and whether it is their
+    first address or a later one, which is how a parent entered as a second
+    address on their partner's card stays invisible in a long list), what
+    the relay would do with mail from it, and which lists deliver to it.
+    Computed with the relay's own rules (policy.find_contacts_by_email,
+    may_post, recipients_for) so the screen can never disagree with what
+    the relay actually does.
+    """
+    from . import policy
+    email = addresses.normalize_email(email)
+    directory = storage.get_mail_directory(team_id)
+    if directory is None:
+        return {"email": email, "configured": False}
+    domain = config.MAIL_DOMAIN
+    contacts = effective_contacts(team_id, directory)
+    names = {p["id"]: p["name"] for p in roster_players(team_id)}
+
+    carriers = [c for c in contacts if email in policy.contact_addresses(c)]
+    active = policy.find_contacts_by_email(contacts, email)
+    sender_kinds = sorted({c["kind"] for c in active})
+    out_contacts = []
+    for c in carriers:
+        held = policy.contact_addresses(c)
+        out_contacts.append({
+            "id": c["id"],
+            "name": c["name"],
+            "kind": c["kind"],
+            "status": c.get("status", "active"),
+            "derived": bool(c.get("derived")),
+            "addressIndex": held.index(email) + 1,
+            "addressCount": len(held),
+            "playerNames": [names.get(pid, pid) for pid in (c.get("playerIds") or [])],
+            "alias": c.get("alias"),
+            "deliverable": email in policy.deliverable_addresses(c),
+        })
+
+    lists = directory.get("lists") or {}
+    may_post: List[str] = []
+    receives: List[str] = []
+    for kind in LIST_ORDER:
+        settings = lists.get(kind) or {}
+        if not settings.get("enabled", kind != "players"):
+            continue
+        if active and policy.may_post(settings, sender_kinds):
+            may_post.append(kind)
+        expanded = policy.recipients_for(kind, contacts) or []
+        if any(e["email"] == email for e in expanded):
+            receives.append(kind)
+
+    player_settings = lists.get("player") or {}
+    player_addresses = []
+    if player_settings.get("enabled", True):
+        for c in contacts:
+            if c.get("kind") != "player" or not c.get("alias"):
+                continue
+            expanded = policy.recipients_for("player", contacts, alias=c["alias"]) or []
+            if any(e["email"] == email for e in expanded):
+                player_id = (c.get("playerIds") or [None])[0]
+                player_addresses.append({
+                    "alias": c["alias"],
+                    "address": addresses.address("player", directory["slug"], domain, c["alias"]),
+                    "playerName": names.get(player_id, player_id),
+                })
+    may_post_players = bool(active) and player_settings.get("enabled", True) \
+        and policy.may_post(player_settings, sender_kinds)
+
+    member = None
+    for membership in storage.get_team_memberships(team_id):
+        user = storage.get_user(membership["userId"]) or {}
+        if (user.get("email") or "").strip().lower() == email:
+            member = {"userId": membership["userId"], "role": membership.get("role"),
+                      "displayName": user.get("displayName")}
+            break
+
+    return {
+        "email": email,
+        "configured": True,
+        "contacts": out_contacts,
+        "senderKinds": sender_kinds,
+        "mayPost": may_post,
+        "mayPostToPlayerAddresses": may_post_players,
+        "receives": receives,
+        "playerAddresses": player_addresses,
+        "member": member,
+    }

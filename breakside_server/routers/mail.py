@@ -385,6 +385,20 @@ async def discard_quarantine_item(team_id: str, item_id: str, user: dict = Depen
 # Log and test
 # =============================================================================
 
+@router.get("/api/teams/{team_id}/mail/lookup")
+async def lookup_mail_address(
+    team_id: str,
+    email: str = Query(min_length=3, max_length=254),
+    user: dict = Depends(require_team_coach("team_id")),
+):
+    """One address, explained: the contacts that carry it, which lists it
+    may post to and which deliver to it, and any team member it belongs
+    to. Backs the directory search on the admin screen."""
+    _require_team(team_id)
+    _require_directory(team_id)
+    return directory_mod.lookup_address(team_id, email)
+
+
 @router.get("/api/teams/{team_id}/mail/log")
 async def get_mail_log(
     team_id: str,
