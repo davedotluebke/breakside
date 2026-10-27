@@ -15,6 +15,7 @@ import { showScreen } from '../screens/navigation.js';
 import { showTeamSettingsScreen, getTeamSettingsReturnScreen } from './teamSettings.js';
 import { log } from '../utils/logger.js';
 import { parseEmailList } from './mailAddressInput.js';
+import { matches, contactFields, playerFields, highlight, looksLikeAddress, joinLabels, tokens } from './mailSearch.js';
 
 const KIND_LABELS = {
     coach: 'Coach', guardian: 'Parent / guardian', player: 'Player', manager: 'Team manager', other: 'Other',
@@ -62,6 +63,14 @@ let directorySort = loadDirectorySort();
 // place (a full re-render would steal the focus mid-tab), so the set only
 // matters when something structural re-renders the screen.
 const openEditors = new Set();
+// Directory search (teams/mailSearch.js). One box above the Directory and
+// Player addresses cards filters both; a query that is an address also asks
+// the server what the relay would do with mail from it (the lookup banner).
+// Not remembered across visits: the question is usually "who is this?" once.
+let peopleQuery = '';
+const lookupCache = new Map();   // normalized address -> /lookup payload, cleared on every reload of state
+let lookupTimer = null;
+let lookupSeq = 0;
 // Fields save when you leave them; a save in flight must land before a
 // structural refresh reads the directory back, or the refresh shows stale
 // data and the editor closes on top of it.
@@ -83,6 +92,7 @@ function showTeamMailScreen() {
         return;
     }
     showScreen('teamMailScreen');
+    peopleQuery = '';
     refresh();
 }
 
@@ -122,6 +132,7 @@ async function refresh() {
     content.innerHTML = '<p class="loading-message">Loading…</p>';
     try {
         state = await api('');
+        lookupCache.clear();
         render();
     } catch (error) {
         log.error('teamMail: load failed', error);
@@ -146,6 +157,7 @@ function render() {
         // Directory and player addresses sit side by side on a wide screen,
         // each scrolling inside its card (css/teams-manage.css .mail-people);
         // the add form is its own section below both.
+        renderPeopleSearch(),
         `<div class="mail-people">${renderDirectory()}${renderRoster()}</div>`,
         renderAddContact(),
         renderEvents(),
@@ -153,6 +165,7 @@ function render() {
         renderLog(),
     ].join('');
     loadLog();
+    updateLookup(true);
 }
 
 function renderSetup() {
@@ -241,36 +254,165 @@ function sortedDirectory(contacts) {
     return people.sort((a, b) => ((KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9)) || byName(a, b));
 }
 
-/** Re-render just the Directory card (sort toggle); field saves have already landed in state. */
-async function rerenderDirectory() {
+/** Re-render just the Directory and Player addresses cards (sort toggle,
+ * search); field saves have already landed in state. The search box itself
+ * sits outside both cards, so typing never loses the focus. */
+async function rerenderPeople() {
     await pendingSave;
-    const card = document.querySelector('[data-section="directory"]');
-    if (card && state?.configured) card.outerHTML = renderDirectory();
+    if (!state?.configured) return;
+    const directory = document.querySelector('[data-section="directory"]');
+    if (directory) directory.outerHTML = renderDirectory();
+    const roster = document.querySelector('[data-section="roster"]');
+    if (roster) roster.outerHTML = renderRoster();
+    const clear = document.querySelector('[data-action="clear-search"]');
+    if (clear) clear.hidden = !peopleQuery;
+}
+
+// =============================================================================
+// Directory search
+// =============================================================================
+
+function renderPeopleSearch() {
+    return `
+        <div class="mail-search" data-section="search">
+            <div class="mail-search-box">
+                <i class="fas fa-search mail-search-icon" aria-hidden="true"></i>
+                <input type="search" id="mailPeopleSearch" data-search class="url-input mail-search-input"
+                    placeholder="Find a name, address or player" value="${escAttr(peopleQuery)}"
+                    autocomplete="off" autocapitalize="none" spellcheck="false"
+                    aria-label="Search the directory and player addresses">
+                <button type="button" class="icon-button mail-search-clear" data-action="clear-search" title="Clear search" ${peopleQuery ? '' : 'hidden'}><i class="fas fa-times"></i></button>
+            </div>
+            <div id="mailSearchResult" class="mail-search-result" hidden></div>
+        </div>`;
+}
+
+function setQuery(value) {
+    peopleQuery = value || '';
+    rerenderPeople();
+    updateLookup();
+}
+
+/** Put an address (from the log, a held message) into the search box and show the answer. */
+function findAddress(email) {
+    const input = document.getElementById('mailPeopleSearch');
+    if (input) input.value = email;
+    setQuery(email);
+    document.querySelector('.mail-search')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    input?.focus({ preventScroll: true });
+}
+
+function matchCount(shown, total, noun) {
+    if (!peopleQuery) return '';
+    if (!shown) return `<p class="mail-search-count">No ${noun} match “${esc(peopleQuery.trim())}”.</p>`;
+    return `<p class="mail-search-count">${shown} of ${total} ${noun} match.</p>`;
+}
+
+/**
+ * The lookup banner: when the query is an address, ask the server who
+ * carries it and what the relay would do with mail from it. Debounced
+ * while typing; immediate after a full render (the DOM was rebuilt) or
+ * when the answer is already cached.
+ */
+function updateLookup(immediate = false) {
+    clearTimeout(lookupTimer);
+    const box = document.getElementById('mailSearchResult');
+    if (!box) return;
+    const q = peopleQuery.trim().toLowerCase();
+    if (!looksLikeAddress(q)) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+    }
+    const run = async () => {
+        const seq = ++lookupSeq;
+        let r = lookupCache.get(q);
+        try {
+            if (!r) {
+                r = await api(`/lookup?email=${encodeURIComponent(q)}`);
+                lookupCache.set(q, r);
+            }
+        } catch (error) {
+            log.warn('teamMail: lookup failed', error);
+            return;
+        }
+        if (seq !== lookupSeq || peopleQuery.trim().toLowerCase() !== q) return;   // typed on
+        const target = document.getElementById('mailSearchResult');
+        if (!target) return;
+        target.innerHTML = renderLookup(r);
+        target.hidden = false;
+    };
+    if (immediate || lookupCache.has(q)) run();
+    else lookupTimer = setTimeout(run, 250);
+}
+
+function ordinal(n) {
+    return ['first', 'second', 'third', 'fourth', 'fifth'][n - 1] || `${n}th`;
+}
+
+function renderLookup(r) {
+    if (!r || r.configured === false) return '';
+    const addr = `<code>${esc(r.email)}</code>`;
+    const lines = [];
+    for (const c of r.contacts || []) {
+        const who = `<strong>${esc(c.name)}</strong>`;
+        const role = c.kind === 'guardian' && c.playerNames.length
+            ? `parent / guardian of ${esc(joinLabels(c.playerNames))}`
+            : c.kind === 'player' ? `the player${c.playerNames.length ? ` ${esc(c.playerNames[0])}` : ''}`
+            : c.derived ? 'coach, from the team\'s members'
+            : esc((KIND_LABELS[c.kind] || c.kind).toLowerCase());
+        const position = c.addressCount > 1
+            ? `the ${ordinal(c.addressIndex)} of ${c.addressCount} addresses on`
+            : 'the address of';
+        const status = c.status !== 'active' ? ` <span class="mail-flag">${esc(c.status)}</span>`
+            : !c.deliverable ? ' <span class="mail-flag">bounced</span>' : '';
+        lines.push(`${addr} is ${position} ${who} (${role})${status}.`);
+    }
+    if (!lines.length) {
+        lines.push(`${addr} is not in the directory. Mail from it to any list is held for your review.`);
+        if (r.member) {
+            lines.push(`It belongs to team member <strong>${esc(r.member.displayName || r.email)}</strong> (${esc(r.member.role || 'member')}). `
+                + `<button type="button" class="invite-btn viewer-invite mail-search-add" data-action="prefill" data-name="${escAttr(r.member.displayName || '')}" data-email="${escAttr(r.email)}"><i class="fas fa-plus"></i> Add to directory</button>`);
+        }
+        return `<p>${lines.join('</p><p>')}</p>`;
+    }
+    const postLabels = (r.mayPost || []).map(k => LIST_LABELS[k] || k);
+    if (r.mayPostToPlayerAddresses) postLabels.push("any player's address");
+    const receiveLabels = (r.receives || []).map(k => LIST_LABELS[k] || k);
+    for (const p of r.playerAddresses || []) receiveLabels.push(`${esc(p.playerName)}'s address`);
+    lines.push(postLabels.length ? `May post to: ${esc(joinLabels(postLabels))}.` : 'May not post to any list; mail from it is held for your review.');
+    lines.push(receiveLabels.length ? `Receives: ${joinLabels(receiveLabels)}.` : 'Receives nothing right now.');
+    if (r.member) lines.push(`Also a team member (${esc(r.member.displayName || r.email)}, ${esc(r.member.role || 'member')}).`);
+    return `<p>${lines.join('</p><p>')}</p>`;
 }
 
 function renderDirectory() {
-    const people = sortedDirectory([...(state.contacts || [])]);
-    const unlisted = (state.members || []).filter(m => m.email && !m.inDirectory && m.role !== 'coach');
+    const everyone = sortedDirectory([...(state.contacts || [])]);
+    const roster = state.roster || [];
+    const people = everyone.filter(c => openEditors.has(c.id) || matches(contactFields(c, roster, KIND_LABELS[c.kind] || c.kind), peopleQuery));
+    const unlisted = (state.members || []).filter(m => m.email && !m.inDirectory && m.role !== 'coach')
+        .filter(m => matches([m.displayName, m.email], peopleQuery));
     const sortBtn = (sort, label) => `<button type="button" class="mail-sort-btn${directorySort === sort ? ' is-active' : ''}" data-action="sort-directory" data-sort="${sort}" aria-pressed="${directorySort === sort}">${label}</button>`;
     return `
         <div class="settings-section" data-section="directory">
             <h3 class="mail-head-row">Directory <span class="mail-sort" aria-label="Sort directory by">Sort by ${sortBtn('role', 'Role')}${sortBtn('name', 'Name')}</span></h3>
             <p class="section-description">Who can send to and receive from the lists. Coaches come from the team's members automatically; add parents and managers with the form below. Players have their own section. A person can have several addresses, comma-separated: each one receives list mail and any of them may post.</p>
             <div class="mail-scroll">
+            ${matchCount(people.length, everyone.length, 'people')}
             <div class="members-list">
                 ${people.map(renderContact).join('')}
-                ${people.some(c => c.kind !== 'coach') ? '' : '<p class="info-message">No parents or managers yet.</p>'}
+                ${peopleQuery || people.some(c => c.kind !== 'coach') ? '' : '<p class="info-message">No parents or managers yet.</p>'}
             </div>
             ${unlisted.length ? `
-            <details class="mail-import">
+            <details class="mail-import"${peopleQuery ? ' open' : ''}>
                 <summary>${unlisted.length} team member${unlisted.length === 1 ? '' : 's'} with an account but not in the directory</summary>
                 <div class="members-list">
                     ${unlisted.map(m => `
                         <div class="member-item">
                             <div class="member-info">
                                 <div class="member-details">
-                                    <span class="member-name">${esc(m.displayName || m.email)}</span>
-                                    <span class="member-email">${esc(m.email)}</span>
+                                    <span class="member-name">${highlight(m.displayName || m.email, peopleQuery)}</span>
+                                    <span class="member-email">${highlight(m.email, peopleQuery)}</span>
                                 </div>
                             </div>
                             <button class="invite-btn viewer-invite" data-action="prefill" data-name="${escAttr(m.displayName || '')}" data-email="${escAttr(m.email)}"><i class="fas fa-plus"></i> Add</button>
@@ -385,8 +527,9 @@ function renderContact(c) {
             <div class="member-info">
                 <span class="member-icon">${c.kind === 'coach' ? '🎯' : c.kind === 'guardian' ? '👪' : c.kind === 'manager' ? '📋' : '✉️'}</span>
                 <div class="member-details">
-                    <span class="member-name">${esc(c.name)} ${flags.join(' ')}</span>
-                    <span class="member-email">${esc(contactSummary(c))}</span>
+                    <span class="member-name">${highlight(c.name, peopleQuery)} ${flags.join(' ')}</span>
+                    <span class="member-email">${highlight(contactSummary(c), peopleQuery)}</span>
+                    ${notesHit(c)}
                 </div>
                 <span class="member-role role-${c.kind === 'coach' ? 'coach' : 'viewer'}">${esc(KIND_LABELS[c.kind] || c.kind)}</span>
             </div>
@@ -399,6 +542,14 @@ function renderContact(c) {
             </div>
             ${editing ? renderContactEditor(c) : ''}`}
         </div>`;
+}
+
+/** A note is not shown on the row; when the search hit it, show the note so the match makes sense. */
+function notesHit(c) {
+    if (!peopleQuery || !c.notes) return '';
+    const note = String(c.notes).toLowerCase();
+    if (!tokens(peopleQuery).some(t => note.includes(t))) return '';
+    return `<span class="member-email mail-note-hit">Note: ${highlight(c.notes, peopleQuery)}</span>`;
 }
 
 function contactSummary(c) {
@@ -442,27 +593,30 @@ function renderRoster() {
     const players = (state.contacts || []).filter(c => c.kind === 'player');
     const byPlayer = Object.fromEntries(players.map(c => [c.playerIds?.[0], c]));
     const missing = roster.filter(p => !byPlayer[p.id]);
+    const guardiansOf = p => (state.contacts || []).filter(g => g.kind === 'guardian' && (g.playerIds || []).includes(p.id)).map(g => g.name);
+    const shown = roster.filter(p => matches(playerFields(p, byPlayer[p.id], guardiansOf(p)), peopleQuery));
     return `
-        <div class="settings-section">
+        <div class="settings-section" data-section="roster">
             <h3>Player addresses</h3>
             <p class="section-description">Writing to a player's address reaches the player (if they have an email), all of their guardians, and every coach. Set a player's own email here if they have one (several, comma-separated, is fine); edit the address name if two players share a first name. Changes save when you leave the box.</p>
             ${missing.length ? `<button class="invite-btn viewer-invite" data-action="sync-aliases"><i class="fas fa-sync"></i> Add addresses for ${missing.length} new player${missing.length === 1 ? '' : 's'}</button>` : ''}
             <div class="mail-scroll">
+            ${matchCount(shown.length, roster.length, 'players')}
             <div class="members-list">
-                ${roster.map(p => {
+                ${shown.map(p => {
                     const c = byPlayer[p.id];
-                    if (!c) return `<div class="member-item"><div class="member-info"><div class="member-details"><span class="member-name">${esc(p.name)}</span><span class="member-email">no address yet</span></div></div></div>`;
-                    const guardians = (state.contacts || []).filter(g => g.kind === 'guardian' && (g.playerIds || []).includes(p.id)).map(g => g.name);
+                    if (!c) return `<div class="member-item"><div class="member-info"><div class="member-details"><span class="member-name">${highlight(p.name, peopleQuery)}</span><span class="member-email">no address yet</span></div></div></div>`;
+                    const guardians = guardiansOf(p);
                     return `
                     <div class="member-item mail-player-row mail-editable-row" data-contact-id="${escAttr(c.id)}">
                         <div class="member-info">
                             <div class="member-details mail-player-details">
                                 <span class="mail-player-id">
-                                    <span class="member-name">${esc(p.name)}</span><span class="mail-player-sep">: </span>
-                                    <span class="member-email"><code data-player-address>${esc(p.address || '')}</code></span>
+                                    <span class="member-name">${highlight(p.name, peopleQuery)}</span><span class="mail-player-sep">: </span>
+                                    <span class="member-email"><code data-player-address>${highlight(p.address || '', peopleQuery)}</code></span>
                                     ${shownBounces(c).map(([addr, b]) => bounceFlag(addr, b)).join(' ')}
                                 </span>
-                                <span class="member-email mail-player-guardians">${guardians.length ? 'Guardians: ' + esc(guardians.join(', ')) : '<em>No guardians linked yet</em>'}</span>
+                                <span class="member-email mail-player-guardians">${guardians.length ? 'Guardians: ' + highlight(guardians.join(', '), peopleQuery) : '<em>No guardians linked yet</em>'}</span>
                             </div>
                         </div>
                         <form class="mail-player-form" data-form="player" data-id="${escAttr(c.id)}">
@@ -471,7 +625,7 @@ function renderRoster() {
                             <span class="icon-status mail-field-status" data-status></span>
                         </form>
                     </div>`;
-                }).join('') || '<p class="info-message">No players on the roster.</p>'}
+                }).join('') || (peopleQuery ? '' : '<p class="info-message">No players on the roster.</p>')}
             </div>
             </div>
         </div>`;
@@ -765,7 +919,7 @@ function renderHeld(item) {
             <div class="member-info">
                 <div class="member-details">
                     <span class="member-name">${esc(item.subject || '(no subject)')}</span>
-                    <span class="member-email">From ${esc(item.fromName || '')} &lt;${esc(item.from || '?')}&gt; to <code>${esc(item.list)}</code> · ${esc(fmtDate(item.at))}</span>
+                    <span class="member-email">From ${senderLink(item.fromName, item.from)} to <code>${esc(item.list)}</code> · ${esc(fmtDate(item.at))}</span>
                     <span class="member-email mail-reason">${esc(REASON_LABELS[item.reason] || item.reason || '')}</span>
                     <div class="mail-held-preview" hidden></div>
                 </div>
@@ -777,6 +931,13 @@ function renderHeld(item) {
                 <button class="icon-button remove-member-btn" data-action="discard" data-id="${escAttr(item.id)}" title="Discard"><i class="fas fa-trash"></i></button>
             </div>
         </div>`;
+}
+
+/** A sender's name as a button that looks them up in the directory search (plain text when the address is unknown). */
+function senderLink(name, email) {
+    if (!email) return esc(name || '');
+    const label = name ? `${esc(name)} <span class="mail-link-addr">&lt;${esc(email)}&gt;</span>` : esc(email);
+    return `<button type="button" class="mail-link" data-action="find-sender" data-email="${escAttr(email)}" title="Find this address in the directory">${label}</button>`;
 }
 
 function renderLogRow(e) {
@@ -798,7 +959,7 @@ function renderLogRow(e) {
     } else {
         what = REASON_LABELS[e.reason] || e.reason || e.action;
     }
-    return `<tr${bounced.length ? ' class="mail-log-warn"' : ''}><td>${icon}</td><td>${esc(fmtDate(e.at))}</td><td><code>${esc(e.list || '')}</code></td><td>${esc(e.fromName || e.from || '')}</td><td>${esc(e.subject || '')}</td><td title="${escAttr(title)}">${esc(what)}</td></tr>`;
+    return `<tr${bounced.length ? ' class="mail-log-warn"' : ''}><td>${icon}</td><td>${esc(fmtDate(e.at))}</td><td><code>${esc(e.list || '')}</code></td><td>${senderLink(e.fromName, e.from)}</td><td>${esc(e.subject || '')}</td><td title="${escAttr(title)}">${esc(what)}</td></tr>`;
 }
 
 // =============================================================================
@@ -820,7 +981,14 @@ async function onContentClick(event) {
         busy = true;
         if (action === 'sort-directory') {
             setDirectorySort(button.dataset.sort);
-            await rerenderDirectory();
+            await rerenderPeople();
+        } else if (action === 'clear-search') {
+            const input = document.getElementById('mailPeopleSearch');
+            if (input) input.value = '';
+            setQuery('');
+            input?.focus();
+        } else if (action === 'find-sender') {
+            findAddress(button.dataset.email || '');
         } else if (action === 'send-test') {
             const r = await api('/test', { method: 'POST' });
             setStatus('mailSettingsStatus', `Sent to ${r.to} via ${r.transport}.`, 'success');
@@ -935,6 +1103,7 @@ function onDetailsToggle(event) {
 /** Live helpers on the "new event list" form: a picked tournament event
  *  fills the name; the name fills the address word until it is edited. */
 function onContentInput(event) {
+    if (event.target?.matches?.('[data-search]')) { setQuery(event.target.value); return; }
     const form = event.target.closest('form[data-form="add-event"]');
     if (!form) return;
     const slugInput = form.elements.slug;
@@ -1099,6 +1268,7 @@ async function refreshQuiet() {
     const y = window.scrollY;
     await pendingSave;
     state = await api('');
+    lookupCache.clear();
     render();
     window.scrollTo(0, y);
 }

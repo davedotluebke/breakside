@@ -1654,6 +1654,107 @@
     margin-top: 0;
 }
 
+/* Directory search: one box above the Directory and Player addresses
+   cards filters both (teams/mailSearch.js). The box sits outside the cards
+   so re-rendering them while typing never loses the focus. */
+.mail-search {
+    margin-bottom: 15px;
+}
+
+.mail-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.mail-search-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--text-muted);
+    pointer-events: none;
+    font-size: 0.9rem;
+}
+
+.mail-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding-left: 36px;
+    padding-right: 36px;
+}
+
+.mail-search-clear {
+    position: absolute;
+    right: 6px;
+    margin: 0;
+    color: var(--text-muted);
+}
+
+/* Search hits in a row's name, addresses, players or note. mark's UA default
+   is a hard yellow that disappears in dark mode; use the warning surface
+   and keep the row's text color. */
+.mail-hit {
+    background: var(--color-warning-surface);
+    color: inherit;
+    border-radius: 3px;
+    padding: 0 1px;
+}
+
+.mail-search-count {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.mail-note-hit {
+    font-style: italic;
+}
+
+/* The lookup banner: what the relay would do with mail from the typed address. */
+.mail-search-result {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--surface-subtle);
+    border: 1px solid var(--border-lighter);
+    font-size: 0.9rem;
+}
+
+.mail-search-result p {
+    margin: 0 0 6px;
+    overflow-wrap: anywhere;
+}
+
+.mail-search-result p:last-child {
+    margin-bottom: 0;
+}
+
+.mail-search-result .mail-search-add {
+    margin: 4px 0 0;
+}
+
+/* A sender's name in the log or a held message: a button that looks the
+   address up in the directory search, drawn as a link. */
+.mail-link {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: var(--color-info);
+    text-align: left;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.mail-link:hover {
+    text-decoration: underline;
+}
+
+.mail-link-addr {
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
 /* Directory + Player addresses: one column on a phone, two cards side by
    side from 820px up. Each card's list scrolls inside the card so the pair
    stays about a screen high however many people the team has. The scroll
