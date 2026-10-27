@@ -589,6 +589,25 @@ body.scrimmage-dialog-open {
     overflow: hidden;
 }
 
+/* The floating mic drives squad narration while the picker is open
+   (narration/squadNarration.js, narration/micButton.js). Idle, the button
+   normally waits under open dialogs (narration/micButton.css: z-index 990
+   against the modals' 1000); here the dialog is the thing it narrates, so
+   it rides above it. The first-use disclosure modal must then outrank the
+   picker too: both are .modal at 1000 and the picker is appended later. */
+body.scrimmage-dialog-open #narrationMicBtn.mic-idle {
+    z-index: 1001;
+}
+body.scrimmage-dialog-open #narrationDisclosureModal {
+    z-index: 1002;
+}
+/* Room for the button over the dialog's last row (the Start / Save buttons
+   and the hint), on the same gate as every other reservation
+   (body.mic-button-visible, set by micButton.js render). */
+body.scrimmage-dialog-open.mic-button-visible .scrimmage-dialog .event-dialog-body {
+    padding-bottom: 88px;
+}
+
 .scrimmage-squad-names {
     display: flex;
     align-items: center;

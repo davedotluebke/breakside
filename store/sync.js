@@ -955,7 +955,9 @@ async function syncTeamToCloud(team) {
         setsEnabled: !!team.setsEnabled,
         sets: team.sets || { offensive: [], defensive: [] },
         // Viewer stats restriction (utils/statsAudience.js)
-        viewerStatsLevel: team.viewerStatsLevel || null
+        viewerStatsLevel: team.viewerStatsLevel || null,
+        // Scrimmage squad names (store/scrimmage.js teamSquadNames)
+        squadNames: team.squadNames || null
     };
     
     log('📤 Queueing team sync:', {
@@ -1776,6 +1778,7 @@ async function syncUserTeams() {
                     defensive: serverTeam.sets?.defensive || [],
                 };
                 localTeam.viewerStatsLevel = serverTeam.viewerStatsLevel || null;
+                localTeam.squadNames = serverTeam.squadNames || null;
 
                 // If server has embedded roster data, deserialize it
                 if (serverTeam.teamRoster && serverTeam.teamRoster.length > 0) {
@@ -1821,6 +1824,7 @@ async function syncUserTeams() {
 
                     // Set tagging fields follow the same server-newer rule
                     localTeam.viewerStatsLevel = serverTeam.viewerStatsLevel || null;
+                    localTeam.squadNames = serverTeam.squadNames || null;
                     localTeam.setsEnabled = !!serverTeam.setsEnabled;
                     localTeam.sets = {
                         offensive: serverTeam.sets?.offensive || [],

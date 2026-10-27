@@ -22,11 +22,12 @@
 import { Game, Gender } from '../store/models.js';
 import { teams, currentTeam, setCurrentEvent, saveAllTeamsData } from '../store/storage.js';
 import {
-    syncGameToCloud, generateGameId, authFetch, API_BASE_URL, listServerGames,
+    syncGameToCloud, syncTeamToCloud, generateGameId, authFetch, API_BASE_URL, listServerGames,
     patchScrimmageGame,
 } from '../store/sync.js';
 import {
-    SQUADS, DEFAULT_SQUAD_NAMES, normalizeSquadNames, generateScrimmageId,
+    SQUADS, DEFAULT_SQUAD_NAMES, normalizeSquadNames, teamSquadNames, squadNamesChanged,
+    generateScrimmageId,
     squadGameFields, buildSquadSnapshot, autoFillSquads, otherSquad, squadRoster,
     groupScrimmages, scrimmageSquadNames, squadAssignments, squadPatch,
     squadDefinition, applySquadDefinition, describeSquadChange,
@@ -52,6 +53,8 @@ import { log } from '../utils/logger.js';
 //   absent      ids whose "here" box is unticked: never on a squad, and Auto
 //               skips them (default: everyone is here)
 //   names       the squad names as typed
+//   namesTouched whether the coach has typed in a name box (new mode: until
+//               then the team's saved names land when the team loads)
 //   pulling     which squad pulls first (new mode)
 //   edit        { scrimmageId, games: {X?, Y?} } — the halves being edited:
 //               this device's live Game for the half it is tracking, the
@@ -149,6 +152,10 @@ function openDialog(mode, team) {
     modal.className = 'modal scrimmage-modal';
     modal.style.display = 'flex';
     lockPageScroll();
+    // The team's own squad names when it is already loaded; the defaults
+    // otherwise, replaced once the team lands (showNewScrimmageDialog).
+    const initialNames = (mode === 'new' && currentTeam && currentTeam.id === team?.id)
+        ? teamSquadNames(currentTeam) : { ...DEFAULT_SQUAD_NAMES };
     modal.innerHTML = `
         <div class="modal-content event-dialog scrimmage-dialog">
             <div class="dialog-header prominent-dialog-header">
@@ -160,10 +167,10 @@ function openDialog(mode, team) {
                        placeholder="Label (optional) — e.g. Tuesday practice" maxlength="40">
                 <div class="scrimmage-squad-names">
                     <input type="text" id="scrimmageSquadNameX" class="event-dialog-input scrimmage-squad-name"
-                           value="${DEFAULT_SQUAD_NAMES.X}" maxlength="20" aria-label="First squad name">
+                           value="${escapeAttr(initialNames.X)}" maxlength="20" aria-label="First squad name">
                     <span class="scrimmage-vs">vs</span>
                     <input type="text" id="scrimmageSquadNameY" class="event-dialog-input scrimmage-squad-name"
-                           value="${DEFAULT_SQUAD_NAMES.Y}" maxlength="20" aria-label="Second squad name">
+                           value="${escapeAttr(initialNames.Y)}" maxlength="20" aria-label="Second squad name">
                 </div>
                 <div class="scrimmage-tools">
                     <button type="button" id="scrimmageClearBtn" class="scrimmage-tool-btn" title="Take everyone off both squads">
@@ -246,7 +253,8 @@ function openDialog(mode, team) {
         ghosts: new Set(),
         assignment: new Map(),
         absent: new Set(),
-        names: { ...DEFAULT_SQUAD_NAMES },
+        names: { ...initialNames },
+        namesTouched: false,
         pulling: 'X',
         variation: 'standard',
         twoPointPlays: false,
@@ -263,6 +271,7 @@ function openDialog(mode, team) {
         const input = modal.querySelector(`#scrimmageSquadName${squad}`);
         input.addEventListener('input', () => {
             state.names[squad] = input.value;
+            state.namesTouched = true;
             renderNames();
         });
     });
@@ -295,6 +304,7 @@ function openDialog(mode, team) {
     modal.querySelector('#scrimmageSaveBtn')?.addEventListener('click', saveSquadEdit);
     wireAddPlayerRow(modal);
     renderNames();
+    announceDialog(true);
     return modal;
 }
 
@@ -303,6 +313,64 @@ function closeDialog() {
     state.modal.remove();
     state = null;
     unlockPageScroll();
+    announceDialog(false);
+}
+
+/**
+ * Tell the narration layer the squad picker opened or closed: the floating
+ * mic button shows over the dialog and drives squad narration while it is
+ * open (narration/squadNarration.js, narration/micButton.js both listen).
+ */
+function announceDialog(open) {
+    document.dispatchEvent(new CustomEvent('breakside:scrimmage-dialog', { detail: { open } }));
+}
+
+function escapeAttr(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+// ── squad narration seam ────────────────────────────────────────────────
+//
+// What narration/squadNarration.js reads and writes: the picker's players,
+// names and assignment, and one entry point to replace the assignment with
+// what the coach said — the same mutation a tap on a pick button makes.
+
+/**
+ * The open picker's state for squad narration, or null when no dialog is
+ * open (or its roster has not landed yet).
+ * @returns {{teamId: string|null, roster: Array<object>, names: {X: string, Y: string},
+ *            assignment: Map<string, 'X'|'Y'>, absent: Set<string>, mode: 'new'|'edit'}|null}
+ */
+function getSquadDialogContext() {
+    if (!state || !state.roster.length) return null;
+    return {
+        teamId: (currentTeam && currentTeam.id) || state.team?.id || null,
+        roster: state.roster.slice(),
+        names: effectiveNames(),
+        assignment: new Map(state.assignment),
+        absent: new Set(state.absent),
+        mode: state.mode,
+    };
+}
+
+/**
+ * Replace the picker's assignment with a narrated one (playerId → squad).
+ * A player the coach put on a squad is here today, whatever the box said;
+ * a squad with no game (edit mode, deleted half) cannot take anyone.
+ * @returns {boolean} whether a dialog was open to apply it to
+ */
+function applyNarratedSquads(assignment) {
+    if (!state) return false;
+    const next = new Map();
+    assignment.forEach((squad, id) => {
+        if (!SQUADS.includes(squad) || !squadHasGame(squad)) return;
+        if (!state.roster.some(p => p.id === id)) return;
+        next.set(id, squad);
+        state.absent.delete(id);
+    });
+    state.assignment = next;
+    renderTable();
+    return true;
 }
 
 // The dialog is taller than a phone screen, so its overlay scrolls. The page
@@ -360,6 +428,14 @@ function showNewScrimmageDialog(team) {
     // the team list behind the dialog.
     selectCloudTeam(team, { landOn: 'none' }).then(() => {
         if (!stillOpen(modal)) return;   // closed meanwhile
+        // The team's saved squad names, unless the coach already typed.
+        if (!state.namesTouched) {
+            state.names = teamSquadNames(currentTeam);
+            SQUADS.forEach(squad => {
+                const input = modal.querySelector(`#scrimmageSquadName${squad}`);
+                if (input) input.value = state.names[squad];
+            });
+        }
         rebuildRoster();
         autoFill();
         renderTable();
@@ -763,6 +839,14 @@ function startScrimmage(trackSquad) {
         // Under a variation with no pull the toggle names who STARTS WITH the
         // disc, so the other squad is the one "pulling" (starting on defense).
         const pullingSquad = variationById(state.variation).noPull ? otherSquad(state.pulling) : state.pulling;
+        // The names a coach uses become the team's default for next time
+        // (Team Settings → Scrimmage Squads shows and edits the same field).
+        // Set before the games are built so saveAllTeamsData persists both.
+        if (squadNamesChanged(currentTeam, names)) {
+            currentTeam.squadNames = { ...names };
+            currentTeam.updatedAt = new Date().toISOString();
+            syncTeamToCloud(currentTeam);
+        }
         const games = createSquadGames(currentTeam, {
             names, ids, label, pullingSquad, trackSquad, rules,
         });
@@ -938,4 +1022,7 @@ async function saveSquadEdit() {
     if (!isGameScreenVisible()) populateCloudTeamsAndGames();
 }
 
-export { showNewScrimmageDialog, showEditSquadsDialog, createSquadGames };
+export {
+    showNewScrimmageDialog, showEditSquadsDialog, createSquadGames,
+    getSquadDialogContext, applyNarratedSquads,
+};

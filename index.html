@@ -648,6 +648,27 @@
                 </div>
             </div>
 
+            <!-- Scrimmage squads: what the team calls its two squads (Team.squadNames;
+                 store/scrimmage.js teamSquadNames). New Scrimmage starts from these
+                 and squad narration listens for them. -->
+            <div class="settings-section">
+                <h3>Scrimmage Squads</h3>
+                <p class="section-description">What the two squads are called when this team scrimmages — pinnie colours, usually. New Scrimmage starts from these names, and the names you use there are remembered here. Voice squad set-up listens for them: "Alice and Bob on Orange, Dana on Black". Names read out without a squad go on the first one.</p>
+                <div class="sets-form">
+                    <div class="form-group">
+                        <label for="squadNameXInput">First squad</label>
+                        <input type="text" id="squadNameXInput" placeholder="Dark" maxlength="20" class="url-input" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="squadNameYInput">Second squad</label>
+                        <input type="text" id="squadNameYInput" placeholder="Light" maxlength="20" class="url-input" autocomplete="off">
+                    </div>
+                    <button id="saveSquadNamesBtn" class="save-identity-btn">
+                        <i class="fas fa-save"></i> Save Squad Names
+                    </button>
+                </div>
+            </div>
+
             <!-- Viewer Stats: hold viewers + share guests to Fun stats (utils/statsAudience.js) -->
             <div class="settings-section">
                 <h3>Viewer Stats</h3>

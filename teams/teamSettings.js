@@ -5,6 +5,7 @@
 import { currentTeam, saveAllTeamsData, isViewer, canManageCurrentTeam } from '../store/storage.js';
 import { roleLabel } from '../store/roles.js';
 import { StatsLevel } from '../utils/statsLevel.js';
+import { DEFAULT_SQUAD_NAMES, teamSquadNames, normalizeSquadNames } from '../store/scrimmage.js';
 import { authFetch, syncTeamToCloud, syncUserTeams, API_BASE_URL } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
 import { showGameScreen } from '../ui/panelSystem.js';
@@ -76,6 +77,8 @@ function showTeamSettingsScreen(returnScreen) {
     document.querySelectorAll('#teamSettingsScreen [data-coach-only]').forEach(el => {
         el.style.display = manages ? '' : 'none';
     });
+    // Scrimmage squad names
+    loadSquadNames();
 
     // Load data
     loadTeamMembers();
@@ -865,6 +868,58 @@ function saveViewerStatsSetting() {
     }
 }
 
+/**
+ * Scrimmage squad names (Team.squadNames; store/scrimmage.js teamSquadNames):
+ * what New Scrimmage starts from and what squad narration listens for.
+ * Shown as stored, defaults as placeholders.
+ */
+function loadSquadNames() {
+    const xInput = document.getElementById('squadNameXInput');
+    const yInput = document.getElementById('squadNameYInput');
+    if (!xInput || !yInput || !currentTeam) return;
+    const names = currentTeam.squadNames || {};
+    xInput.value = names.X || '';
+    yInput.value = names.Y || '';
+    xInput.placeholder = DEFAULT_SQUAD_NAMES.X;
+    yInput.placeholder = DEFAULT_SQUAD_NAMES.Y;
+    xInput.disabled = yInput.disabled = isViewer();
+    const saveBtn = document.getElementById('saveSquadNamesBtn');
+    if (saveBtn) saveBtn.disabled = isViewer();
+}
+
+function saveSquadNames() {
+    const xInput = document.getElementById('squadNameXInput');
+    const yInput = document.getElementById('squadNameYInput');
+    const saveBtn = document.getElementById('saveSquadNamesBtn');
+    if (!xInput || !yInput || !currentTeam || isViewer()) return;
+
+    const typed = { X: xInput.value, Y: yInput.value };
+    const names = normalizeSquadNames(typed);
+    const isDefault = names.X === DEFAULT_SQUAD_NAMES.X && names.Y === DEFAULT_SQUAD_NAMES.Y;
+    // Blank both to go back to the defaults; stored as null, as legacy teams are.
+    currentTeam.squadNames = isDefault && !typed.X.trim() && !typed.Y.trim() ? null : names;
+    // Show what was actually saved (trimmed, de-duplicated).
+    xInput.value = currentTeam.squadNames ? names.X : '';
+    yInput.value = currentTeam.squadNames ? names.Y : '';
+
+    currentTeam.updatedAt = new Date().toISOString();
+    if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
+    if (typeof syncTeamToCloud === 'function' && currentTeam.id) {
+        syncTeamToCloud(currentTeam);
+    }
+    log(`🥏 Squad names saved: ${teamSquadNames(currentTeam).X} vs ${teamSquadNames(currentTeam).Y}`);
+
+    if (saveBtn) {
+        const originalHtml = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+        saveBtn.disabled = true;
+        setTimeout(() => {
+            saveBtn.innerHTML = originalHtml;
+            saveBtn.disabled = false;
+        }, 1500);
+    }
+}
+
 function loadTeamIdentity() {
     const symbolInput = document.getElementById('teamSymbolInput');
     const iconUrlInput = document.getElementById('teamIconUrlInput');
@@ -1162,7 +1217,8 @@ function initializeTeamIdentityHandlers() {
     }
 
     document.getElementById('viewerFunStatsToggle')?.addEventListener('change', saveViewerStatsSetting);
-    
+    document.getElementById('saveSquadNamesBtn')?.addEventListener('click', saveSquadNames);
+
     // Auto-uppercase symbol input
     const symbolInput = document.getElementById('teamSymbolInput');
     if (symbolInput) {

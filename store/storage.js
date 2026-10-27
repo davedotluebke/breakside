@@ -235,7 +235,10 @@ function serializeTeam(team) {
 
         // Viewer stats restriction (utils/statsAudience.js)
         viewerStatsLevel: team.viewerStatsLevel || null,
-        
+
+        // Scrimmage squad names (store/scrimmage.js teamSquadNames)
+        squadNames: team.squadNames || null,
+
         // Existing fields
         name: team.name,
         
@@ -678,7 +681,8 @@ function deserializeTeams(serializedData) {
             defensive: teamData.sets?.defensive || [],
         };
         team.viewerStatsLevel = teamData.viewerStatsLevel || null;
-        
+        team.squadNames = teamData.squadNames || null;
+
         // Deserialize the roster
         team.teamRoster = teamData.teamRoster.map(playerData => deserializePlayer(playerData));
         

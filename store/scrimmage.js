@@ -60,6 +60,29 @@ function normalizeSquadNames(names = {}) {
     return { X: x, Y: y };
 }
 
+/**
+ * The squad names a team's scrimmages start from: Team.squadNames when the
+ * coach has set them (Team Settings, or the names used in the last New
+ * Scrimmage), else the defaults. Always normalized, so two squads never
+ * share a name.
+ * @param {{squadNames?: {X?: string, Y?: string}|null}|null} team
+ * @returns {{X: string, Y: string}}
+ */
+function teamSquadNames(team) {
+    return normalizeSquadNames(team?.squadNames || {});
+}
+
+/**
+ * Whether `names` differ from what the team has saved — the New Scrimmage
+ * dialog remembers the names a coach types as the team's default, so the
+ * next scrimmage (and squad narration) starts from them.
+ */
+function squadNamesChanged(team, names) {
+    const saved = teamSquadNames(team);
+    const next = normalizeSquadNames(names);
+    return saved.X !== next.X || saved.Y !== next.Y;
+}
+
 /** "Scrimmage-2026-09-27-ab12" — dated, so a data directory listing reads. */
 function generateScrimmageId(date = new Date()) {
     return generateShortId(`Scrimmage ${isoDay(date)}`);
@@ -570,7 +593,7 @@ function isScrimmageOver(scrimmage) {
 export {
     SQUADS, DEFAULT_SQUAD_NAMES,
     isScrimmageGame, withoutScrimmages, otherSquad,
-    normalizeSquadNames, generateScrimmageId, formatShortDate,
+    normalizeSquadNames, teamSquadNames, squadNamesChanged, generateScrimmageId, formatShortDate,
     squadGameFields, buildSquadSnapshot, squadRoster, autoFillSquads,
     gameStartMs, groupScrimmages, scrimmageSquadNames, scrimmageScores,
     scrimmageLabel, isScrimmageOver,

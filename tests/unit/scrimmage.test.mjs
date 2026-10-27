@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
     DEFAULT_SQUAD_NAMES,
     isScrimmageGame, withoutScrimmages, otherSquad, normalizeSquadNames,
+    teamSquadNames, squadNamesChanged,
     generateScrimmageId, formatShortDate, squadGameFields, buildSquadSnapshot,
     squadRoster, autoFillSquads, groupScrimmages, scrimmageSquadNames,
     scrimmageScores, scrimmageLabel, isScrimmageOver,
@@ -99,6 +100,19 @@ test('squad names: trimmed, defaulted, never identical', () => {
     // Same name on both sides would give both games the same team and
     // opponent (and the same id stem); disambiguate rather than refuse.
     assert.deepEqual(normalizeSquadNames({ X: 'White', Y: 'white' }), { X: 'White X', Y: 'white Y' });
+});
+
+test('teamSquadNames: the team\'s own names, else the defaults; squadNamesChanged compares normalized', () => {
+    assert.deepEqual(teamSquadNames(null), DEFAULT_SQUAD_NAMES);
+    assert.deepEqual(teamSquadNames({ squadNames: null }), DEFAULT_SQUAD_NAMES);
+    assert.deepEqual(teamSquadNames({ squadNames: { X: 'Orange', Y: 'Black' } }), { X: 'Orange', Y: 'Black' });
+    // A half-set team falls back per side.
+    assert.deepEqual(teamSquadNames({ squadNames: { X: 'Orange' } }), { X: 'Orange', Y: 'Light' });
+    const team = { squadNames: { X: 'Orange', Y: 'Black' } };
+    assert.equal(squadNamesChanged(team, { X: ' Orange ', Y: 'Black' }), false);
+    assert.equal(squadNamesChanged(team, { X: 'Orange', Y: 'Blue' }), true);
+    assert.equal(squadNamesChanged({ squadNames: null }, { X: '', Y: '' }), false);
+    assert.equal(squadNamesChanged({ squadNames: null }, { X: 'Orange', Y: '' }), true);
 });
 
 test('scrimmage ids are dated and carry a hash suffix', () => {

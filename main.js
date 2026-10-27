@@ -196,6 +196,7 @@ import './narration/transcriptDisplay.js';
 // lineupNarration before micButton: the FAB imports it to route Line-tab
 // presses, so it evaluates first either way — list it in the real order.
 import './narration/lineupNarration.js';
+import './narration/squadNarration.js';
 import './narration/micButton.js';
 
 // Skip the service worker during local development (localhost / 127.0.0.1).

@@ -377,7 +377,13 @@ function Team(name = "My Team", initialRoster = [], id = null) {
     // The one stats level the team's viewers (and share-link guests) may see:
     // 'fun' or null for no restriction. See utils/statsAudience.js.
     this.viewerStatsLevel = null;
-    
+
+    // What this team calls its two scrimmage squads ({X, Y}; pinnie colours,
+    // usually), or null for the defaults (store/scrimmage.js
+    // DEFAULT_SQUAD_NAMES). Set in Team Settings and remembered from the
+    // last New Scrimmage; squad narration listens for these words.
+    this.squadNames = null;
+
     // New model: array of player IDs (references to Player entities)
     this.playerIds = [];
     

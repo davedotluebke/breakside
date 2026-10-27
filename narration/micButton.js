@@ -3,10 +3,13 @@
  *
  * Floating FAB at bottom-right that controls speech narration recording.
  *
- * One button, two jobs. Which one it drives follows the game clock, not the
- * tab (see isLineupContext):
- *   - between points → lineup narration ("Kris in for Wes"), on ANY tab
- *   - during a point → event narration, except on the Line tab
+ * One button, three jobs. Which one it drives follows what is on screen
+ * (see currentTarget):
+ *   - the scrimmage squad picker open → squad narration ("Alice and Bob
+ *     on Orange, Dana on Black"), on the team list or over a game
+ *   - otherwise, by the game clock rather than the tab (isLineupContext):
+ *     between points → lineup narration ("Kris in for Wes"), on ANY tab;
+ *     during a point → event narration, except on the Line tab
  * The press handlers never branch on which one is live.
  *
  * Where the button appears is a per-device setting (Advanced Settings →
@@ -24,10 +27,12 @@
  *   - Long press (held >= LONG_PRESS_MS):        temporary recording — records
  *                                                until finger lifts, then stops
  *
- * Visibility: shown only when the in-game screen is active and the setting
- * allows it on the current tab. Game-screen enter/exit, tab changes
- * (ui/panelSystem.js applyTabState), phase transitions in either narration
- * layer, and the setting itself all call back into render(); nothing polls.
+ * Visibility: shown when the in-game screen is active and the setting
+ * allows it on the current tab, or when the squad picker is open and the
+ * setting is not off. Game-screen enter/exit, tab changes
+ * (ui/panelSystem.js applyTabState), the picker opening and closing
+ * (breakside:scrimmage-dialog), phase transitions in any narration layer,
+ * and the setting itself all call back into render(); nothing polls.
  * Correctness never rides on the paint either way: every press reads
  * currentTarget() live.
  *
@@ -40,6 +45,7 @@ import { isPointInProgress } from '../utils/helpers.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { narrationEngine } from './narrationEngine.js';
 import { lineupNarration } from './lineupNarration.js';
+import { squadNarration } from './squadNarration.js';
 
 const narrationMicButton = (function() {
     const BTN_ID = 'narrationMicBtn';
@@ -118,6 +124,34 @@ const narrationMicButton = (function() {
         }
     };
 
+    const squadTarget = {
+        name: 'squads',
+        phase: () => (squadNarration && squadNarration.getPhase)
+            ? squadNarration.getPhase()
+            : 'idle',
+        isBusy() {
+            const p = this.phase();
+            return p === 'recording' || p === 'connecting';
+        },
+        blocked: (phase) => phase === 'processing'
+            ? 'Still working out the previous squads…'
+            : null,
+        start: () => squadNarration.start(),
+        stop: () => squadNarration.stop(),
+        failedToStart: (msg) => 'Squad narration failed to start: ' + msg,
+        ui: {
+            idle:       ['Narrate the squads — tap, say who goes on which squad, tap again', 'Narrate squads'],
+            connecting: ['Connecting…', 'Connecting'],
+            recording:  ['Listening — tap to finish the squads', 'Finish squads'],
+            processing: ['Working out the squads…', 'Working out the squads']
+        }
+    };
+
+    /** Whether the scrimmage squad picker is open (teams/scrimmageDialogs.js). */
+    function isSquadDialogOpen() {
+        return !!(squadNarration && squadNarration.isDialogOpen && squadNarration.isDialogOpen());
+    }
+
     /**
      * Whether the mic should be talking about a LINE rather than about play.
      *
@@ -165,7 +199,8 @@ const narrationMicButton = (function() {
     }
 
     function anyTargetBusy() {
-        return lineupTarget.phase() !== 'idle' || eventTarget.phase() !== 'idle';
+        return lineupTarget.phase() !== 'idle' || eventTarget.phase() !== 'idle'
+            || squadTarget.phase() !== 'idle';
     }
 
     /**
@@ -178,12 +213,18 @@ const narrationMicButton = (function() {
      * anyway). In particular this keeps a lineup recording stoppable through
      * the point start that would otherwise flip the context under it.
      *
+     * The squad picker open means squads, wherever it was opened from: on
+     * the team list there is no game to narrate, and over a game (Edit
+     * Squads) the picker is what the coach is looking at.
+     *
      * In 'lineup' mode the button never drives event narration, even
      * mid-point on the All tab — that is the whole point of the setting.
      */
     function currentTarget() {
         if (lineupTarget.phase() !== 'idle') return lineupTarget;
         if (eventTarget.phase() !== 'idle') return eventTarget;
+        if (squadTarget.phase() !== 'idle') return squadTarget;
+        if (isSquadDialogOpen()) return squadTarget;
         if (narrationMode() === 'lineup') return lineupTarget;
         return isLineupContext() ? lineupTarget : eventTarget;
     }
@@ -223,7 +264,11 @@ const narrationMicButton = (function() {
         // recording or its follow-up work is running, in which case the
         // button stays until that is idle: the coach must be able to stop
         // what they started, and see it finish, whatever they just changed.
-        const visible = !!inGame && (isEnabledOnTab() || anyTargetBusy());
+        // The squad picker shows the button wherever it is open (it is a
+        // lineup-type job, so 'lineup' mode allows it; 'off' still means off).
+        const visible = (!!inGame && isEnabledOnTab())
+            || (isSquadDialogOpen() && narrationMode() !== 'off')
+            || anyTargetBusy();
         btn.classList.toggle('visible', visible);
         // Mirrored on <body> for the layouts that keep the button's corner
         // clear — the Field events bar's right padding, the Full tab's log
@@ -580,6 +625,8 @@ const narrationMicButton = (function() {
         // directly (game/gameScreenSync.js), and this listener catches every
         // other navigation path.
         document.addEventListener('breakside:screen-shown', render);
+        // The squad picker opening or closing (teams/scrimmageDialogs.js).
+        document.addEventListener('breakside:scrimmage-dialog', render);
     }
 
     if (document.readyState === 'loading') {
@@ -605,7 +652,7 @@ const narrationMicButton = (function() {
 // --- ES-module export ---
 export { narrationMicButton };
 // window survivor: late-bound back-edge hook (called window-qualified by
-// narration/narrationEngine.js setPhase and narration/lineupNarration.js
-// setPhase — an engine↔micButton import cycle would invert their eval
-// order; see setPhase)
+// narration/narrationEngine.js, narration/lineupNarration.js and
+// narration/squadNarration.js setPhase — an engine↔micButton import cycle
+// would invert their eval order; see setPhase)
 window.narrationMicButton = narrationMicButton;
