@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dual-squad tracking — mockup</title>
+<style>
+  :root {
+    --bg: #111; --surface: #1d1d1f; --surface-2: #2a2a2d; --text: #eee; --muted: #9a9a9a;
+    --dark-squad: #2f6fdf;   /* "Dark" squad accent */
+    --light-squad: #e3a21a;  /* "Light" squad accent */
+    --o: #35a86b; --d: #c54848;
+  }
+  body { margin: 0; background: #000; color: var(--text); font-family: -apple-system, system-ui, sans-serif; }
+  .wrap { display: flex; gap: 32px; padding: 24px; flex-wrap: wrap; justify-content: center; }
+  .note { max-width: 760px; margin: 0 auto 8px; color: var(--muted); font-size: 0.9rem; line-height: 1.4; padding: 0 24px; }
+  .phone { width: 360px; background: var(--bg); border-radius: 24px; border: 1px solid #333; overflow: hidden; position: relative; }
+  .phone h3 { margin: 0; padding: 10px 14px; font-size: 0.8rem; color: var(--muted); font-weight: 500; background: #000; border-bottom: 1px solid #222; }
+  /* header: tinted by the ACTIVE squad */
+  .header { padding: 10px 12px 8px; border-bottom: 3px solid; display: flex; flex-direction: column; gap: 8px; }
+  .header.dark { background: linear-gradient(#1b2d52, var(--surface)); border-color: var(--dark-squad); }
+  .header.light { background: linear-gradient(#4a3610, var(--surface)); border-color: var(--light-squad); }
+  .score { display: flex; justify-content: center; align-items: center; gap: 14px; font-weight: 700; letter-spacing: 0.04em; }
+  .score .num { font-size: 1.6rem; }
+  .score .name { font-size: 0.85rem; text-transform: uppercase; }
+  .score .name.dark { color: var(--dark-squad); } .score .name.light { color: var(--light-squad); }
+  /* the squad switcher — a segmented control */
+  .switch { display: flex; border-radius: 12px; overflow: hidden; border: 1px solid #444; }
+  .switch button { flex: 1; border: 0; padding: 8px 6px; background: var(--surface-2); color: var(--muted); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .switch button.on.dark { background: var(--dark-squad); color: #fff; }
+  .switch button.on.light { background: var(--light-squad); color: #111; }
+  .pill { font-size: 0.65rem; padding: 2px 7px; border-radius: 999px; font-weight: 800; letter-spacing: 0.05em; }
+  .pill.o { background: var(--o); color: #fff; } .pill.d { background: var(--d); color: #fff; }
+  .switch button:not(.on) .pill { opacity: 0.7; }
+  .auto { font-size: 0.7rem; color: var(--muted); text-align: center; }
+  .auto b { color: var(--text); }
+  .tabs { display: flex; background: var(--surface); border-bottom: 1px solid #333; }
+  .tabs span { flex: 1; text-align: center; padding: 8px 0; font-size: 0.75rem; color: var(--muted); }
+  .tabs span.on { color: var(--text); border-bottom: 2px solid #ff8a3d; }
+  .body { padding: 12px; min-height: 300px; display: flex; flex-direction: column; gap: 10px; }
+  .holder { background: var(--surface); border-radius: 10px; padding: 10px 12px; font-size: 0.9rem; }
+  .holder small { color: var(--muted); display: block; margin-top: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .grid button { border: 0; border-radius: 10px; padding: 12px 4px; background: var(--surface-2); color: var(--text); font-size: 0.8rem; }
+  .grid button.dark { border-left: 4px solid var(--dark-squad); } .grid button.light { border-left: 4px solid var(--light-squad); }
+  .row { display: flex; gap: 6px; }
+  .row button { flex: 1; border: 0; border-radius: 10px; padding: 12px 4px; background: var(--surface-2); color: var(--text); font-size: 0.8rem; }
+  .row button.turn { background: #4a2626; } .row button.score { background: #234a33; }
+  /* the post-turnover toast */
+  .toast { position: absolute; left: 10px; right: 10px; bottom: 14px; background: #262626; border: 1px solid var(--light-squad); border-radius: 14px; padding: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+  .toast .t { font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
+  .toast .t em { color: var(--light-squad); font-style: normal; }
+  .toast .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .toast .chips span { background: var(--surface-2); border-radius: 999px; padding: 5px 10px; font-size: 0.8rem; }
+  .toast .chips span.sel { background: var(--light-squad); color: #111; font-weight: 700; }
+  .toast .mods { display: flex; gap: 6px; }
+  .toast .mods span { flex: 1; text-align: center; border: 1px solid #555; border-radius: 8px; padding: 6px; font-size: 0.8rem; }
+  .toast .mods span.sel { border-color: var(--light-squad); background: #3a2d12; }
+  .toast .act { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.8rem; }
+  .toast .act b { color: var(--light-squad); }
+  .log { font-size: 0.78rem; line-height: 1.5; }
+  .log .dk { color: var(--dark-squad); } .log .lt { color: var(--light-squad); }
+</style>
+</head>
+<body>
+<p class="note"><b>Dual-squad tracking, mockup.</b> One coach, both squads. The header is tinted by the <i>active</i> squad; the segmented switcher shows both squads with their O/D pill; by default the active squad follows the disc. Left: Dark on offense, mid-possession. Right: Dark just turned it over, the view switched to Light, and a toast asks whether it was an individual D and with what modifiers. The mirrored Dark-side event (a throwaway, or a turnover against good defense) is already written.</p>
+<div class="wrap">
+
+  <div class="phone">
+    <h3>A — Dark has the disc (active squad follows the disc)</h3>
+    <div class="header dark">
+      <div class="score"><span class="name dark">Dark</span><span class="num">4</span><span class="num">–</span><span class="num">3</span><span class="name light">Light</span></div>
+      <div class="switch">
+        <button class="on dark">Dark <span class="pill o">O</span></button>
+        <button class="light">Light <span class="pill d">D</span></button>
+      </div>
+      <div class="auto">Auto: showing the squad with the disc · tap a squad to pin it</div>
+    </div>
+    <div class="tabs"><span>Simple</span><span class="on">Full</span><span>Field</span><span>Line</span><span>Log</span></div>
+    <div class="body">
+      <div class="holder">Bob has the disc <small>Dark · possession 2 · 0:41</small></div>
+      <div class="grid">
+        <button class="dark">Alice</button><button class="dark">Charlie</button><button class="dark">Dana</button><button class="dark">Eve</button>
+        <button class="dark">Hank</button><button class="dark">Iris</button><button class="dark">Jake</button><button class="dark">Unknown</button>
+      </div>
+      <div class="row"><button class="turn">Throwaway</button><button class="turn">Drop</button><button class="turn">Stall</button><button class="score">Score</button></div>
+      <div class="log">
+        <div><span class="dk">Dark</span> Bob → Eve (huck)</div>
+        <div><span class="dk">Dark</span> Eve → Bob</div>
+        <div><span class="lt">Light</span> timeout</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone">
+    <h3>B — turnover: the view switches to Light, with a toast</h3>
+    <div class="header light">
+      <div class="score"><span class="name dark">Dark</span><span class="num">4</span><span class="num">–</span><span class="num">3</span><span class="name light">Light</span></div>
+      <div class="switch">
+        <button class="dark">Dark <span class="pill d">D</span></button>
+        <button class="on light">Light <span class="pill o">O</span></button>
+      </div>
+      <div class="auto">Auto: showing the squad with the disc · tap a squad to pin it</div>
+    </div>
+    <div class="tabs"><span>Simple</span><span class="on">Full</span><span>Field</span><span>Line</span><span>Log</span></div>
+    <div class="body">
+      <div class="holder">Light picks up <small>Light · possession 3 · tap who has it</small></div>
+      <div class="grid">
+        <button class="light">Kai</button><button class="light">Lena</button><button class="light">Mo</button><button class="light">Nia</button>
+        <button class="light">Omar</button><button class="light">Pia</button><button class="light">Quinn</button><button class="light">Unknown</button>
+      </div>
+      <div class="log">
+        <div><span class="dk">Dark</span> Bob → Eve (huck)</div>
+        <div><span class="dk">Dark</span> Bob throwaway</div>
+      </div>
+    </div>
+    <div class="toast">
+      <div class="t">Was that a <em>Light</em> D?</div>
+      <div class="chips"><span>Kai</span><span class="sel">Lena</span><span>Mo</span><span>Nia</span><span>Omar</span><span>Pia</span><span>Quinn</span></div>
+      <div class="mods"><span>Block</span><span class="sel">Interception</span><span class="sel">Layout</span><span>Sky</span></div>
+      <div class="act"><span>No — plain throwaway</span><b>Save D ›</b></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
