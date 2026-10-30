@@ -29,7 +29,9 @@ except ImportError:
 # Import storage - handle both relative and absolute imports
 try:
     from storage.user_storage import get_user, user_exists
-    from storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
+    from storage.membership_storage import (
+        GAME_RECORDER_ROLES, get_user_team_role, get_user_memberships, get_user_teams,
+    )
     from storage.game_storage import game_exists, get_game_current
     from storage.event_storage import event_exists, get_event
     from storage.index_storage import get_player_teams_verified
@@ -37,7 +39,9 @@ try:
     from storage.team_storage import team_exists
 except ImportError:
     from breakside_server.storage.user_storage import get_user, user_exists
-    from breakside_server.storage.membership_storage import get_user_team_role, get_user_memberships, get_user_teams
+    from breakside_server.storage.membership_storage import (
+        GAME_RECORDER_ROLES, get_user_team_role, get_user_memberships, get_user_teams,
+    )
     from breakside_server.storage.game_storage import game_exists, get_game_current
     from breakside_server.storage.event_storage import event_exists, get_event
     from breakside_server.storage.index_storage import get_player_teams_verified
@@ -77,12 +81,51 @@ def is_admin(user_id: str) -> bool:
 def coach_team_ids(user_id: str) -> set:
     """Return the set of team ids where ``user_id`` holds the Coach role.
 
-    Lifted out of ``assert_player_edit_access`` so ``require_any_coach`` can
-    ask the same question without duplicating the membership scan.
+    Lifted out of ``assert_player_edit_access`` so other checks can ask the
+    same question without duplicating the membership scan.
     """
     return set(
         m["teamId"] for m in get_user_memberships(user_id) if m["role"] == "coach"
     )
+
+
+def recorder_team_ids(user_id: str) -> set:
+    """Return the set of team ids where ``user_id`` may record games: a Coach
+    or a Stat Keeper membership (``GAME_RECORDER_ROLES``)."""
+    return set(
+        m["teamId"] for m in get_user_memberships(user_id)
+        if m["role"] in GAME_RECORDER_ROLES
+    )
+
+
+# The two team-role questions every write dependency below asks, with the
+# 403 detail each produces. Team administration (roster, settings, invites,
+# members, mail, shares, deleting games) is Coach-only; writing game state
+# (sync, controller roles) is open to any role in GAME_RECORDER_ROLES — the
+# Stat Keeper role exists precisely so someone can track a game without
+# being handed the team's contact lists.
+COACH_ONLY_DETAIL = "Coach access required for this team"
+RECORDER_DETAIL = "Coach or stat keeper access required for this team"
+
+
+def _assert_role(user_id: str, team_id: str, allowed: frozenset, detail: str) -> None:
+    """Raise 403 unless ``user_id`` is an admin or holds one of ``allowed`` on
+    ``team_id``."""
+    if is_admin(user_id):
+        return
+    role = get_user_team_role(user_id, team_id)
+    if role not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+def assert_team_coach(user_id: str, team_id: str) -> None:
+    """403 unless admin or Coach of ``team_id``."""
+    _assert_role(user_id, team_id, frozenset({"coach"}), COACH_ONLY_DETAIL)
+
+
+def assert_team_recorder(user_id: str, team_id: str) -> None:
+    """403 unless admin, Coach or Stat Keeper of ``team_id``."""
+    _assert_role(user_id, team_id, GAME_RECORDER_ROLES, RECORDER_DETAIL)
 
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -219,17 +262,46 @@ def assert_team_edit_access(user: dict, team_id: str) -> None:
         )
 
 
+def _stored_game_team_id(request: Request) -> str:
+    """Resolve the team that owns the EXISTING game named in the path.
+
+    Shared by the game write dependencies. Validates the id before the auth
+    short-circuit so traversal is rejected even with auth disabled; 404s a
+    missing game; 400s a game with no teamId. Leaves the parsed game on
+    ``request.state.game`` for a handler that needs a field of it (the
+    ping's eventStamp) so it is not parsed a second time.
+    """
+    game_id = request.path_params.get("game_id")
+    if not game_id or not game_exists(game_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Game {game_id} not found"
+        )
+
+    game = get_game_current(game_id)
+    request.state.game = game
+    team_id = game.get("teamId")
+    if not team_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Game has no teamId"
+        )
+    return team_id
+
+
 async def require_game_team_coach(
     request: Request,
     user: dict = Depends(get_current_user)
 ) -> dict:
     """
-    Dependency for write endpoints on an EXISTING game (delete, restore,
-    phase patch, controller roles, shares). The teamId always comes from the
-    stored game — the request body is never consulted. The one endpoint that
-    can create a game (sync) uses ``require_game_sync_coach`` instead.
+    Dependency for the ADMINISTRATIVE writes on an EXISTING game: delete,
+    restore a version, the metadata patches made from the team list (phase,
+    squads, end-from-outside), and share links. The teamId always comes from
+    the stored game — the request body is never consulted.
 
-    Requires Coach access to the game's team.
+    Requires Coach access to the game's team. Recording the game itself
+    (sync, controller roles) is ``require_game_team_recorder``, which a Stat
+    Keeper passes too.
     When AUTH_REQUIRED is false, skips the membership check.
 
     Returns:
@@ -240,8 +312,6 @@ async def require_game_team_coach(
         HTTPException 400: If game has no teamId
         HTTPException 403: If user is not a coach for the team
     """
-    # Validate before the auth short-circuit so traversal is rejected even
-    # when auth is disabled for local dev.
     game_id = request.path_params.get("game_id")
     if game_id is not None:
         validate_id(game_id, "game_id")
@@ -249,39 +319,44 @@ async def require_game_team_coach(
     if not auth_required():
         return user
 
-    if not game_id or not game_exists(game_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Game {game_id} not found"
-        )
-
-    game = get_game_current(game_id)
-    # Left for the handler, so one that needs a field of the stored game
-    # (the ping's eventStamp) does not parse it a second time.
-    request.state.game = game
-    team_id = game.get("teamId")
-    if not team_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Game has no teamId"
-        )
-
-    # Admin bypass
-    if is_admin(user["id"]):
-        return user
-
-    # Verify coach access to this team
-    role = get_user_team_role(user["id"], team_id)
-    if role != "coach":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Coach access required for this team"
-        )
-
+    assert_team_coach(user["id"], _stored_game_team_id(request))
     return user
 
 
-async def require_game_sync_coach(
+async def require_game_team_recorder(
+    request: Request,
+    user: dict = Depends(get_current_user)
+) -> dict:
+    """
+    Dependency for the RECORDING writes on an EXISTING game: the controller
+    endpoints (claim Active/Line Coach, release, handoff response, ping).
+    The teamId always comes from the stored game.
+
+    Requires Coach or Stat Keeper access to the game's team
+    (``GAME_RECORDER_ROLES``). The one endpoint that can create a game (sync)
+    uses ``require_game_sync_recorder`` instead.
+    When AUTH_REQUIRED is false, skips the membership check.
+
+    Returns:
+        The user dict if authorized
+
+    Raises:
+        HTTPException 404: If the game doesn't exist
+        HTTPException 400: If game has no teamId
+        HTTPException 403: If user may not record games for the team
+    """
+    game_id = request.path_params.get("game_id")
+    if game_id is not None:
+        validate_id(game_id, "game_id")
+
+    if not auth_required():
+        return user
+
+    assert_team_recorder(user["id"], _stored_game_team_id(request))
+    return user
+
+
+async def require_game_sync_recorder(
     request: Request,
     game_data: Dict[str, Any] = Depends(get_json_body),
     user: dict = Depends(get_current_user)
@@ -297,6 +372,9 @@ async def require_game_sync_coach(
       and the stored content can't diverge by construction: the same parsed
       body (shared via ``get_json_body``) is what the handler stores.
 
+    Requires Coach or Stat Keeper access to the team (``GAME_RECORDER_ROLES``):
+    sync is how a game is started, tracked and ended, which is the whole of
+    what a Stat Keeper is for.
     When AUTH_REQUIRED is false, skips the membership check.
 
     Returns:
@@ -304,7 +382,7 @@ async def require_game_sync_coach(
 
     Raises:
         HTTPException 400: If neither the stored game nor the body has a teamId
-        HTTPException 403: If user is not a coach, or body teamId mismatches
+        HTTPException 403: If user may not record, or body teamId mismatches
     """
     game_id = request.path_params.get("game_id")
     if game_id is not None:
@@ -336,14 +414,7 @@ async def require_game_sync_coach(
             detail="Body teamId does not match the game's team"
         )
 
-    # Verify coach access to this team
-    role = get_user_team_role(user["id"], team_id)
-    if role != "coach":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Coach access required for this team"
-        )
-
+    assert_team_recorder(user["id"], team_id)
     return user
 
 
@@ -544,7 +615,7 @@ async def require_body_team_coach(
     return user
 
 
-async def require_body_game_coach(
+async def require_body_game_recorder(
     body: Dict[str, Any] = Depends(get_json_body),
     user: dict = Depends(get_current_user)
 ) -> dict:
@@ -552,21 +623,22 @@ async def require_body_game_coach(
     Dependency for endpoints that name an EXISTING game in their request body
     rather than in the path (the narration routes: POST
     /api/narration/finalize and POST /api/narration/lineup, which spend the
-    operator's LLM budget on behalf of one game's coaching staff).
+    operator's LLM budget on behalf of whoever is recording one game).
 
-    ``require_game_team_coach`` can't be used — it reads
+    ``require_game_team_recorder`` can't be used — it reads
     ``request.path_params``. Like it, this authorizes against the STORED
     game's teamId; the body's only say is *which* game, never which team.
     The body arrives via ``get_json_body`` so FastAPI parses it once and the
-    handler is handed the very same dict (see ``require_game_sync_coach``).
+    handler is handed the very same dict (see ``require_game_sync_recorder``).
 
-    Requires Coach access to the game's team.
+    Requires Coach or Stat Keeper access to the game's team: narration is a
+    way of recording the game, so whoever may sync it may narrate it.
     When AUTH_REQUIRED is false, skips the membership check.
 
     Raises:
         HTTPException 400: If the body has no game_id, or the game has no teamId
         HTTPException 404: If the game doesn't exist
-        HTTPException 403: If user is not a coach for the game's team
+        HTTPException 403: If user may not record the game's team
     """
     game_id = body.get("game_id")
     # Validate before the auth short-circuit so traversal is rejected even
@@ -596,21 +668,11 @@ async def require_body_game_coach(
             detail="Game has no teamId"
         )
 
-    # Admin bypass
-    if is_admin(user["id"]):
-        return user
-
-    role = get_user_team_role(user["id"], team_id)
-    if role != "coach":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Coach access required for this team"
-        )
-
+    assert_team_recorder(user["id"], team_id)
     return user
 
 
-async def require_any_coach(user: dict = Depends(get_current_user)) -> dict:
+async def require_any_recorder(user: dict = Depends(get_current_user)) -> dict:
     """
     Dependency for endpoints that spend a server-side resource on a caller's
     behalf but have no specific game to authorize against — POST
@@ -618,16 +680,17 @@ async def require_any_coach(user: dict = Depends(get_current_user)) -> dict:
     operator's key and is legitimately called before any game exists (the
     practice-narration flow).
 
-    Requires the caller to coach at least one team. That is weaker than
-    coach-of-this-game, but it is the strongest question this endpoint can
-    ask, and it is what keeps a drive-by Supabase signup (self-signup is
-    open) from spending the operator's OpenAI budget.
+    Requires the caller to record for at least one team (a Coach or Stat
+    Keeper membership). That is weaker than recorder-of-this-game, but it is
+    the strongest question this endpoint can ask, and it is what keeps a
+    drive-by Supabase signup (self-signup is open) from spending the
+    operator's OpenAI budget: both roles are handed out by a coach's invite.
 
     When AUTH_REQUIRED is false, skips the membership check — a synthetic dev
     user holds no memberships.
 
     Raises:
-        HTTPException 403: If the user coaches no team at all
+        HTTPException 403: If the user records for no team at all
     """
     if not auth_required():
         return user
@@ -636,10 +699,10 @@ async def require_any_coach(user: dict = Depends(get_current_user)) -> dict:
     if is_admin(user["id"]):
         return user
 
-    if not coach_team_ids(user["id"]):
+    if not recorder_team_ids(user["id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Coach access required"
+            detail="Coach or stat keeper access required"
         )
 
     return user

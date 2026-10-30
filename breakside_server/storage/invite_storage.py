@@ -1,14 +1,15 @@
 """
 Team invite storage module.
 
-Manages invite codes that allow users to join teams as coaches or viewers.
+Manages invite codes that allow users to join teams as coaches, stat keepers
+or viewers (the roles are described in membership_storage).
 
 Invite data structure:
 {
     "id": "inv_abc123def456",
     "code": "X7K2MP4R",               # 8-char human-friendly code
     "teamId": "Sample-Team-b2c4",
-    "role": "coach",                   # "coach" | "viewer"
+    "role": "coach",                   # "coach" | "statkeeper" | "viewer"
     "createdBy": "user-uuid",
     "createdAt": "2025-01-15T10:00:00Z",
     "expiresAt": "2025-01-22T10:00:00Z",
@@ -34,7 +35,9 @@ from typing import Dict, Any, List, Optional, Literal
 from ._config import config
 from .file_utils import atomic_write_json, entity_lock
 from .json_index import JsonIndex, add_to_bucket, remove_from_bucket
-from .membership_storage import create_membership, get_user_team_membership
+from .membership_storage import (
+    GAME_RECORDER_ROLES, Role, create_membership, get_user_team_membership,
+)
 
 INVITES_DIR = config.INVITES_DIR
 
@@ -185,7 +188,7 @@ def get_invite_validity_reason(invite: Dict[str, Any]) -> Optional[str]:
 
 def create_invite(
     team_id: str,
-    role: Literal["coach", "viewer"],
+    role: Role,
     created_by: str,
     expires_days: Optional[int] = None,
     max_uses: Optional[int] = None
@@ -195,22 +198,27 @@ def create_invite(
 
     Args:
         team_id: The team ID
-        role: Either "coach" or "viewer"
+        role: "coach", "statkeeper" or "viewer"
         created_by: User ID of who created the invite
-        expires_days: Days until expiration (None uses defaults: 7 for coach, 30 for viewer)
-        max_uses: Max number of times the invite can be used (None = unlimited)
+        expires_days: Days until expiration (None uses defaults: 7 for a
+            role that can write games, 30 for viewer)
+        max_uses: Max number of times the invite can be used (None = unlimited
+            for viewer; 1 for a role that can write games)
 
     Returns:
         The created invite
     """
     now = datetime.now(timezone.utc)
 
-    # Set defaults based on role
+    # Defaults follow what the role can do, not its name: an invite that
+    # hands out write access to games is single-use and short-lived, whether
+    # it makes a coach or a stat keeper.
+    grants_write = role in GAME_RECORDER_ROLES
     if expires_days is None:
-        expires_days = 7 if role == "coach" else 30
+        expires_days = 7 if grants_write else 30
 
-    if max_uses is None and role == "coach":
-        max_uses = 1  # Coach invites are single-use by default
+    if max_uses is None and grants_write:
+        max_uses = 1
 
     # Calculate expiry
     expires_at = None

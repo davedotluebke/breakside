@@ -6,6 +6,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ._shared import (
+    GAME_RECORDER_ROLES,
     create_invite,
     get_current_user,
     get_invite,
@@ -31,14 +32,14 @@ router = APIRouter()
 @router.post("/api/teams/{team_id}/invites")
 async def create_team_invite(
     team_id: str,
-    role: Literal["coach", "viewer"] = Body(...),
+    role: Literal["coach", "statkeeper", "viewer"] = Body(...),
     expires_days: Optional[int] = Body(default=None, ge=1, le=365),
     user: dict = Depends(require_team_coach("team_id"))
 ):
     """
     Create an invite code for a team.
 
-    Coach invites: single-use, default 7-day expiry
+    Coach and stat keeper invites: single-use, default 7-day expiry
     Viewer invites: unlimited uses, default 30-day expiry
 
     Requires: Coach access to the team.
@@ -46,8 +47,8 @@ async def create_team_invite(
     if not team_exists(team_id):
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
 
-    # Set defaults based on role
-    default_expiry = 7 if role == "coach" else 30
+    # Defaults follow what the role can do (see invite_storage.create_invite).
+    default_expiry = 7 if role in GAME_RECORDER_ROLES else 30
 
     invite = create_invite(
         team_id=team_id,

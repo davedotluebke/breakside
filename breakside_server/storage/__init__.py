@@ -64,6 +64,8 @@ from .user_storage import (
 )
 
 from .membership_storage import (
+    ROLES,
+    GAME_RECORDER_ROLES,
     membership_exists,
     get_membership,
     create_membership,
@@ -256,6 +258,8 @@ __all__ = [
     "list_users",
     "set_admin",
     # Membership storage
+    "ROLES",
+    "GAME_RECORDER_ROLES",
     "membership_exists",
     "get_membership",
     "create_membership",

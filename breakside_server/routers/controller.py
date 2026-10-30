@@ -22,7 +22,7 @@ from ._shared import (
     release_role,
     request_handoff,
     require_game_team_access,
-    require_game_team_coach,
+    require_game_team_recorder,
     respond_to_handoff,
 )
 
@@ -106,7 +106,7 @@ async def get_controller_status(
 @router.post("/api/games/{game_id}/claim-active")
 async def claim_active_coach(
     game_id: str,
-    user: dict = Depends(require_game_team_coach)
+    user: dict = Depends(require_game_team_recorder)
 ):
     """
     Claim the Active Coach role.
@@ -114,7 +114,7 @@ async def claim_active_coach(
     If role is vacant or stale, claim immediately.
     If role is occupied, creates a handoff request (5-second timeout).
 
-    Requires: Coach access to the game's team.
+    Requires: Coach or Stat Keeper access to the game's team.
     """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail="Game not found")
@@ -146,7 +146,7 @@ async def claim_active_coach(
 @router.post("/api/games/{game_id}/claim-line")
 async def claim_line_coach(
     game_id: str,
-    user: dict = Depends(require_game_team_coach)
+    user: dict = Depends(require_game_team_recorder)
 ):
     """
     Claim the Line Coach role.
@@ -154,7 +154,7 @@ async def claim_line_coach(
     If role is vacant or stale, claim immediately.
     If role is occupied, creates a handoff request (5-second timeout).
 
-    Requires: Coach access to the game's team.
+    Requires: Coach or Stat Keeper access to the game's team.
     """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail="Game not found")
@@ -186,7 +186,7 @@ async def claim_line_coach(
 async def release_controller_role(
     game_id: str,
     role: Literal["activeCoach", "lineCoach"] = Body(..., embed=True),
-    user: dict = Depends(require_game_team_coach)
+    user: dict = Depends(require_game_team_recorder)
 ):
     """
     Release a controller role.
@@ -211,7 +211,7 @@ async def release_controller_role(
 async def respond_handoff(
     game_id: str,
     accept: bool = Body(..., embed=True),
-    user: dict = Depends(require_game_team_coach)
+    user: dict = Depends(require_game_team_recorder)
 ):
     """
     Accept or deny a pending handoff request.
@@ -240,7 +240,7 @@ async def respond_handoff(
 async def ping_controller(
     request: Request,
     game_id: str,
-    user: dict = Depends(require_game_team_coach),
+    user: dict = Depends(require_game_team_recorder),
     instance_id: Optional[str] = Header(None, alias="X-Breakside-Instance"),
 ):
     """
@@ -266,7 +266,7 @@ async def ping_controller(
     it moves, so an event roster edited in-game by one coach reaches the
     others' Line tabs without leaving the game. Null for a standalone game.
 
-    Requires: Coach access to the game's team.
+    Requires: Coach or Stat Keeper access to the game's team.
     """
     if not game_exists(game_id):
         raise HTTPException(status_code=404, detail="Game not found")

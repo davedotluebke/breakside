@@ -15,11 +15,11 @@ Two endpoints support the two-pass hybrid narration pipeline:
 
 Authorization differs between the two, because only one of them names a game:
 
-  - /finalize carries a ``game_id``, so it requires Coach access to THAT
-    game's team (``require_body_game_coach``).
+  - /finalize carries a ``game_id``, so it requires Coach or Stat Keeper
+    access to THAT game's team (``require_body_game_recorder``).
   - /token is issued before a game exists (the practice-narration flow), so
-    the strongest question it can ask is whether the caller coaches any team
-    at all (``require_any_coach``). Both are strictly narrower than "any
+    the strongest question it can ask is whether the caller records for any
+    team at all (``require_any_recorder``). Both are strictly narrower than "any
     authenticated user": Supabase self-signup is open, so that was anyone.
 
 Request bodies are also bounded — see the ``Field(max_length=...)`` caps on
@@ -44,14 +44,14 @@ logger = logging.getLogger(__name__)
 try:
     from auth import (  # type: ignore
         get_json_body,
-        require_any_coach,
-        require_body_game_coach,
+        require_any_recorder,
+        require_body_game_recorder,
     )
 except ImportError:
     from breakside_server.auth import (  # type: ignore
         get_json_body,
-        require_any_coach,
-        require_body_game_coach,
+        require_any_recorder,
+        require_body_game_recorder,
     )
 
 
@@ -79,7 +79,7 @@ def parse_body(model_cls, body: Dict[str, Any]):
     The narration routes that name a game authorize on ``game_id``, so the
     authorization dependency needs the body — and takes it through the shared
     ``get_json_body`` dependency, which FastAPI parses once and caches (the
-    same arrangement as ``require_game_sync_coach``). That leaves the route
+    same arrangement as ``require_game_sync_recorder``). That leaves the route
     with a single, untyped body param, so the Pydantic model has to be applied
     here rather than by FastAPI.
 
@@ -126,7 +126,7 @@ class TokenRequest(BaseModel):
     # NOTE: no game_id. The field used to exist here, unread, above a comment
     # claiming it authenticated the requester against the game team. It never
     # did, and it can't: this endpoint is called before a game exists.
-    # Authorization is `require_any_coach` on the route instead.
+    # Authorization is `require_any_recorder` on the route instead.
 
 
 @router.post("/token")
@@ -134,7 +134,7 @@ async def create_ephemeral_token(
     # Coach of *some* team. The practice-narration flow has no game to check
     # against, so coach-of-this-game is not available here — but minting a
     # live OpenAI credential must not be reachable by a drive-by signup.
-    user: dict = Depends(require_any_coach),
+    user: dict = Depends(require_any_recorder),
     req: TokenRequest = Body(...),
 ):
     """
@@ -330,7 +330,7 @@ async def _finalize_request(
 async def finalize_narration(
     # Authorization first, deliberately: an unauthorized caller should not be
     # able to probe the request schema through validation errors.
-    user: dict = Depends(require_body_game_coach),
+    user: dict = Depends(require_body_game_recorder),
     req: FinalizeRequest = Depends(_finalize_request),
 ):
     """

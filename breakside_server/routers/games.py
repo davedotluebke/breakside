@@ -32,7 +32,7 @@ from ._shared import (
     list_all_games,
     list_game_versions,
     remove_game_from_event,
-    require_game_sync_coach,
+    require_game_sync_recorder,
     require_game_team_access,
     require_game_team_coach,
     save_game_version,
@@ -51,7 +51,7 @@ router = APIRouter()
 async def sync_game(
     game_id: str,
     game_data: Dict[str, Any] = Depends(get_json_body),
-    user: dict = Depends(require_game_sync_coach)
+    user: dict = Depends(require_game_sync_recorder)
 ):
     """
     Full game sync - replaces entire game state.
@@ -59,8 +59,9 @@ async def sync_game(
 
     Creates a new version on each sync.
 
-    Requires: Coach access to the game's team (for a new game, the team
-    claimed by the body's teamId — the same parsed body that gets stored).
+    Requires: Coach or Stat Keeper access to the game's team (for a new
+    game, the team claimed by the body's teamId — the same parsed body that
+    gets stored).
     """
     if "team" not in game_data or "opponent" not in game_data:
         raise HTTPException(status_code=400, detail="Invalid game data: missing team or opponent")

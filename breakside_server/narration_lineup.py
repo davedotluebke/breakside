@@ -43,11 +43,11 @@ logger = logging.getLogger(__name__)
 
 # Dual-import pattern, mirroring narration.py / the rest of the backend.
 try:
-    from auth import get_json_body, require_body_game_coach  # type: ignore
+    from auth import get_json_body, require_body_game_recorder  # type: ignore
 except ImportError:
     from breakside_server.auth import (  # type: ignore
         get_json_body,
-        require_body_game_coach,
+        require_body_game_recorder,
     )
 
 try:
@@ -92,7 +92,7 @@ class LineupRosterPlayer(BaseModel):
 
 class LineupRequest(BaseModel):
     # Required: the route authorizes Coach access against THIS game's team
-    # (require_body_game_coach). It used to be optional and unread, which
+    # (require_body_game_recorder). It used to be optional and unread, which
     # made the endpoint a free Anthropic proxy for any signed-up account.
     game_id: str
     # Capped for the same reason as FinalizeRequest.transcript — it is pasted
@@ -141,7 +141,7 @@ async def _lineup_request(
 async def extract_lineup(
     # Authorization first, deliberately: an unauthorized caller should not be
     # able to probe the request schema through validation errors.
-    user: dict = Depends(require_body_game_coach),
+    user: dict = Depends(require_body_game_recorder),
     req: LineupRequest = Depends(_lineup_request),
 ):
     """

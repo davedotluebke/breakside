@@ -9,7 +9,7 @@ a lineup.
 
 Prompt-content, parsing, and set-arithmetic tests are pure. Endpoint tests
 use TestClient with the Claude call mocked; only ``get_current_user`` is
-overridden (a test can't mint a Supabase JWT), so ``require_body_game_coach``
+overridden (a test can't mint a Supabase JWT), so ``require_body_game_recorder``
 runs for real against the seeded storage of the ``narration_data`` fixture.
 Overriding the authorization dependency itself would let the behavior tests
 sail past the very check TestLineupAuthorization pins.
@@ -527,7 +527,7 @@ class TestLineupEndpoint:
 # /lineup takes a game_id and forwards the transcript to Anthropic on the
 # operator's key. It used to read only `Depends(get_current_user)` and never
 # look at game_id at all, so any Supabase signup (self-signup is open) could
-# spend the budget. These tests drive the REAL require_body_game_coach — only
+# spend the budget. These tests drive the REAL require_body_game_recorder — only
 # get_current_user is overridden, because a test can't mint a Supabase JWT.
 
 def _as(user):

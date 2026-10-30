@@ -1,14 +1,29 @@
 """
 Team membership storage module.
 
-Tracks which users have access to which teams and their role (coach/viewer).
+Tracks which users have access to which teams and their role.
+
+Roles, from most to least power:
+
+- ``coach``: administers the team. Roster and settings, invites, members
+  (with their email addresses), mailing lists, share links, game deletion,
+  and everything a stat keeper can do.
+- ``statkeeper``: records games. Starts, tracks and ends games for the team
+  (the game sync and the Active/Line Coach controller roles), and reads what
+  a viewer reads. Nothing administrative, and no email addresses: the role
+  exists so a sidelined player or a parent can keep stats without being
+  handed the coaches' contact lists.
+- ``viewer``: read-only. Watches games live, reads statistics.
+
+``GAME_RECORDER_ROLES`` is the set of roles that may write game state; the
+auth dependencies derive their checks from it rather than naming roles.
 
 Membership data structure:
 {
     "id": "mem_abc123",
     "teamId": "Sample-Team-b2c4",
     "userId": "uuid-from-supabase",
-    "role": "coach",                    # "coach" | "viewer"
+    "role": "coach",                    # "coach" | "statkeeper" | "viewer"
     "invitedBy": "uuid-of-inviter",     # null if created team
     "joinedAt": "2024-01-15T10:00:00Z"
 }
@@ -28,6 +43,15 @@ from .file_utils import atomic_write_json
 from .json_index import JsonIndex, add_to_bucket, remove_from_bucket
 
 MEMBERSHIPS_DIR = config.MEMBERSHIPS_DIR
+
+Role = Literal["coach", "statkeeper", "viewer"]
+
+# Every role a membership (or an invite) may carry, most powerful first.
+ROLES = ("coach", "statkeeper", "viewer")
+
+# Roles that may write a game: sync it, hold the Active/Line Coach controller
+# roles, end it from inside. Team administration stays with ``coach`` alone.
+GAME_RECORDER_ROLES = frozenset({"coach", "statkeeper"})
 
 # Index file for fast lookups
 INDEX_FILE = MEMBERSHIPS_DIR / "_index.json"
@@ -89,7 +113,7 @@ def get_membership(membership_id: str) -> Optional[Dict[str, Any]]:
 def create_membership(
     team_id: str,
     user_id: str,
-    role: Literal["coach", "viewer"],
+    role: Role,
     invited_by: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -98,7 +122,7 @@ def create_membership(
     Args:
         team_id: The team ID
         user_id: The user ID
-        role: Either "coach" or "viewer"
+        role: One of ROLES ("coach", "statkeeper", "viewer")
         invited_by: User ID of who sent the invite (null if creator)
 
     Returns:
@@ -133,7 +157,7 @@ def create_membership(
 
 def update_membership_role(
     membership_id: str,
-    new_role: Literal["coach", "viewer"]
+    new_role: Role
 ) -> Optional[Dict[str, Any]]:
     """
     Update a membership's role.
@@ -216,7 +240,7 @@ def get_user_team_role(user_id: str, team_id: str) -> Optional[str]:
     Get a user's role for a specific team.
 
     Returns:
-        "coach", "viewer", or None if no membership
+        "coach", "statkeeper", "viewer", or None if no membership
     """
     membership = get_user_team_membership(user_id, team_id)
     return membership["role"] if membership else None
@@ -232,6 +256,12 @@ def get_team_coaches(team_id: str) -> List[str]:
     """Get all user IDs who are coaches for a team."""
     memberships = get_team_memberships(team_id)
     return [m["userId"] for m in memberships if m["role"] == "coach"]
+
+
+def get_team_stat_keepers(team_id: str) -> List[str]:
+    """Get all user IDs who are stat keepers for a team."""
+    memberships = get_team_memberships(team_id)
+    return [m["userId"] for m in memberships if m["role"] == "statkeeper"]
 
 
 def get_team_viewers(team_id: str) -> List[str]:

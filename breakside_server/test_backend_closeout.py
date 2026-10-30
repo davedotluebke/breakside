@@ -4,7 +4,7 @@ Tests for the F1 backend-closeout fixes (June 2026 code review report § 7, arch
 - Event endpoints routed through shared require_* dependencies
   (read/list require team access, writes require team coach)
 - require_game_team_coach no longer reads the request body; sync uses
-  require_game_sync_coach with a shared parsed body + teamId consistency
+  require_game_sync_recorder with a shared parsed body + teamId consistency
 - restore_version is a faithful rollback (no pendingNextLine re-merge)
 - Fail-fast at startup when auth is required but SUPABASE_JWT_SECRET is unset
 
@@ -176,7 +176,7 @@ class TestEventWriteAuthz:
 
 
 # =============================================================================
-# Game sync teamId validation (require_game_sync_coach)
+# Game sync teamId validation (require_game_sync_recorder)
 # =============================================================================
 
 def _game_body(team_id, **extra):
