@@ -30,7 +30,7 @@ function setEditPlayerToggleValue(attrGroup, value) {
         btn.classList.toggle('selected', btn.dataset.value === value);
     });
 }
-import { currentTeam, currentEvent, saveAllTeamsData, isViewer } from '../store/storage.js';
+import { currentTeam, currentEvent, saveAllTeamsData, isViewer, canManageCurrentTeam } from '../store/storage.js';
 import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     currentGame, formatPlayerName, formatPlayerNameWithRole, formatPlayTime, extractPlayerName,
@@ -316,13 +316,17 @@ function updateTeamRosterDisplay() {
         }
     }
 
-    // Hide editing controls for viewers
+    // Hide editing controls for viewers, and the roster-editing ones for a
+    // stat keeper too (the roster is the team's, PUT-able by coaches only;
+    // store/roles.js). A stat keeper keeps the Start Game subscreen.
     const viewerMode = isViewer();
+    const canEditRoster = canManageCurrentTeam();
     const rosterScreen = document.getElementById('teamRosterScreen');
     if (rosterScreen) {
-        // Hide management rows (add player, create line) and start game subscreen for viewers
+        // Hide management rows (add player, create line) for anyone who
+        // cannot edit the roster, and the start game subscreen for viewers
         rosterScreen.querySelectorAll('.management-row').forEach(el => {
-            el.style.display = viewerMode ? 'none' : '';
+            el.style.display = canEditRoster ? '' : 'none';
         });
         // Only force-hide the Start Game subscreen for viewers. For non-viewers,
         // leave its visibility to the navigation layer (showStartGameSubscreen /

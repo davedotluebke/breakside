@@ -134,6 +134,18 @@
     color: var(--color-secondary-ink);
 }
 
+.team-header .role-badge.statkeeper-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: 0.95em;
+}
+
+.team-header .role-badge.statkeeper-badge i {
+    color: var(--color-info);
+}
+
 /* On very narrow screens, hide the "Coach" text and show only the icon */
 @media (max-width: 360px) {
     .role-badge-text {

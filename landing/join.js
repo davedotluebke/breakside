@@ -204,14 +204,22 @@ async function fetchInviteInfo(code) {
 // UI Updates
 // =============================================================================
 
+const ROLE_LABELS = { coach: 'Coach', statkeeper: 'Stat Keeper', viewer: 'Viewer' };
+function roleLabel(role) { return ROLE_LABELS[role] || role || 'member'; }
+
 function displayInvitePreview(info) {
     teamName.textContent = info.teamName;
     
-    // Set role badge
+    // Set role badge. Classic script: the labels are hand-kept from
+    // store/roles.js, like apiOrigin.js.
     if (info.role === 'coach') {
         roleIcon.textContent = '🎯';
         roleText.textContent = 'Coach';
         roleBadge.classList.add('role-coach');
+    } else if (info.role === 'statkeeper') {
+        roleIcon.textContent = '📊';
+        roleText.textContent = 'Stat Keeper';
+        roleBadge.classList.add('role-statkeeper');
     } else {
         roleIcon.textContent = '👁️';
         roleText.textContent = 'Viewer';
@@ -308,7 +316,7 @@ async function redeemInvite() {
 
         // Show success state
         successTeamName.textContent = result.team?.name || inviteInfo?.teamName || 'the team';
-        successRole.textContent = result.membership?.role || inviteInfo?.role || 'member';
+        successRole.textContent = roleLabel(result.membership?.role || inviteInfo?.role);
         showState(successState);
 
     } catch (error) {

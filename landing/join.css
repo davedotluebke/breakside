@@ -117,6 +117,10 @@
     border: 2px solid var(--accent-blue);
 }
 
+.role-badge.role-statkeeper {
+    border: 2px solid var(--text-secondary);
+}
+
 .role-icon {
     font-size: 1.25rem;
 }

@@ -9,6 +9,7 @@
  */
 import { Team, isTestTeam } from '../store/models.js';
 import { buildLocalTeamData } from '../store/localTeamView.js';
+import { roleLabel, canRecordGames, canManageTeam } from '../store/roles.js';
 import {
     readTeamListPrefs, writeTeamListPrefs, isTeamPinned, pinTeam, unpinTeam,
     markTeamViewed, arrangeTeams,
@@ -432,7 +433,7 @@ function renderCloudTeamsList(data = _lastListData) {
  * list with the coach action buttons.
  *
  * @param {object} team - team as the API returns it
- * @param {string} role - 'coach' | 'viewer'
+ * @param {string} role - 'coach' | 'statkeeper' | 'viewer' (store/roles.js)
  * @param {{teamGames: Array, teamEvents: Array, pinned: boolean}} ctx
  * @returns {HTMLElement}
  */
@@ -487,7 +488,8 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
 
     topRow.appendChild(topLeft);
 
-    // Right side: [pin] for everyone, then [gear] [trash] for coaches.
+    // Right side: [pin] for everyone, then [gear] [trash] for coaches
+    // (a stat keeper administers nothing: store/roles.js).
     const topRight = document.createElement('div');
     topRight.className = 'team-header-actions';
 
@@ -507,7 +509,7 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
     };
     topRight.appendChild(pinBtn);
 
-    if (role === 'coach') {
+    if (canManageTeam(role)) {
         const settingsBtn = document.createElement('button');
         settingsBtn.innerHTML = '<i class="fas fa-cog"></i><span class="icon-button-label">Team settings</span>';
         settingsBtn.classList.add('icon-button', 'team-settings-btn');
@@ -546,6 +548,12 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
         roleBadge.className = 'role-badge coach-badge';
         roleBadge.innerHTML = '<i class="fas fa-clipboard"></i> <span class="role-badge-text">Coach</span>';
         roleBadge.title = 'Coach';
+        bottomRow.appendChild(roleBadge);
+    } else if (role === 'statkeeper') {
+        const roleBadge = document.createElement('span');
+        roleBadge.className = 'role-badge statkeeper-badge';
+        roleBadge.innerHTML = '<i class="fas fa-chart-bar"></i> <span class="role-badge-text">Stat Keeper</span>';
+        roleBadge.title = 'Stat Keeper: records games, no team administration';
         bottomRow.appendChild(roleBadge);
     } else if (role === 'viewer') {
         const roleBadge = document.createElement('span');
@@ -675,8 +683,10 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
         });
     }
 
-    // Buttons row for coaches
-    if (role === 'coach') {
+    // Buttons row for anyone who records games. A game or a scrimmage is
+    // two game syncs, which a stat keeper may make; an event is a team
+    // document (POST /api/events), which only a coach may create.
+    if (canRecordGames(role)) {
         const btnRow = document.createElement('div');
         btnRow.className = 'team-action-buttons';
 
@@ -685,18 +695,21 @@ function buildTeamSection(team, role, { teamGames, teamEvents, pinned }) {
         newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Game';
         newGameBtn.onclick = (e) => {
             e.stopPropagation();
+            setCurrentTeamRole(role);
             selectCloudTeam(team, { landOn: 'startGame' });
         };
         btnRow.appendChild(newGameBtn);
 
-        const newEventBtn = document.createElement('button');
-        newEventBtn.className = 'new-game-btn new-event-btn';
-        newEventBtn.innerHTML = '<i class="fas fa-trophy"></i> New Event';
-        newEventBtn.onclick = (e) => {
-            e.stopPropagation();
-            showCreateEventDialog(team);
-        };
-        btnRow.appendChild(newEventBtn);
+        if (canManageTeam(role)) {
+            const newEventBtn = document.createElement('button');
+            newEventBtn.className = 'new-game-btn new-event-btn';
+            newEventBtn.innerHTML = '<i class="fas fa-trophy"></i> New Event';
+            newEventBtn.onclick = (e) => {
+                e.stopPropagation();
+                showCreateEventDialog(team);
+            };
+            btnRow.appendChild(newEventBtn);
+        }
 
         const newScrimmageBtn = document.createElement('button');
         newScrimmageBtn.className = 'new-game-btn new-scrimmage-btn';
@@ -1347,7 +1360,7 @@ async function handleJoinCodeFromTeamsScreen() {
 
         const info = await response.json();
 
-        if (!confirm(`Join "${info.teamName}" as ${info.role}?\nInvited by ${info.invitedBy || 'a coach'}`)) {
+        if (!confirm(`Join "${info.teamName}" as ${roleLabel(info.role)}?\nInvited by ${info.invitedBy || 'a coach'}`)) {
             return;
         }
 
@@ -1370,7 +1383,7 @@ async function handleJoinCodeFromTeamsScreen() {
         recordTeamViewed(result.team?.id);
         input.value = '';
         closeJoinTeamModal();
-        alert(`Joined ${result.team?.name || 'the team'} as ${result.membership?.role || 'member'}!`);
+        alert(`Joined ${result.team?.name || 'the team'} as ${roleLabel(result.membership?.role)}!`);
 
         if (typeof syncUserTeams === 'function') {
             await syncUserTeams();
@@ -1414,7 +1427,7 @@ function openCreateTeamModal() {
  * Render a single game list item
  * @param {object} game - Game metadata from the server
  * @param {object} team - Parent team
- * @param {string} role - 'coach' | 'viewer'
+ * @param {string} role - 'coach' | 'statkeeper' | 'viewer' (store/roles.js)
  * @param {object} [parentEvent] - If set and event has phases, render a phase picker
  */
 function renderGameItem(game, team, role, parentEvent) {
@@ -1440,7 +1453,7 @@ function renderGameItem(game, team, role, parentEvent) {
     const line2 = document.createElement('div');
     line2.className = 'game-line2';
 
-    if (!game.game_end_timestamp && role === 'coach') {
+    if (!game.game_end_timestamp && canRecordGames(role)) {
         const joinBtn = document.createElement('button');
         joinBtn.textContent = 'Join';
         joinBtn.className = 'game-join-btn';
@@ -1451,7 +1464,7 @@ function renderGameItem(game, team, role, parentEvent) {
         };
         line2.appendChild(joinBtn);
     }
-    if (game.game_end_timestamp && role === 'coach') {
+    if (game.game_end_timestamp && canRecordGames(role)) {
         const reviewBtn = document.createElement('button');
         reviewBtn.textContent = 'Review';
         reviewBtn.className = 'game-join-btn game-watch-btn';
@@ -1481,7 +1494,7 @@ function renderGameItem(game, team, role, parentEvent) {
     // --- Inline phase picker (event games with phases configured, coach only) ---
     // Sits between the Review/Join button and the trash icon so each game item
     // stays one row tall.
-    if (role === 'coach' && parentEvent && (parentEvent.phases || []).length > 0) {
+    if (canManageTeam(role) && parentEvent && (parentEvent.phases || []).length > 0) {
         const select = document.createElement('select');
         select.className = 'game-phase-select';
         const noneOpt = document.createElement('option');
@@ -1517,7 +1530,7 @@ function renderGameItem(game, team, role, parentEvent) {
     spacer.style.flex = '1';
     line2.appendChild(spacer);
 
-    if (role === 'coach') {
+    if (canManageTeam(role)) {
         const deleteBtn = document.createElement('button');
         deleteBtn.innerHTML = '<i class="fas fa-trash icon-danger"></i>';
         deleteBtn.classList.add('icon-button');
@@ -1669,12 +1682,12 @@ function groupHeaderButton({ icon, label, labelClass = 'ev-btn-label', title, cs
  * @param {object} event
  * @param {Array} games - the event's game summaries
  * @param {object} team
- * @param {string} role - 'coach' | 'viewer'
+ * @param {string} role - 'coach' | 'statkeeper' | 'viewer' (store/roles.js)
  * @param {{key: string, active: boolean}} item - from buildTeamSection
  */
 function renderEventContainer(event, games, team, role, item) {
     const buttons = [];
-    if (role === 'coach') {
+    if (canManageTeam(role)) {
         // Roster label collapses "Event roster + stats" → "Roster + stats" →
         // icon-only; the settings label drops out first. See @container rules
         // in css/teams.css.
@@ -1764,8 +1777,8 @@ function renderEventContainer(event, games, team, role, item) {
         }
     }
 
-    // "New Event Game" button for coaches (only open events)
-    if (role === 'coach' && event.status !== 'closed') {
+    // "New Event Game" button for anyone who records games (only open events)
+    if (canRecordGames(role) && event.status !== 'closed') {
         const newGameBtn = document.createElement('button');
         newGameBtn.className = 'new-game-btn event-new-game-btn';
         newGameBtn.innerHTML = '<i class="fas fa-plus"></i> New Event Game';
@@ -1940,7 +1953,7 @@ function revealScrimmagesGroup(teamId) {
  * being tracked right now).
  * @param {Array} scrimmages - from groupScrimmages, newest first
  * @param {object} team - team as the API returns it
- * @param {string} role - 'coach' | 'viewer'
+ * @param {string} role - 'coach' | 'statkeeper' | 'viewer' (store/roles.js)
  * @param {Array} teamGames - the team's game summaries, for the stats screen
  * @param {{key: string, active: boolean}} item - from buildTeamSection
  */
@@ -1984,7 +1997,7 @@ function renderScrimmagesGroup(scrimmages, team, role, teamGames, item) {
  * button.
  * @param {object} scrimmage - from groupScrimmages
  * @param {object} team - team as the API returns it
- * @param {string} role - 'coach' | 'viewer'
+ * @param {string} role - 'coach' | 'statkeeper' | 'viewer' (store/roles.js)
  * @param {Array} teamGames - the team's game summaries, for the Stats button
  * @param {{key: string, active: boolean}} item - from renderScrimmagesGroup
  */
@@ -2024,7 +2037,7 @@ function renderScrimmageContainer(scrimmage, team, role, teamGames, item) {
         },
     })];
 
-    if (role === 'coach') {
+    if (canManageTeam(role)) {
         // Squads, their names and the label can change after creation — a
         // late arrival, a lopsided first half. Both halves are updated at
         // once, and coaches tracking either squad see it on their phones.
@@ -2116,8 +2129,8 @@ function renderSquadGameItem(game, squadName, team, role) {
 
     const ended = !!game.game_end_timestamp;
     const btn = document.createElement('button');
-    btn.className = 'game-join-btn' + (ended || role === 'viewer' ? ' game-watch-btn' : '');
-    if (role === 'coach') {
+    btn.className = 'game-join-btn' + (ended || !canRecordGames(role) ? ' game-watch-btn' : '');
+    if (canRecordGames(role)) {
         btn.textContent = ended ? 'Review' : 'Track';
         btn.title = ended ? `Review ${squadName}'s game` : `Keep stats for ${squadName}`;
     } else {

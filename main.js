@@ -83,6 +83,7 @@ import './store/authFetchLogic.js';
 import './store/pointTimerNormalizer.js';
 import './store/localTeamView.js';
 import './store/teamListPrefs.js';
+import './store/roles.js';
 import './utils/helpers.js';
 import './utils/changeStamp.js';
 import './utils/qrCode.js';

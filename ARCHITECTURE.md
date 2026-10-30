@@ -1151,7 +1151,7 @@ below).
 - `GET /api/auth/teams` - List teams user has access to
 
 #### Memberships
-- `POST /api/teams/{team_id}/invite` - Generate invite code
+- `POST /api/teams/{team_id}/invites` - Generate invite code (`role`: `coach` | `statkeeper` | `viewer`)
 - `POST /api/invites/{code}/redeem` - Redeem invite code
 - `GET /api/teams/{team_id}/members` - List team members
 - `DELETE /api/teams/{team_id}/members/{user_id}` - Remove member
@@ -1167,7 +1167,7 @@ below).
 - `POST /api/teams/{team_id}/mail/test` - Email the requesting coach from the team address
 - `POST /api/mail/dev/inbound` - Dev backends only: process a raw message as if received
 
-#### Game Control
+#### Game Control (writes: Coach or Stat Keeper of the game's team)
 - `GET /api/games/{game_id}/controller` - Get controller state (roles, pending handoffs)
 - `POST /api/games/{game_id}/ping` - Ping to keep role alive; returns controller state + `connectedCoaches` list
 - `POST /api/games/{game_id}/claim-active` - Request Active Coach role
@@ -1951,8 +1951,23 @@ the testing recipe are in [docs/dev-notes/password-change.md](docs/dev-notes/pas
 | Role | Abilities |
 |------|-----------|
 | **Admin** | Full system access. Can modify any team, game, player. Can grant/revoke any role. |
-| **Coach** | Full access to assigned teams. Can create/edit games, modify rosters, add events. |
+| **Coach** | Full access to assigned teams. Administers the team: roster, settings, events, invites, members (and their email addresses), mailing lists, share links, deleting and restoring games. Plus everything a Stat Keeper can do. |
+| **Stat Keeper** | Records games for assigned teams: starts, tracks and ends them (the game sync, the Active/Line Coach controller roles, narration). Reads what a Viewer reads. Nothing administrative, and no email addresses — the role exists so a sidelined player or a parent can keep stats on a scrimmage without being made a coach. Stored as `statkeeper`. |
 | **Viewer** | Read-only access to assigned teams. Can watch games live, view statistics. |
+
+The split is encoded once on each side. Server: `membership_storage.GAME_RECORDER_ROLES`
+(`coach`, `statkeeper`) is what the recording dependencies check
+(`require_game_sync_recorder`, `require_game_team_recorder` for the controller
+endpoints, `require_body_game_recorder` / `require_any_recorder` for narration);
+everything administrative stays on the coach-only dependencies
+(`require_team_coach`, `require_game_team_coach` for delete / restore / the
+team-list metadata patches / shares, `require_event_team_coach`, the player edit
+rules). `test_statkeeper.py` is the matrix. Client: `store/roles.js`
+`canRecordGames(role)` / `canManageTeam(role)` decide which team-list buttons,
+settings sections and game-menu items a role sees (`store/storage.js`
+`isStatKeeper()` / `canManageCurrentTeam()` for the current team). A `null`
+role is a local-only team and reads as coach. The UI gating is a courtesy; the
+server is the gate.
 
 #### Dynamic Roles (Per-Game)
 
@@ -1965,9 +1980,10 @@ the testing recipe are in [docs/dev-notes/password-change.md](docs/dev-notes/pas
 
 - **Admin**: Manually granted by existing Admin (stored in user profile)
 - **Coach**: Granted via single-use invite code (7-day expiry)
+- **Stat Keeper**: Granted via single-use invite code (7-day expiry), the same terms as a coach's: it hands out write access to games
 - **Viewer**: Granted via multi-use invite link (permanent, revocable)
-- **Active Coach**: Claimed by any Coach during a game; requires handoff from current holder
-- **Line Coach**: Claimed by any Coach during a game; requires handoff from current holder
+- **Active Coach**: Claimed by any Coach or Stat Keeper during a game; requires handoff from current holder
+- **Line Coach**: Claimed by any Coach or Stat Keeper during a game; requires handoff from current holder
 
 ### Handoff Protocol
 

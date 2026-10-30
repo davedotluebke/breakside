@@ -2,7 +2,8 @@
  * Team Settings Screen
  * Manages team members, invites, and joining teams
  */
-import { currentTeam, saveAllTeamsData, isViewer } from '../store/storage.js';
+import { currentTeam, saveAllTeamsData, isViewer, canManageCurrentTeam } from '../store/storage.js';
+import { roleLabel } from '../store/roles.js';
 import { StatsLevel } from '../utils/statsLevel.js';
 import { authFetch, syncTeamToCloud, syncUserTeams, API_BASE_URL } from '../store/sync.js';
 import { showScreen } from '../screens/navigation.js';
@@ -41,6 +42,9 @@ function getApiBaseUrl() {
 // Track where we came from so Back returns to the right screen
 let _settingsReturnScreen = 'teamRosterScreen';
 
+// Member / invite row icons per role (store/roles.js has the labels).
+const ROLE_ICONS = { coach: '🎯', statkeeper: '📊', viewer: '👁️' };
+
 function showTeamSettingsScreen(returnScreen) {
     if (!currentTeam) {
         alert('No team selected');
@@ -65,9 +69,17 @@ function showTeamSettingsScreen(returnScreen) {
     // Viewer stats restriction
     loadViewerStatsSetting();
 
+    // Coach-only sections (invites, email lists). The server refuses these
+    // to a viewer or a stat keeper anyway; hiding them says so up front
+    // instead of showing "Failed to load" and dead buttons.
+    const manages = canManageCurrentTeam();
+    document.querySelectorAll('#teamSettingsScreen [data-coach-only]').forEach(el => {
+        el.style.display = manages ? '' : 'none';
+    });
+
     // Load data
     loadTeamMembers();
-    loadTeamInvites();
+    if (manages) loadTeamInvites();
 
     showScreen('teamSettingsScreen');
 }
@@ -116,6 +128,11 @@ function initializeTeamSettings() {
         createCoachInviteBtn.addEventListener('click', () => createInvite('coach'));
     }
     
+    const createStatKeeperInviteBtn = document.getElementById('createStatKeeperInviteBtn');
+    if (createStatKeeperInviteBtn) {
+        createStatKeeperInviteBtn.addEventListener('click', () => createInvite('statkeeper'));
+    }
+
     const createViewerInviteBtn = document.getElementById('createViewerInviteBtn');
     if (createViewerInviteBtn) {
         createViewerInviteBtn.addEventListener('click', () => createInvite('viewer'));
@@ -258,8 +275,8 @@ async function loadTeamMembers() {
 
 function renderMemberItem(member) {
     const displayName = member.displayName || member.email?.split('@')[0] || 'Unknown';
-    const roleIcon = member.role === 'coach' ? '🎯' : '👁️';
-    const roleClass = member.role === 'coach' ? 'role-coach' : 'role-viewer';
+    const roleIcon = ROLE_ICONS[member.role] || '👁️';
+    const roleClass = `role-${member.role || 'viewer'}`;
     
     // Get current user ID to prevent self-removal UI issues
     const currentUserId = window.breakside?.auth?.getCurrentUser?.()?.id;
@@ -273,7 +290,7 @@ function renderMemberItem(member) {
                     <span class="member-name">${escapeHtmlAttr(displayName)}${isSelf ? ' (you)' : ''}</span>
                     <span class="member-email">${escapeHtmlAttr(member.email || '')}</span>
                 </div>
-                <span class="member-role ${roleClass}">${escapeHtmlAttr(member.role || '')}</span>
+                <span class="member-role ${roleClass}">${escapeHtmlAttr(roleLabel(member.role))}</span>
             </div>
             <button class="remove-member-btn icon-button"
                     data-user-id="${escapeHtmlAttr(member.userId || '')}"
@@ -388,8 +405,8 @@ async function loadTeamInvites() {
 }
 
 function renderInviteItem(invite) {
-    const roleIcon = invite.role === 'coach' ? '🎯' : '👁️';
-    const roleClass = invite.role === 'coach' ? 'role-coach' : 'role-viewer';
+    const roleIcon = ROLE_ICONS[invite.role] || '👁️';
+    const roleClass = `role-${invite.role || 'viewer'}`;
     const expiresDate = invite.expiresAt ? formatDate(invite.expiresAt) : 'Never';
     
     return `
@@ -398,7 +415,7 @@ function renderInviteItem(invite) {
                 <span class="invite-role-icon">${roleIcon}</span>
                 <div class="invite-details">
                     <span class="invite-code">${escapeHtmlAttr(invite.code || '')}</span>
-                    <span class="invite-meta">${escapeHtmlAttr(invite.role || '')} • expires ${escapeHtmlAttr(expiresDate)}</span>
+                    <span class="invite-meta">${escapeHtmlAttr(roleLabel(invite.role))} • expires ${escapeHtmlAttr(expiresDate)}</span>
                 </div>
             </div>
             <div class="invite-actions">
@@ -495,9 +512,7 @@ function showInviteModal(data, role) {
     if (!modal) return;
     
     if (roleText) {
-        roleText.textContent = role === 'coach' 
-            ? 'Share this code with your new coach:' 
-            : 'Share this code with your new viewer:';
+        roleText.textContent = `Share this code with your new ${roleLabel(role).toLowerCase()}:`;
     }
     
     if (codeText) {
@@ -629,7 +644,7 @@ function showJoinModal(info) {
     if (!modal) return;
     
     if (teamNameEl) teamNameEl.textContent = info.teamName;
-    if (roleEl) roleEl.textContent = info.role;
+    if (roleEl) roleEl.textContent = roleLabel(info.role);
     if (inviterEl) inviterEl.textContent = info.invitedBy || 'A coach';
     
     modal.style.display = 'flex';
@@ -679,7 +694,7 @@ async function confirmJoinTeam() {
         const input = document.getElementById('joinCodeInput');
         if (input) input.value = '';
         
-        alert(`You've joined ${result.team?.name || 'the team'} as a ${result.membership?.role}!`);
+        alert(`You've joined ${result.team?.name || 'the team'} as a ${roleLabel(result.membership?.role)}!`);
         
         // Trigger a sync to pull the new team
         if (typeof syncUserTeams === 'function') {

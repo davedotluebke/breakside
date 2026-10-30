@@ -365,6 +365,11 @@
     color: var(--white);
 }
 
+.member-role.role-statkeeper {
+    background: var(--color-secondary-ink);
+    color: var(--white);
+}
+
 .remove-member-btn {
     background: none;
     border: none;
@@ -466,6 +471,15 @@
 
 .invite-btn.viewer-invite:hover {
     background: linear-gradient(135deg, var(--color-info-hover) 0%, var(--color-info-active) 100%);
+}
+
+.invite-btn.statkeeper-invite {
+    background: var(--color-secondary-ink);
+    color: var(--white);
+}
+
+.invite-btn.statkeeper-invite:hover {
+    filter: brightness(1.1);
 }
 
 /* Join Team Form */

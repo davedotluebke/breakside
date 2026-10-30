@@ -614,8 +614,9 @@
                 </div>
             </div>
 
-            <!-- Email Lists (team mailing lists) entry point -->
-            <div class="settings-section">
+            <!-- Email Lists (team mailing lists) entry point. Coach-only
+                 (teamSettings.js hides data-coach-only for other roles). -->
+            <div class="settings-section" data-coach-only>
                 <h3>Email Lists</h3>
                 <p class="section-description">Team email addresses (everyone, parents, coaches, one per player) that relay to the right people. Coaches manage who's on them here.</p>
                 <button id="openTeamMailBtn" class="roster-nav-btn">
@@ -632,9 +633,10 @@
                 </div>
             </div>
             
-            <!-- Active Invites Section -->
-            <div class="settings-section">
+            <!-- Active Invites Section (coach-only, see data-coach-only above) -->
+            <div class="settings-section" data-coach-only>
                 <h3>Active Invites</h3>
+                <p class="section-description">A <strong>coach</strong> runs the team: roster, settings, invites, members and their email addresses, email lists, share links. A <strong>stat keeper</strong> starts, tracks and ends games but sees none of that; it's the role for a sidelined player or a parent keeping stats. A <strong>viewer</strong> watches games and reads stats. Coach and stat keeper codes are single-use and expire in a week; a viewer link can be shared with everyone.</p>
                 <div id="invitesList" class="invites-list">
                     <!-- Invites will be populated dynamically -->
                     <p class="loading-message">Loading invites...</p>
@@ -642,6 +644,9 @@
                 <div class="invite-buttons">
                     <button id="createCoachInviteBtn" class="invite-btn coach-invite">
                         <i class="fas fa-plus"></i> Invite Coach
+                    </button>
+                    <button id="createStatKeeperInviteBtn" class="invite-btn statkeeper-invite">
+                        <i class="fas fa-plus"></i> Invite Stat Keeper
                     </button>
                     <button id="createViewerInviteBtn" class="invite-btn viewer-invite">
                         <i class="fas fa-plus"></i> Invite Viewer

@@ -15,6 +15,7 @@ import {
     Throw, Turnover, Violation, Defense, Other, Pull, Pickup,
     Possession, Point,
 } from './models.js';
+import { canManageTeam } from './roles.js';
 import { getPlayerFromName, currentGame } from '../utils/helpers.js';
 import { log } from '../utils/logger.js';
 import { normalizePointTimers } from './pointTimerNormalizer.js';
@@ -724,7 +725,7 @@ let teams = [];                 // An array of teams
 let currentTeam = null;         // The current team being tracked
 let currentEvent = null;        // The current TournamentEvent (null when standalone game)
 let sampleTeam = null;          // A sample team with 10 players, used if no teams are found
-let currentTeamRole = null;     // The user's role on the current team ('coach' or 'viewer')
+let currentTeamRole = null;     // The user's role on the current team (store/roles.js; null = local-only team)
 
 const UNKNOWN_PLAYER_OBJ = new Player(UNKNOWN_PLAYER);
 
@@ -852,6 +853,10 @@ function getEffectiveDefaultLine(player) {
 function getCurrentTeamRole() { return currentTeamRole; }
 function setCurrentTeamRole(role) { currentTeamRole = role; }
 function isViewer() { return currentTeamRole === 'viewer'; }
+function isStatKeeper() { return currentTeamRole === 'statkeeper'; }
+/** May the user administer the current team (roster, settings, invites,
+ *  mail, shares)? False for a viewer or a stat keeper; see store/roles.js. */
+function canManageCurrentTeam() { return canManageTeam(currentTeamRole); }
 
 /**
  * Create a sample team with predefined players
@@ -876,7 +881,8 @@ export {
     clearAllTeamsData,
     serializeTournamentEvent, deserializeTournamentEvent, getActiveRoster,
     getEffectivePosition, getEffectiveDefaultLine,
-    getCurrentTeamRole, setCurrentTeamRole, isViewer, createSampleTeam,
+    getCurrentTeamRole, setCurrentTeamRole, isViewer, isStatKeeper, canManageCurrentTeam,
+    createSampleTeam,
 };
 
 // window survivor: late-bound state accessor (read by store/models.js

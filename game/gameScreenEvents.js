@@ -8,7 +8,7 @@
 import { Role, Gender, Other, Possession, isTestGame, stampEvent } from '../store/models.js';
 import {
     teams, currentTeam, currentEvent, saveAllTeamsData, getActiveRoster,
-    serializeTournamentEvent,
+    serializeTournamentEvent, canManageCurrentTeam,
 } from '../store/storage.js';
 import { isScrimmageGame } from '../store/scrimmage.js';
 import {
@@ -380,19 +380,25 @@ function handleGameMenuClick(e) {
             console.warn('🔌 Rejoin Game button not found in DOM — HTML may be stale');
         }
 
-        // Edit Squads: a scrimmage half only, and not for viewers.
-        // Event Roster + Stats: an event game only, and not for viewers.
+        // Edit Squads: a scrimmage half only. Event Roster + Stats: an event
+        // game only. Share Game: any game. All three are team administration
+        // (a squad PATCH, an event PUT, a share link), so coaches only — not
+        // a viewer, and not a stat keeper (store/roles.js).
         const editSquadsBtn = document.getElementById('menuEditSquads');
         const eventRosterBtn = document.getElementById('menuEventRoster');
-        if (editSquadsBtn || eventRosterBtn) {
+        const shareGameBtn = document.getElementById('menuShareGame');
+        if (editSquadsBtn || eventRosterBtn || shareGameBtn) {
             const game = typeof currentGame === 'function' ? currentGame() : null;
-            const viewerMode = typeof window.isViewer === 'function' && window.isViewer();
+            const manages = canManageCurrentTeam();
             if (editSquadsBtn) {
-                editSquadsBtn.style.display = (isScrimmageGame(game) && !viewerMode) ? '' : 'none';
+                editSquadsBtn.style.display = (isScrimmageGame(game) && manages) ? '' : 'none';
             }
             if (eventRosterBtn) {
                 const inEvent = !!(game && game.eventId) && !isScrimmageGame(game);
-                eventRosterBtn.style.display = (inEvent && !viewerMode) ? '' : 'none';
+                eventRosterBtn.style.display = (inEvent && manages) ? '' : 'none';
+            }
+            if (shareGameBtn) {
+                shareGameBtn.style.display = manages ? '' : 'none';
             }
         }
 
