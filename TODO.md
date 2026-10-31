@@ -1465,7 +1465,7 @@ Remaining work:
   control, a live game, and the mic not recording. The batch is the single
   step in a loop, so counters come out as a hand-chained Undo would leave
   them. Unit tests in `tests/unit/undoLogic.test.mjs`, e2e
-  `tests/scenarios/25-undo-across-points.spec.ts`.
+  `tests/scenarios/26-undo-across-points.spec.ts`.
   - **Left out, deliberately:** undoing End Game (the Review screen has no
     undo), and a styled confirm sheet in place of the native `confirm()`
     (the End Game convention; revisit if the native dialog grates on a phone).
