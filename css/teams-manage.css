@@ -1640,6 +1640,16 @@
     border-radius: 8px;
 }
 
+/* A label in the grid is a column flex box, and .url-input carries flex: 1
+   from the icon-url row it was written for; beside a tall fieldset (the
+   post-policy checkboxes) that stretched every input in the row to the
+   fieldset's height. Inputs keep their own height; the label's spare room
+   stays empty. */
+.mail-form-grid label > .url-input,
+.mail-form-grid label > select {
+    flex: 0 0 auto;
+}
+
 .mail-add-form {
     margin-top: 0;
 }
@@ -1768,6 +1778,135 @@
     .mail-player-form {
         margin-top: 6px;
     }
+}
+
+/* Event lists: one card per event, its sections collapsible so a team with
+   several trips still reads as a list. The roster checkboxes flow into as
+   many columns as fit; a pickup's parents are indented under the pickup. */
+.mail-events {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.mail-event {
+    border: 1px solid var(--border-lighter);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface-subtle);
+}
+
+.mail-event-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.mail-event-head .mail-address {
+    flex: 1 1 12em;
+}
+
+.mail-event-head .mail-toggle {
+    margin-left: auto;
+    font-size: 0.85rem;
+}
+
+.mail-event-summary {
+    margin: 6px 0 4px;
+}
+
+.mail-event-section {
+    border-top: 1px solid var(--border-lighter);
+    padding: 6px 0;
+}
+
+.mail-event-section > summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 4px 0;
+    list-style-position: inside;
+}
+
+.mail-count {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--surface-inset);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.mail-check-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11em, 1fr));
+    gap: 4px 12px;
+    margin: 6px 0 8px;
+}
+
+.mail-check-grid label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    min-width: 0;
+    padding: 4px 0;
+}
+
+.mail-pickup {
+    margin-bottom: 8px;
+}
+
+.mail-event-guardians {
+    flex: 1 1 100%;
+    margin: 6px 0 0 14px;
+    padding-left: 10px;
+    border-left: 2px solid var(--border-lighter);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mail-guardian-row,
+.mail-guardian-add {
+    margin-top: 0;
+}
+
+.mail-guardian-row .member-icon {
+    font-size: 1rem;
+}
+
+.mail-guardian-add .invite-btn {
+    margin: 0;
+}
+
+.mail-guardian-add .mail-alias-input,
+.mail-guardian-row .mail-alias-input {
+    flex: 0 1 12em;
+}
+
+.mail-event .mail-list-actions .invite-btn {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+.mail-pickup-add {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border-lighter);
+}
+
+.mail-event-add h4 {
+    margin: 0 0 4px;
+    font-size: 0.95rem;
+}
+
+.mail-address-preview {
+    font-weight: 400;
 }
 
 .mail-policy {

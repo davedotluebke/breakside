@@ -5,8 +5,9 @@
  * is reached from Team Settings and renders from one payload: settings and
  * addresses, the per-list policy, the directory (guardians, players, managers,
  * plus coaches derived from memberships), the roster with each player's
- * alias, the quarantine queue and the delivery log. See TODO.Comms.md
- * § Phase 0 for the design.
+ * alias, the event lists (a roster subset plus pickup players and their
+ * parents, at <slug>-<event>@), the quarantine queue and the delivery log.
+ * See TODO.Comms.md § Phase 0 for the design.
  */
 import { currentTeam } from '../store/storage.js';
 import { authFetch, API_BASE_URL } from '../store/sync.js';
@@ -33,6 +34,7 @@ const POSTER_KINDS = ['coach', 'manager', 'guardian', 'player', 'other'];
 const REASON_LABELS = {
     'unknown-sender': 'Sender not in the directory',
     'not-allowed-to-post': 'Sender may not post to this list',
+    'not-on-event': 'Sender is not on this event\'s list',
     'dmarc-fail': 'Possible spoof (sender domain check failed)',
     'auth-fail': 'Possible spoof (both sender checks failed)',
     'list-disabled': 'List is turned off',
@@ -65,6 +67,11 @@ const openEditors = new Set();
 // data and the editor closes on top of it.
 let pendingSave = Promise.resolve();
 let dialogOpen = false;
+// Which <details> of each event card are open, keyed "<eventId>:<section>".
+// A card is redrawn in place after every change to it (a pickup added, a
+// player ticked), and must come back the way the coach had it.
+const openEventSections = new Set();
+const EVENT_SECTIONS_OPEN_BY_DEFAULT = ['players', 'pickups'];
 
 // =============================================================================
 // Screen
@@ -86,6 +93,9 @@ function initializeTeamMail() {
     document.getElementById('teamMailContent')?.addEventListener('change', onContentChange);
     document.getElementById('teamMailContent')?.addEventListener('submit', onContentSubmit);
     document.getElementById('teamMailContent')?.addEventListener('focusout', onFieldBlur);
+    document.getElementById('teamMailContent')?.addEventListener('input', onContentInput);
+    // "toggle" does not bubble; capture it so a redrawn event card keeps its sections as they were.
+    document.getElementById('teamMailContent')?.addEventListener('toggle', onDetailsToggle, true);
 }
 
 async function api(path, options = {}) {
@@ -138,6 +148,7 @@ function render() {
         // the add form is its own section below both.
         `<div class="mail-people">${renderDirectory()}${renderRoster()}</div>`,
         renderAddContact(),
+        renderEvents(),
         renderLists(),
         renderLog(),
     ].join('');
@@ -192,6 +203,7 @@ function renderAddresses() {
             ${row('Staff', a.staff)}
             ${state.lists.players.enabled ? row('Players', a.players) : ''}
             ${row('Each player', a.playerPattern)}
+            ${(state.events || []).length ? row('Each event', a.eventPattern) : ''}
             <form class="mail-inline-form" data-form="settings">
                 <label>Address name <input type="text" name="slug" value="${escAttr(state.slug)}" maxlength="24" autocapitalize="none" class="url-input" required></label>
                 <label>Short name <input type="text" name="displayName" value="${escAttr(state.displayName)}" maxlength="40" class="url-input"></label>
@@ -465,6 +477,219 @@ function renderRoster() {
         </div>`;
 }
 
+// =============================================================================
+// Event lists
+// =============================================================================
+
+function renderEvents() {
+    const events = state.events || [];
+    return `
+        <div class="settings-section" data-section="events">
+            <h3>Event lists</h3>
+            <p class="section-description">One address per tournament or trip, <code>${esc(state.slug)}-&lt;event&gt;@${esc(state.domain)}</code>, for the logistics of the people going: the coaches and managers, the players you tick (and their parents from the directory), and any pickup players with their parents. Pickup players and their parents are on the event list only — they never get the team's other mail. Anyone on the list may write to it.</p>
+            <div class="mail-events">
+                ${events.map(renderEventCard).join('')}
+            </div>
+            ${renderAddEvent()}
+        </div>`;
+}
+
+function eventSectionOpen(ev, section) {
+    const key = `${ev.id}:${section}`;
+    if (openEventSections.has(key)) return true;
+    if (openEventSections.has(`${key}:closed`)) return false;
+    return EVENT_SECTIONS_OPEN_BY_DEFAULT.includes(section);
+}
+
+function setEventSectionOpen(eventId, section, open) {
+    openEventSections.delete(`${eventId}:${section}`);
+    openEventSections.delete(`${eventId}:${section}:closed`);
+    openEventSections.add(open ? `${eventId}:${section}` : `${eventId}:${section}:closed`);
+}
+
+function renderEventCard(ev) {
+    const roster = state.roster || [];
+    const going = new Set(ev.playerIds || []);
+    const pickups = (ev.contacts || []).filter(c => c.kind === 'player');
+    const recipients = ev.recipients || [];
+    const linked = (state.tournamentEvents || []).find(t => t.id === ev.eventId);
+    const details = (section, summary, body) => `
+        <details class="mail-event-section" data-event-section="${section}" ${eventSectionOpen(ev, section) ? 'open' : ''}>
+            <summary>${summary}</summary>
+            ${body}
+        </details>`;
+    return `
+        <div class="mail-event" data-event-id="${escAttr(ev.id)}">
+            <div class="mail-event-head">
+                <strong class="mail-event-name">${esc(ev.name)}</strong>
+                <code class="mail-address">${esc(ev.address)}</code>
+                <button class="icon-button copy-address-btn" data-copy="${escAttr(ev.address)}" title="Copy address"><i class="fas fa-copy"></i></button>
+                <label class="mail-toggle"><input type="checkbox" data-event-toggle="enabled" ${ev.enabled ? 'checked' : ''}> On</label>
+                <button class="icon-button remove-member-btn" data-action="remove-event" data-id="${escAttr(ev.id)}" data-name="${escAttr(ev.name)}" title="Delete this event list"><i class="fas fa-trash"></i></button>
+            </div>
+            <p class="section-description mail-event-summary">
+                Reaches ${recipients.length} address${recipients.length === 1 ? '' : 'es'}${recipients.length ? `: ${esc(recipients.map(r => r.name).filter((n, i, a) => a.indexOf(n) === i).join(', '))}` : ''}.
+                ${linked ? ` Linked to the event <strong>${esc(linked.name)}</strong>.` : ''}
+            </p>
+            ${details('players', `Players going <span class="mail-count">${going.size} of ${roster.length}</span>`, `
+                <div class="mail-check-grid">
+                    ${roster.map(p => `<label><input type="checkbox" data-event-player="${escAttr(p.id)}" ${going.has(p.id) ? 'checked' : ''}> ${esc(p.name)}</label>`).join('') || '<p class="info-message">No players on the roster.</p>'}
+                </div>
+                <div class="mail-list-actions">
+                    ${linked ? `<button type="button" class="invite-btn viewer-invite" data-action="sync-event" data-id="${escAttr(ev.id)}" title="Tick the players on the event's roster and add its pickup players"><i class="fas fa-sync"></i> Copy from the event roster</button>` : ''}
+                    <span class="icon-status mail-field-status" data-status="players"></span>
+                </div>`)}
+            ${details('pickups', `Pickup players <span class="mail-count">${pickups.length}</span>`, `
+                ${pickups.map(p => renderPickup(ev, p)).join('') || '<p class="info-message">No pickup players yet.</p>'}
+                <form class="mail-add-form mail-pickup-add" data-form="add-pickup" data-event="${escAttr(ev.id)}">
+                    <div class="mail-form-grid">
+                        <label>Pickup player's name <input type="text" name="name" class="url-input" maxlength="80" required placeholder="Name"></label>
+                        <label>Their email (optional) <input type="email" multiple name="email" class="url-input" autocapitalize="none" placeholder="player@example.com"></label>
+                        <label>Parent / guardian email(s), comma-separated (optional) <input type="email" multiple name="guardianEmails" class="url-input" autocapitalize="none" placeholder="mom@example.com, dad@example.com"></label>
+                    </div>
+                    <div class="mail-list-actions">
+                        <button type="submit" class="save-identity-btn"><i class="fas fa-user-plus"></i> Add pickup player</button>
+                        <span class="icon-status" data-status></span>
+                    </div>
+                </form>`)}
+            ${details('settings', 'Settings', renderEventSettings(ev))}
+        </div>`;
+}
+
+function renderPickup(ev, p) {
+    const pickupId = p.playerIds?.[0];
+    const guardians = (ev.contacts || []).filter(c => c.kind === 'guardian' && (c.playerIds || []).includes(pickupId));
+    const flags = [];
+    if (p.status && p.status !== 'active') flags.push(`<span class="mail-flag">${esc(p.status)}</span>`);
+    for (const [addr, b] of shownBounces(p)) flags.push(bounceFlag(addr, b, { withAddress: contactEmails(p).length > 1 }));
+    return `
+        <div class="member-item mail-player-row mail-editable-row mail-pickup" data-contact-id="${escAttr(p.id)}">
+            <div class="member-info">
+                <span class="member-icon">🎒</span>
+                <div class="member-details">
+                    <span class="member-name">${esc(p.name)} ${flags.join(' ')}</span>
+                    <span class="member-email">Pickup player${guardians.length ? '' : ' · <em>no parent addresses yet</em>'}</span>
+                </div>
+                <span class="member-role role-viewer">Pickup</span>
+            </div>
+            <div class="mail-contact-actions">
+                ${shownBounces(p).length ? `<button class="icon-button" data-action="clear-event-bounce" data-id="${escAttr(p.id)}" data-event="${escAttr(ev.id)}" title="Deliver to this address again"><i class="fas fa-redo"></i></button>` : ''}
+                <button class="icon-button remove-member-btn" data-action="remove-pickup" data-id="${escAttr(p.id)}" data-event="${escAttr(ev.id)}" data-name="${escAttr(p.name)}" title="Remove this pickup player and their parents from the list"><i class="fas fa-times"></i></button>
+            </div>
+            <form class="mail-player-form" data-form="event-contact" data-id="${escAttr(p.id)}" data-event="${escAttr(ev.id)}">
+                <input type="text" name="name" data-field="name" data-saved="${escAttr(p.name)}" value="${escAttr(p.name)}" maxlength="80" class="url-input mail-alias-input" aria-label="Name">
+                <input type="email" multiple name="email" data-field="emails" data-saved="${escAttr(contactEmails(p).join(', '))}" value="${escAttr(contactEmails(p).join(', '))}" placeholder="player's own email(s), optional" class="url-input" autocapitalize="none" aria-label="Player email">
+                <span class="icon-status mail-field-status" data-status></span>
+            </form>
+            <div class="mail-event-guardians">
+                ${guardians.map(g => renderPickupGuardian(ev, g)).join('')}
+                <form class="mail-player-form mail-guardian-add" data-form="add-pickup-guardian" data-event="${escAttr(ev.id)}" data-pickup="${escAttr(pickupId)}">
+                    <input type="text" name="name" class="url-input mail-alias-input" maxlength="80" placeholder="Parent / guardian name" aria-label="Parent / guardian name">
+                    <input type="email" multiple name="emails" class="url-input" autocapitalize="none" placeholder="email(s), comma-separated" aria-label="Parent / guardian email" required>
+                    <button type="submit" class="invite-btn viewer-invite"><i class="fas fa-plus"></i> Add parent</button>
+                    <span class="icon-status" data-status></span>
+                </form>
+            </div>
+        </div>`;
+}
+
+function renderPickupGuardian(ev, g) {
+    const flags = [];
+    if (g.status && g.status !== 'active') flags.push(`<span class="mail-flag">${esc(g.status)}</span>`);
+    for (const [addr, b] of shownBounces(g)) flags.push(bounceFlag(addr, b, { withAddress: contactEmails(g).length > 1 }));
+    return `
+        <form class="mail-player-form mail-guardian-row" data-form="event-contact" data-id="${escAttr(g.id)}" data-event="${escAttr(ev.id)}" data-contact-id="${escAttr(g.id)}">
+            <span class="member-icon" title="Parent / guardian">👪</span>
+            <input type="text" name="name" data-field="name" data-saved="${escAttr(g.name)}" value="${escAttr(g.name)}" maxlength="80" class="url-input mail-alias-input" aria-label="Parent / guardian name">
+            <input type="email" multiple name="emails" data-field="emails" data-saved="${escAttr(contactEmails(g).join(', '))}" value="${escAttr(contactEmails(g).join(', '))}" class="url-input" autocapitalize="none" aria-label="Parent / guardian email" placeholder="email(s), comma-separated">
+            ${flags.join(' ')}
+            ${shownBounces(g).length ? `<button type="button" class="icon-button" data-action="clear-event-bounce" data-id="${escAttr(g.id)}" data-event="${escAttr(ev.id)}" title="Deliver to this address again"><i class="fas fa-redo"></i></button>` : ''}
+            <button type="button" class="icon-button remove-member-btn" data-action="remove-pickup-guardian" data-id="${escAttr(g.id)}" data-event="${escAttr(ev.id)}" data-name="${escAttr(g.name)}" title="Remove this parent"><i class="fas fa-times"></i></button>
+            <span class="icon-status mail-field-status" data-status></span>
+        </form>`;
+}
+
+function renderEventSettings(ev) {
+    const anyone = (ev.postPolicy || []).includes('anyone');
+    const tournaments = state.tournamentEvents || [];
+    return `
+        <form class="mail-list-form mail-event-settings" data-form="event-settings" data-event="${escAttr(ev.id)}">
+            <div class="mail-form-grid">
+                <label>Name <input type="text" name="name" value="${escAttr(ev.name)}" maxlength="60" class="url-input" required></label>
+                <label><span>Address word (<code>${esc(state.slug)}-…</code>)</span> <input type="text" name="slug" value="${escAttr(ev.slug)}" maxlength="24" class="url-input" autocapitalize="none" required></label>
+                <label>Linked tournament event
+                    <select name="eventId">
+                        <option value="">Not linked</option>
+                        ${tournaments.map(t => `<option value="${escAttr(t.id)}" ${t.id === ev.eventId ? 'selected' : ''}>${esc(t.name)}${t.status && t.status !== 'open' ? ` (${esc(t.status)})` : ''}</option>`).join('')}
+                    </select>
+                </label>
+                <fieldset class="mail-policy">
+                    <legend>Who may post</legend>
+                    <label><input type="checkbox" name="anyone" ${anyone ? 'checked' : ''}> Anyone on the list</label>
+                    ${POSTER_KINDS.filter(k => k !== 'other').map(k => `<label><input type="checkbox" name="kind:${k}" ${!anyone && (ev.postPolicy || []).includes(k) ? 'checked' : ''} ${anyone ? 'disabled' : ''}> ${esc(KIND_LABELS[k])}</label>`).join('')}
+                </fieldset>
+                <label>Subject tag <input type="text" name="subjectTag" value="${escAttr(ev.subjectTag || '')}" maxlength="40" class="url-input"></label>
+                <label>Reply goes to
+                    <select name="replyTo">
+                        <option value="list" ${ev.replyTo === 'list' ? 'selected' : ''}>The list</option>
+                        <option value="author" ${ev.replyTo === 'author' ? 'selected' : ''}>The person who wrote it</option>
+                        <option value="coaches" ${ev.replyTo === 'coaches' ? 'selected' : ''}>The coaches</option>
+                    </select>
+                </label>
+            </div>
+            <div class="mail-list-actions">
+                <button type="submit" class="save-identity-btn"><i class="fas fa-save"></i> Save</button>
+                <span class="icon-status" data-status></span>
+            </div>
+        </form>`;
+}
+
+function renderAddEvent() {
+    const tournaments = state.tournamentEvents || [];
+    return `
+        <form class="mail-add-form mail-event-add" data-form="add-event">
+            <h4>New event list</h4>
+            <div class="mail-form-grid">
+                ${tournaments.length ? `
+                <label>Tournament event (optional — fills the list from its roster)
+                    <select name="eventId">
+                        <option value="">Not linked</option>
+                        ${tournaments.map(t => `<option value="${escAttr(t.id)}" data-name="${escAttr(t.name)}">${esc(t.name)}${t.status && t.status !== 'open' ? ` (${esc(t.status)})` : ''} — ${t.playerCount} player${t.playerCount === 1 ? '' : 's'}${t.pickupCount ? `, ${t.pickupCount} pickup${t.pickupCount === 1 ? '' : 's'}` : ''}</option>`).join('')}
+                    </select>
+                </label>` : ''}
+                <label>Name (for subject tags and "via" lines) <input type="text" name="name" class="url-input" maxlength="60" required placeholder="States 2026"></label>
+                <label><span>Address word: <span class="mail-address-preview"><code>${esc(state.slug)}-<span data-slug-preview>event</span>@${esc(state.domain)}</code></span></span>
+                    <input type="text" name="slug" class="url-input" maxlength="24" autocapitalize="none" autocomplete="off" required placeholder="states"></label>
+            </div>
+            <div class="mail-list-actions">
+                <button type="submit" class="save-identity-btn"><i class="fas fa-envelope"></i> Create event list</button>
+                <span class="icon-status" data-status></span>
+            </div>
+        </form>`;
+}
+
+/** Redraw one event card in place from a fresh payload (or drop it). */
+function replaceEventCard(ev, { remove = false } = {}) {
+    const list = state.events || (state.events = []);
+    const at = list.findIndex(e => e.id === ev.id);
+    const card = document.querySelector(`.mail-event[data-event-id="${CSS.escape(ev.id)}"]`);
+    if (remove) {
+        if (at >= 0) list.splice(at, 1);
+        card?.remove();
+        if (!list.length) {
+            const section = document.querySelector('[data-section="events"]');
+            if (section) section.outerHTML = renderEvents();
+        }
+        return;
+    }
+    if (at >= 0) list[at] = ev; else list.push(ev);
+    if (card) card.outerHTML = renderEventCard(ev);
+    else {
+        const section = document.querySelector('[data-section="events"]');
+        if (section) section.outerHTML = renderEvents();
+    }
+}
+
 function renderLists() {
     const lists = state.lists || {};
     return `
@@ -664,6 +889,26 @@ async function onContentClick(event) {
         } else if (action === 'discard') {
             await api(`/quarantine/${id}`, { method: 'DELETE' });
             await refreshQuiet();
+        } else if (action === 'remove-event') {
+            if (!confirm(`Delete the event list "${button.dataset.name}"? Its address stops working and its pickup players are forgotten. Players and parents from the directory are not affected.`)) return;
+            await api(`/events/${id}`, { method: 'DELETE' });
+            replaceEventCard({ id }, { remove: true });
+            await refreshQuiet();
+        } else if (action === 'sync-event') {
+            const r = await api(`/events/${id}/sync`, { method: 'POST' });
+            replaceEventCard(r.event);
+            const added = (r.added || []).length;
+            flashStatus(document.querySelector(`.mail-event[data-event-id="${CSS.escape(id)}"] [data-event-section="players"]`),
+                `Copied: ${r.playerIds.length} player${r.playerIds.length === 1 ? '' : 's'}${added ? `, ${added} pickup${added === 1 ? '' : 's'} added` : ''}`);
+        } else if (action === 'remove-pickup' || action === 'remove-pickup-guardian') {
+            const what = action === 'remove-pickup' ? `${button.dataset.name} and their parents` : button.dataset.name;
+            if (!confirm(`Remove ${what} from this event list?`)) return;
+            const r = await api(`/events/${button.dataset.event}/contacts/${id}`, { method: 'DELETE' });
+            replaceEventCard(r.event);
+        } else if (action === 'clear-event-bounce') {
+            await api(`/events/${button.dataset.event}/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ bounces: null }) });
+            const r = await api(`/events/${button.dataset.event}`, { method: 'PATCH', body: JSON.stringify({}) });
+            replaceEventCard(r.event);
         }
     } catch (error) {
         alert(error.message);
@@ -680,9 +925,72 @@ function reportRelease(r) {
     }
 }
 
+function onDetailsToggle(event) {
+    const details = event.target;
+    if (!(details instanceof HTMLDetailsElement) || !details.dataset.eventSection) return;
+    const card = details.closest('[data-event-id]');
+    if (card) setEventSectionOpen(card.dataset.eventId, details.dataset.eventSection, details.open);
+}
+
+/** Live helpers on the "new event list" form: a picked tournament event
+ *  fills the name; the name fills the address word until it is edited. */
+function onContentInput(event) {
+    const form = event.target.closest('form[data-form="add-event"]');
+    if (!form) return;
+    const slugInput = form.elements.slug;
+    if (event.target === slugInput) {
+        slugInput.dataset.touched = slugInput.value ? '1' : '';
+    } else if (event.target === form.elements.name && !slugInput.dataset.touched) {
+        slugInput.value = slugify(form.elements.name.value);
+    }
+    const preview = form.querySelector('[data-slug-preview]');
+    if (preview) preview.textContent = slugify(slugInput.value) || 'event';
+}
+
+async function onEventQuickChange(input) {
+    const card = input.closest('[data-event-id]');
+    if (!card) return;
+    const eventId = card.dataset.eventId;
+    const status = card.querySelector('[data-status="players"]');
+    try {
+        busy = true;
+        let body;
+        if (input.dataset.eventToggle) {
+            body = { [input.dataset.eventToggle]: input.checked };
+        } else {
+            body = { playerIds: Array.from(card.querySelectorAll('[data-event-player]:checked')).map(b => b.dataset.eventPlayer) };
+        }
+        const r = await api(`/events/${eventId}`, { method: 'PATCH', body: JSON.stringify(body) });
+        replaceEventCard(r.event);
+        if (!input.dataset.eventToggle) {
+            flashStatus(document.querySelector(`.mail-event[data-event-id="${CSS.escape(eventId)}"] [data-event-section="players"]`), 'Saved');
+        }
+    } catch (error) {
+        if (status) { status.textContent = error.message; status.className = 'icon-status error'; }
+        else alert(error.message);
+        input.checked = !input.checked;
+    } finally {
+        busy = false;
+    }
+}
+
 function onContentChange(event) {
     if (event.target.dataset?.field && event.target.tagName === 'SELECT') {
         queueSave(event.target);
+    }
+    if (event.target.dataset?.eventToggle || event.target.dataset?.eventPlayer) {
+        if (!busy) onEventQuickChange(event.target);
+        return;
+    }
+    const addEvent = event.target.closest('form[data-form="add-event"]');
+    if (addEvent && event.target.name === 'eventId') {
+        const picked = event.target.selectedOptions[0];
+        if (picked?.dataset.name) {
+            addEvent.elements.name.value = picked.dataset.name;
+            if (!addEvent.elements.slug.dataset.touched) addEvent.elements.slug.value = slugify(picked.dataset.name);
+            const preview = addEvent.querySelector('[data-slug-preview]');
+            if (preview) preview.textContent = slugify(addEvent.elements.slug.value) || 'event';
+        }
     }
     // "Anyone" disables the per-kind boxes in a list's post policy.
     if (event.target.name === 'anyone') {
@@ -719,9 +1027,56 @@ async function onContentSubmit(event) {
             };
             await api('/contacts', { method: 'POST', body: JSON.stringify(body) });
             await refreshQuiet();
-        } else if (kind === 'player' || kind === 'contact-edit') {
+        } else if (kind === 'player' || kind === 'contact-edit' || kind === 'event-contact') {
             // Fields save on leaving them; Enter just leaves the field.
             document.activeElement?.blur?.();
+        } else if (kind === 'add-event') {
+            const body = {
+                name: form.elements.name.value.trim(),
+                slug: slugify(form.elements.slug.value),
+                eventId: form.elements.eventId?.value || null,
+            };
+            const r = await api('/events', { method: 'POST', body: JSON.stringify(body) });
+            setEventSectionOpen(r.event.id, 'players', true);
+            setEventSectionOpen(r.event.id, 'pickups', true);
+            await refreshQuiet();
+            document.querySelector(`.mail-event[data-event-id="${CSS.escape(r.event.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (kind === 'add-pickup') {
+            const eventId = form.dataset.event;
+            const body = {
+                kind: 'player',
+                name: form.elements.name.value.trim(),
+                emails: form.elements.email.value.trim(),
+                guardianEmails: form.elements.guardianEmails.value.trim() || null,
+            };
+            const r = await api(`/events/${eventId}/contacts`, { method: 'POST', body: JSON.stringify(body) });
+            replaceEventCard(r.event);
+            document.querySelector(`.mail-event[data-event-id="${CSS.escape(eventId)}"] form[data-form="add-pickup"] input[name="name"]`)?.focus();
+        } else if (kind === 'add-pickup-guardian') {
+            const eventId = form.dataset.event;
+            const body = {
+                kind: 'guardian',
+                name: form.elements.name.value.trim() || 'Parent / guardian',
+                emails: form.elements.emails.value.trim(),
+                playerIds: [form.dataset.pickup],
+            };
+            const r = await api(`/events/${eventId}/contacts`, { method: 'POST', body: JSON.stringify(body) });
+            replaceEventCard(r.event);
+        } else if (kind === 'event-settings') {
+            const anyone = form.elements.anyone.checked;
+            const postPolicy = anyone ? ['anyone'] : POSTER_KINDS.filter(k => form.elements[`kind:${k}`]?.checked);
+            if (!postPolicy.length) throw new Error('Pick at least one role that may post, or "Anyone on the list".');
+            const body = {
+                name: form.elements.name.value.trim(),
+                slug: slugify(form.elements.slug.value),
+                eventId: form.elements.eventId.value || null,
+                postPolicy, subjectTag: form.elements.subjectTag.value, replyTo: form.elements.replyTo.value,
+            };
+            const r = await api(`/events/${form.dataset.event}`, { method: 'PATCH', body: JSON.stringify(body) });
+            setEventSectionOpen(r.event.id, 'settings', true);
+            replaceEventCard(r.event);
+            const saved = document.querySelector(`.mail-event[data-event-id="${CSS.escape(r.event.id)}"] form[data-form="event-settings"] [data-status]`);
+            if (saved) { saved.textContent = 'Saved.'; saved.className = 'icon-status success'; }
         } else if (kind === 'list') {
             const anyone = form.elements.anyone.checked;
             const postPolicy = anyone ? ['anyone'] : POSTER_KINDS.filter(k => form.elements[`kind:${k}`].checked);
@@ -817,7 +1172,8 @@ async function saveField(input) {
     }
 
     try {
-        const r = await api(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify({ [field]: value }) });
+        const path = form.dataset.event ? `/events/${form.dataset.event}/contacts/${id}` : `/contacts/${id}`;
+        const r = await api(path, { method: 'PATCH', body: JSON.stringify({ [field]: value }) });
         applyContactUpdate(r.contact, form);
         const contact = r.contact;
         input.dataset.saved = field === 'emails' ? contactEmails(contact).join(', ')
@@ -840,11 +1196,19 @@ async function saveField(input) {
 
 /** Reflect a saved contact in `state` and in the row's summary, without re-rendering. */
 function applyContactUpdate(contact, form) {
-    const list = state?.contacts || [];
+    const eventId = form?.dataset.event;
+    const ev = eventId ? (state?.events || []).find(e => e.id === eventId) : null;
+    const list = ev ? (ev.contacts || []) : (state?.contacts || []);
     const at = list.findIndex(c => c.id === contact.id);
     if (at >= 0) list[at] = { ...list[at], ...contact };
     const row = form?.closest('[data-contact-id]');
     if (!row) return;
+    if (ev) {
+        // A pickup's name shows on its row; a guardian lives in its own form.
+        const nameEl = row.querySelector('.member-name');
+        if (nameEl?.firstChild && contact.kind === 'player') nameEl.firstChild.nodeValue = `${contact.name} `;
+        return;
+    }
     const nameEl = row.querySelector('.member-name');
     if (nameEl && nameEl.firstChild && contact.kind !== 'player') nameEl.firstChild.nodeValue = `${contact.name} `;
     if (contact.kind === 'player') {

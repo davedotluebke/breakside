@@ -879,6 +879,38 @@ reached from Team Settings.
 | `staff-<slug>@` | coaches and managers |
 | `players-<slug>@` | players and coaches (off unless the team turns it on) |
 | `<alias>-<slug>@` | one player, all of their guardians, every coach |
+| `<slug>-<event>@` | an event list: coaches, managers, the roster players going (with their guardians) and the event's pickup players (with theirs) |
+
+**Event lists** (`cudo-states@`) are for the logistics of one tournament or
+trip: a subset of the roster plus pickup players who are not on the team,
+each of whom may have several parent addresses, none of whom should get
+the team's other mail. A list is a record on the directory (`events[]`:
+`slug`, `name`, the usual `enabled` / `postPolicy` / `subjectTag` /
+`replyTo`, `playerIds` for the roster players going, an optional `eventId`
+linking it to a tournament event, and its own `contacts[]`). The event's
+contacts are pickup players (`kind: player`, `playerIds` holding one
+generated pickup id, or the tournament roster's pickup id) and their
+guardians (`kind: guardian`, pointing at pickup ids), in the same shape as
+directory contacts so bounces, pausing and multiple addresses work
+unchanged (`policy.event_members`). They are found by the sender lookup for
+their event's list only, so a pickup's parent can write to `cudo-states@`
+and is a stranger to `parents-cudo@`. A directory contact who is not on the
+list (a parent whose player is not going) is held with reason
+`not-on-event`; a coach can release. Defaults: on, anyone on the list may
+post, replies to the list, subject `[CUDO States]`. Linked to a tournament
+event, "Copy from the event roster" (`directory.sync_event_roster`, also
+run on creation) ticks the roster players on the event's roster and adds
+its pickup players by name, for the coach to fill in addresses; the list
+stays its own copy, since who gets the logistics mail and who is on the
+stats roster are different questions. Routing: the event's full local part
+is registered in `_slugs.json` (`events`) and `parse_local_part` matches it
+exactly before the slug rules. Because the event shape puts the slug first
+and the player-alias shape puts it last, `cudo-states@` could also read as
+player `cudo` on a team whose slug is `states`; storage refuses an event
+name whose address already resolves to another team, a slug or alias that
+would form an existing event address, and (within the team) an event whose
+address is a player's alias read backwards (`_check_event_local`,
+`_validate_event`). Player erasure takes the player off every event list.
 
 **Pipeline.** SES receives mail for the domain, stores the raw MIME in S3
 (30-day lifecycle) and notifies an SNS topic; an SQS queue subscribes. The

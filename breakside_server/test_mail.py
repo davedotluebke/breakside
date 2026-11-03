@@ -21,7 +21,7 @@ def env(tmp_path, monkeypatch):
     players; mail configured with slug ``cudo``, a file-outbox transport."""
     import config
     from storage import (team_storage, player_storage, user_storage, membership_storage,
-                         index_storage, mail_storage, tombstones)
+                         index_storage, mail_storage, tombstones, event_storage)
     from mail import transport
 
     patches = [
@@ -31,6 +31,8 @@ def env(tmp_path, monkeypatch):
         (config, "USERS_DIR", tmp_path / "users"),
         (config, "MEMBERSHIPS_DIR", tmp_path / "memberships"),
         (config, "INDEX_FILE", tmp_path / "index.json"),
+        (config, "EVENTS_DIR", tmp_path / "events"),
+        (event_storage, "EVENTS_DIR", tmp_path / "events"),
         (config, "MAIL_DIR", tmp_path / "mail"),
         (config, "MAIL_OUTBOX_DIR", tmp_path / "outbox"),
         (config, "MAIL_TRANSPORT", "file"),
