@@ -367,6 +367,18 @@ function renderLookup(r) {
             : !c.deliverable ? ' <span class="mail-flag">bounced</span>' : '';
         lines.push(`${addr} is ${position} ${who} (${role})${status}.`);
     }
+    const events = r.events || [];
+    for (const ev of events) {
+        for (const c of ev.contacts || []) {
+            const role = c.kind === 'guardian' && c.playerNames.length
+                ? `parent / guardian of pickup player ${esc(joinLabels(c.playerNames))}`
+                : c.kind === 'player' ? 'pickup player' : esc(c.kind);
+            const position = c.addressCount > 1 ? `the ${ordinal(c.addressIndex)} of ${c.addressCount} addresses on` : 'the address of';
+            const status = c.status !== 'active' ? ` <span class="mail-flag">${esc(c.status)}</span>`
+                : !c.deliverable ? ' <span class="mail-flag">bounced</span>' : '';
+            lines.push(`${addr} is ${position} <strong>${esc(c.name)}</strong> (${role}) on the event list <strong>${esc(ev.name)}</strong> only${status}.`);
+        }
+    }
     if (!lines.length) {
         lines.push(`${addr} is not in the directory. Mail from it to any list is held for your review.`);
         if (r.member) {
@@ -382,7 +394,12 @@ function renderLookup(r) {
     const aliasCount = (state?.roster || []).filter(p => p.alias).length;
     if (behind.length > 1 && behind.length >= aliasCount) receiveLabels.push("every player's address");   // a coach
     else for (const p of behind) receiveLabels.push(`${esc(p.playerName)}'s address`);
-    lines.push(postLabels.length ? `May post to: ${esc(joinLabels(postLabels))}.` : 'May not post to any list; mail from it is held for your review.');
+    for (const ev of events) {
+        const label = `the event list ${esc(ev.name)}${ev.enabled ? '' : ' (turned off)'}`;
+        if (ev.mayPost) postLabels.push(label);
+        if (ev.receives) receiveLabels.push(label);
+    }
+    lines.push(postLabels.length ? `May post to: ${joinLabels(postLabels)}.` : 'May not post to any list; mail from it is held for your review.');
     lines.push(receiveLabels.length ? `Receives: ${joinLabels(receiveLabels)}.` : 'Receives nothing right now.');
     if (r.member && !(r.contacts || []).some(c => c.derived)) lines.push(`Also a team member (${esc(r.member.displayName || r.email)}, ${esc(r.member.role || 'member')}).`);
     return `<p>${lines.join('</p><p>')}</p>`;

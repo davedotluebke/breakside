@@ -315,6 +315,48 @@ def lookup_address(team_id: str, email: str) -> Dict[str, Any]:
     may_post_players = bool(active) and player_settings.get("enabled", True) \
         and policy.may_post(player_settings, sender_kinds)
 
+    # Event lists. A pickup player or their parent exists only on an event
+    # list, so without this the answer would be "not in the directory" for
+    # an address the relay accepts (for that list). Same rules as decide():
+    # known senders are the directory plus the event's own contacts, and a
+    # poster must also be someone the list reaches.
+    events_out = []
+    for ev in directory.get("events") or []:
+        ev_contacts = list(ev.get("contacts") or [])
+        ev_names = dict(names)
+        ev_names.update({c["playerIds"][0]: c["name"] for c in ev_contacts
+                         if c.get("kind") == "player" and c.get("playerIds")})
+        ev_carriers = [c for c in ev_contacts if email in policy.contact_addresses(c)]
+        members = policy.event_members(ev, contacts)
+        member_addresses = {a for c in members for a in policy.contact_addresses(c)}
+        expanded = policy.recipients_for("event", contacts, event=ev) or []
+        ev_receives = any(e["email"] == email for e in expanded)
+        ev_active = policy.find_contacts_by_email(contacts + ev_contacts, email)
+        ev_kinds = sorted({c["kind"] for c in ev_active})
+        enabled = ev.get("enabled", True)
+        ev_may_post = bool(enabled and ev_active and policy.may_post(ev, ev_kinds) and email in member_addresses)
+        if not (ev_carriers or ev_receives or ev_may_post):
+            continue
+        events_out.append({
+            "id": ev["id"],
+            "name": ev.get("name") or ev.get("slug"),
+            "slug": ev.get("slug"),
+            "address": addresses.address("event", directory["slug"], domain, ev.get("slug")),
+            "enabled": enabled,
+            "mayPost": ev_may_post,
+            "receives": ev_receives,
+            "contacts": [{
+                "id": c["id"],
+                "name": c["name"],
+                "kind": c["kind"],
+                "status": c.get("status", "active"),
+                "addressIndex": policy.contact_addresses(c).index(email) + 1,
+                "addressCount": len(policy.contact_addresses(c)),
+                "playerNames": [ev_names.get(pid, pid) for pid in (c.get("playerIds") or [])],
+                "deliverable": email in policy.deliverable_addresses(c),
+            } for c in ev_carriers],
+        })
+
     member = None
     for membership in storage.get_team_memberships(team_id):
         user = storage.get_user(membership["userId"]) or {}
@@ -332,5 +374,6 @@ def lookup_address(team_id: str, email: str) -> Dict[str, Any]:
         "mayPostToPlayerAddresses": may_post_players,
         "receives": receives,
         "playerAddresses": player_addresses,
+        "events": events_out,
         "member": member,
     }

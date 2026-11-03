@@ -1101,6 +1101,25 @@ def with_event(configured):
 
 
 class TestEventLists:
+    def test_lookup_address_covers_event_lists(self, with_event):
+        """A pickup parent exists only on the event list: the lookup names the
+        list rather than calling the address unknown. A roster parent going
+        to the event is on its list too; one staying home is not."""
+        from mail import directory as dm
+        tid = with_event["team_id"]
+        zedmom = dm.lookup_address(tid, "zedmom@x.test")
+        assert zedmom["contacts"] == [] and zedmom["mayPost"] == [] and zedmom["receives"] == []
+        assert [(e["slug"], e["mayPost"], e["receives"]) for e in zedmom["events"]] == [("states", True, True)]
+        c = zedmom["events"][0]["contacts"][0]
+        assert (c["name"], c["kind"], c["addressIndex"], c["addressCount"], c["playerNames"]) == ("Parents of Zed", "guardian", 1, 2, ["Zed Pickup"])
+        mom = dm.lookup_address(tid, "mom@x.test")             # Alice is going
+        assert [(e["slug"], e["mayPost"], e["receives"], e["contacts"]) for e in mom["events"]] == [("states", True, True, [])]
+        bob_dad = dm.lookup_address(tid, "lee@x.test")
+        assert bob_dad["events"] == []                           # nobody at all
+        from storage import mail_storage as ms
+        ms.add_mail_contact(tid, {"kind": "guardian", "name": "Bob Only", "email": "bobonly@x.test", "playerIds": [with_event["bob"]]})
+        assert dm.lookup_address(tid, "bobonly@x.test")["events"] == []   # Bob is not going: not on the list, may not post
+
     def test_address_rules(self):
         from mail import addresses as a
         assert a.validate_event_slug(" States ") == "states"
