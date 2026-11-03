@@ -937,7 +937,8 @@ from it arrived. A query that is an address also calls
 `GET /api/teams/{id}/mail/lookup?email=`, which answers with the relay's
 own policy functions: the contacts carrying it (and its position among
 their addresses), the lists it may post to and the ones that deliver to it,
-the player addresses it is behind, and any team member it belongs to. A
+the player addresses it is behind, the event lists it is on (a pickup
+parent exists only there), and any team member it belongs to. A
 sender's name in the activity log or on a held message is a button that
 puts their address into the search.
 
