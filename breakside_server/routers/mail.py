@@ -13,6 +13,8 @@ from fastapi.concurrency import run_in_threadpool
 
 from ._shared import (
     add_mail_contact,
+    add_mail_event,
+    add_mail_event_contact,
     auth_required,
     config,
     create_mail_directory,
@@ -23,11 +25,15 @@ from ._shared import (
     purge_expired_quarantine,
     read_mail_log, attach_bounces,
     remove_mail_contact,
+    remove_mail_event,
+    remove_mail_event_contact,
     remove_mail_quarantine,
     require_team_coach,
     team_exists,
     get_team,
     update_mail_contact,
+    update_mail_event,
+    update_mail_event_contact,
     update_mail_list,
     update_mail_settings,
     import_server_module,
@@ -182,6 +188,146 @@ async def sync_player_aliases(team_id: str, user: dict = Depends(require_team_co
     _require_directory(team_id)
     added = directory_mod.ensure_player_aliases(team_id)
     return {"added": added, "count": len(added)}
+
+
+# =============================================================================
+# Event lists
+# =============================================================================
+
+def _event_payload(team_id: str, event_id: str) -> Dict[str, Any]:
+    """The one event list as the screen renders it (address, recipients)."""
+    directory = _require_directory(team_id)
+    event = next((e for e in directory["events"] if e["id"] == event_id), None)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event list not found")
+    contacts = directory_mod.effective_contacts(team_id, directory)
+    return directory_mod.event_view(directory, event, contacts)
+
+
+@router.post("/api/teams/{team_id}/mail/events")
+async def create_mail_event(
+    team_id: str,
+    event: Dict[str, Any] = Body(...),
+    user: dict = Depends(require_team_coach("team_id")),
+):
+    """Create an event list: ``{slug, name, eventId?, playerIds?}``. With a
+    linked tournament event (and no explicit playerIds) its roster is
+    copied onto the list right away."""
+    _require_team(team_id)
+    _require_directory(team_id)
+    try:
+        record = add_mail_event(team_id, event)
+    except (ValueError, addresses.AddressError) as exc:
+        raise _bad_request(exc)
+    if record.get("eventId") and "playerIds" not in event:
+        try:
+            directory_mod.sync_event_roster(team_id, record["id"])
+        except (KeyError, ValueError) as exc:
+            logger.info("mail: event list %s created without a roster sync: %s", record["id"], exc)
+    return {"status": "created", "event": _event_payload(team_id, record["id"])}
+
+
+@router.patch("/api/teams/{team_id}/mail/events/{event_id}")
+async def patch_mail_event(
+    team_id: str, event_id: str,
+    updates: Dict[str, Any] = Body(...),
+    user: dict = Depends(require_team_coach("team_id")),
+):
+    _require_team(team_id)
+    _require_directory(team_id)
+    try:
+        record = update_mail_event(team_id, event_id, updates)
+    except (ValueError, addresses.AddressError) as exc:
+        raise _bad_request(exc)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Event list not found")
+    return {"status": "updated", "event": _event_payload(team_id, event_id)}
+
+
+@router.delete("/api/teams/{team_id}/mail/events/{event_id}")
+async def delete_mail_event(team_id: str, event_id: str, user: dict = Depends(require_team_coach("team_id"))):
+    _require_team(team_id)
+    if not remove_mail_event(team_id, event_id):
+        raise HTTPException(status_code=404, detail="Event list not found")
+    return {"status": "deleted", "eventId": event_id}
+
+
+@router.post("/api/teams/{team_id}/mail/events/{event_id}/sync")
+async def sync_mail_event_roster(team_id: str, event_id: str, user: dict = Depends(require_team_coach("team_id"))):
+    """Copy the linked tournament event's roster onto the list."""
+    _require_team(team_id)
+    _require_directory(team_id)
+    try:
+        result = directory_mod.sync_event_roster(team_id, event_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Event list not found")
+    except ValueError as exc:
+        raise _bad_request(exc)
+    return {"status": "synced", **result, "event": _event_payload(team_id, event_id)}
+
+
+@router.post("/api/teams/{team_id}/mail/events/{event_id}/contacts")
+async def create_mail_event_contact(
+    team_id: str, event_id: str,
+    contact: Dict[str, Any] = Body(...),
+    user: dict = Depends(require_team_coach("team_id")),
+):
+    """Add a pickup player (``kind: player``) or a guardian of one
+    (``kind: guardian``, ``playerIds`` naming the pickup) to an event list.
+    A pickup may come with ``guardianEmails``: one guardian contact named
+    after the player is created holding every address, so the common case
+    (a name and the parents' addresses) is one form."""
+    _require_team(team_id)
+    _require_directory(team_id)
+    guardian_emails = contact.pop("guardianEmails", None)
+    try:
+        record = add_mail_event_contact(team_id, event_id, contact)
+        guardian = None
+        if guardian_emails and record["kind"] == "player":
+            try:
+                guardian = add_mail_event_contact(team_id, event_id, {
+                    "kind": "guardian", "name": f"Parents of {record['name']}",
+                    "emails": guardian_emails, "playerIds": record["playerIds"],
+                })
+            except ValueError:
+                remove_mail_event_contact(team_id, event_id, record["id"])
+                raise
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Event list not found")
+    except ValueError as exc:
+        raise _bad_request(exc)
+    return {"status": "created", "contact": record, "guardian": guardian,
+            "event": _event_payload(team_id, event_id)}
+
+
+@router.patch("/api/teams/{team_id}/mail/events/{event_id}/contacts/{contact_id}")
+async def patch_mail_event_contact(
+    team_id: str, event_id: str, contact_id: str,
+    updates: Dict[str, Any] = Body(...),
+    user: dict = Depends(require_team_coach("team_id")),
+):
+    _require_team(team_id)
+    _require_directory(team_id)
+    try:
+        record = update_mail_event_contact(team_id, event_id, contact_id, updates)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Event list not found")
+    except ValueError as exc:
+        raise _bad_request(exc)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return {"status": "updated", "contact": record}
+
+
+@router.delete("/api/teams/{team_id}/mail/events/{event_id}/contacts/{contact_id}")
+async def delete_mail_event_contact(
+    team_id: str, event_id: str, contact_id: str,
+    user: dict = Depends(require_team_coach("team_id")),
+):
+    _require_team(team_id)
+    if not remove_mail_event_contact(team_id, event_id, contact_id):
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return {"status": "deleted", "contactId": contact_id, "event": _event_payload(team_id, event_id)}
 
 
 # =============================================================================

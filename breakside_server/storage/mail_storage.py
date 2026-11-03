@@ -3,8 +3,8 @@ Persistence for team mailing lists (Comms Phase 0). See TODO.Comms.md.
 
 Layout under ``data/mail/``:
 
-    _slugs.json                     slug ↔ teamId (global; routes inbound mail)
-    {teamId}/directory.json         slug, display name, per-list settings, contacts
+    _slugs.json                     slug ↔ teamId, plus every event address (global; routes inbound mail)
+    {teamId}/directory.json         slug, display name, per-list settings, contacts, event lists
     {teamId}/log/{YYYY-MM}.jsonl    one line per relayed / quarantined / bounced message
     {teamId}/quarantine/{id}.json   held message metadata …
     {teamId}/quarantine/{id}.eml    … and its raw MIME
@@ -14,6 +14,13 @@ is why it lives beside the other private entity stores rather than on the
 public team document that every viewer syncs. Coaches themselves are never
 stored as contacts: they are derived live from team memberships by
 mail/directory.py, so the coaches list can never go stale.
+
+**Event lists** (``<slug>-<event>@``) live on the directory as ``events``:
+each carries its own settings, the roster players going (``playerIds``) and
+its own ``contacts`` — pickup players and their guardians, who exist only
+for that event and never receive the team's other mail. Their address
+local parts are registered in the slug index so inbound routing can match
+them exactly without opening every directory.
 
 Address rules (what a slug or alias may look like) live in mail/addresses.py;
 this module only enforces uniqueness and shape.
@@ -28,6 +35,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from ._config import config
 from .file_utils import atomic_write_json, entity_lock
 from .json_index import JsonIndex
+
+try:
+    from mail import addresses as _addresses
+except ImportError:  # package mode
+    from breakside_server.mail import addresses as _addresses
 
 MAIL_DIR = config.MAIL_DIR
 
@@ -44,13 +56,15 @@ REPLY_TO_MODES = ("author", "list", "coaches")
 # cleared (set to None) through the API; the inbound path is what sets it.
 CONTACT_FIELDS = ("kind", "name", "email", "emails", "playerIds", "alias", "status", "optOut", "notes")
 LIST_FIELDS = ("enabled", "postPolicy", "subjectTag", "replyTo")
+EVENT_FIELDS = ("slug", "name", "eventId", "playerIds") + LIST_FIELDS
+EVENT_CONTACT_KINDS = ("player", "guardian")
 
 QUARANTINE_TTL_DAYS = 14
 
 _slugs = JsonIndex(
     path_getter=lambda: Path(MAIL_DIR) / "_slugs.json",
     lock_key="mail-slugs",
-    empty=lambda: {"bySlug": {}, "byTeam": {}},
+    empty=lambda: {"bySlug": {}, "byTeam": {}, "events": {}},
 )
 
 
@@ -101,11 +115,57 @@ def _claim_slug(index: Dict[str, Any], slug: str, team_id: str) -> None:
     owner = index["bySlug"].get(slug)
     if owner and owner != team_id:
         raise ValueError(f"The address name \"{slug}\" is already in use by another team.")
+    event_owner = (index.get("events") or {}).get(slug)
+    if event_owner and event_owner.get("team") != team_id:
+        raise ValueError(f"The address name \"{slug}\" is already in use by another team's event list.")
     previous = index["byTeam"].get(team_id)
     if previous and previous != slug:
         index["bySlug"].pop(previous, None)
     index["bySlug"][slug] = team_id
     index["byTeam"][team_id] = slug
+
+
+def list_mail_event_locals() -> Dict[str, Tuple[str, str]]:
+    """``{local: (team slug, event name)}`` for every event list, every team.
+
+    What ``mail.addresses.parse_local_part`` matches first; the team is
+    ``list_mail_slugs()[slug]``.
+    """
+    index = _slugs.load()
+    return {local: (entry["slug"], entry["event"])
+            for local, entry in (index.get("events") or {}).items()
+            if entry.get("slug") and entry.get("event")}
+
+
+def _sync_event_locals(index: Dict[str, Any], team_id: str, slug: str,
+                       event_slugs: Iterable[str]) -> None:
+    """Make the index's event entries for ``team_id`` exactly ``event_slugs``
+    under ``slug``, inside an open index update. Raises ValueError when a
+    new local would shadow another team's address."""
+    events = index.setdefault("events", {})
+    # A local already registered to this team keeps its place: an event
+    # address matches before the slug rules, so a team that later claimed a
+    # slug the address could also be read under does not unseat it.
+    held = {l for l, e in events.items() if e.get("team") == team_id}
+    for local in held:
+        del events[local]
+    for event in event_slugs:
+        local = f"{slug}-{event}"
+        if local not in held:
+            _check_event_local(index, local, team_id)
+        events[local] = {"team": team_id, "slug": slug, "event": event}
+
+
+def _check_event_local(index: Dict[str, Any], local: str, team_id: str) -> None:
+    """Refuse an event address that already means something to another team:
+    its whole slug, one of its lists, or a player alias of its (see
+    mail/addresses.py on why the two address shapes can meet)."""
+    other = (index.get("events") or {}).get(local)
+    if other and other.get("team") != team_id:
+        raise ValueError(f"The address \"{local}\" is already used by another team's event list.")
+    parsed = _addresses.parse_local_part(local, index.get("bySlug", {}).keys())
+    if parsed and index["bySlug"].get(parsed[1]) != team_id:
+        raise ValueError(f"The address \"{local}\" would clash with another team's addresses; pick another name.")
 
 
 # ==========================================================================
@@ -171,9 +231,19 @@ def get_mail_directory(team_id: str) -> Optional[Dict[str, Any]]:
         return None
     with open(path, "r") as f:
         directory = json.load(f)
+    _normalize_directory(directory)
+    return directory
+
+
+def _normalize_directory(directory: Dict[str, Any]) -> None:
     for contact in directory.get("contacts") or []:
         normalize_contact(contact)
-    return directory
+    directory.setdefault("events", [])
+    for event in directory["events"]:
+        event.setdefault("contacts", [])
+        event.setdefault("playerIds", [])
+        for contact in event["contacts"]:
+            normalize_contact(contact)
 
 
 def _save_directory(directory: Dict[str, Any]) -> None:
@@ -220,6 +290,8 @@ def update_mail_settings(team_id: str, *, slug: Optional[str] = None,
         if slug and slug != directory["slug"]:
             with _slugs.update() as index:
                 _claim_slug(index, slug, team_id)
+                # Event addresses carry the slug: cudo-states → cudo-mixed-states.
+                _sync_event_locals(index, team_id, slug, [e["slug"] for e in directory.get("events", [])])
             directory["slug"] = slug
         if display_name is not None:
             directory["displayName"] = display_name.strip() or directory["slug"]
@@ -236,6 +308,7 @@ def delete_mail_directory(team_id: str) -> bool:
             previous = index["byTeam"].pop(team_id, None)
             if previous:
                 index["bySlug"].pop(previous, None)
+            _sync_event_locals(index, team_id, previous or "", [])
         if existed:
             _rmtree(_team_dir(team_id))
         return existed
@@ -262,8 +335,7 @@ def list_mail_directories() -> List[Dict[str, Any]]:
                 directory = json.load(f)
         except (json.JSONDecodeError, IOError):
             continue
-        for contact in directory.get("contacts") or []:
-            normalize_contact(contact)
+        _normalize_directory(directory)
         found.append(directory)
     return found
 
@@ -411,6 +483,11 @@ def _validate_contact(directory: Dict[str, Any], contact: Dict[str, Any],
     emails = contact.get("emails") or []
     if not emails and kind != "player":
         raise ValueError("An email address is required.")
+    if alias:
+        local = f"{alias}-{directory['slug']}"
+        event_owner = (_slugs.load().get("events") or {}).get(local)
+        if event_owner:
+            raise ValueError(f"The address name \"{alias}\" would clash with an event list's address.")
     for other in directory["contacts"]:
         if other["id"] == exclude_id:
             continue
@@ -548,6 +625,314 @@ def add_player_contacts(team_id: str, players: Iterable[Tuple[str, str, str]]) -
 
 
 # ==========================================================================
+# Event lists
+# ==========================================================================
+
+def default_event_settings(display_name: str, event_name: str) -> Dict[str, Any]:
+    """Settings for a new event list: on, anyone on the list may post (the
+    parents of the players going coordinate carpools and rooms among
+    themselves), replies to the list, subject tagged with the team and the
+    event ("[CUDO States]")."""
+    tag = " ".join(p for p in ((display_name or "").strip(), (event_name or "").strip()) if p) or "Event"
+    return {"enabled": True, "postPolicy": ["anyone"], "subjectTag": f"[{tag}]"[:40], "replyTo": "list"}
+
+
+def _clean_event_updates(updates: Dict[str, Any]) -> Dict[str, Any]:
+    clean: Dict[str, Any] = {}
+    if "slug" in updates:
+        clean["slug"] = _addresses.validate_event_slug(str(updates["slug"] or ""))
+    if "name" in updates:
+        name = str(updates["name"] or "").strip()
+        if not name:
+            raise ValueError("Event name is required.")
+        if len(name) > 60:
+            raise ValueError("Event name is too long (60 characters max).")
+        clean["name"] = name
+    if "eventId" in updates:
+        value = updates["eventId"]
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ValueError("eventId must be an event id or null.")
+        clean["eventId"] = value.strip() if value else None
+    if "playerIds" in updates:
+        ids = updates["playerIds"] or []
+        if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
+            raise ValueError("playerIds must be a list of player ids.")
+        clean["playerIds"] = list(dict.fromkeys(ids))
+    for field in LIST_FIELDS:
+        if field not in updates:
+            continue
+        value = updates[field]
+        if field == "enabled":
+            clean["enabled"] = bool(value)
+        elif field == "postPolicy":
+            if not isinstance(value, list) or not value:
+                raise ValueError("postPolicy must be a non-empty list.")
+            kinds = [str(v) for v in value]
+            if "anyone" in kinds:
+                clean["postPolicy"] = ["anyone"]
+            else:
+                bad = [k for k in kinds if k not in POSTER_KINDS]
+                if bad:
+                    raise ValueError(f"Unknown poster kind(s): {', '.join(bad)}")
+                clean["postPolicy"] = kinds
+        elif field == "subjectTag":
+            tag = str(value or "").strip()
+            if len(tag) > 40:
+                raise ValueError("Subject tag is too long (40 characters max).")
+            clean["subjectTag"] = tag
+        elif field == "replyTo":
+            if value not in REPLY_TO_MODES:
+                raise ValueError(f"replyTo must be one of {', '.join(REPLY_TO_MODES)}.")
+            clean["replyTo"] = value
+    return clean
+
+
+def _find_event(directory: Dict[str, Any], event_id: str) -> Optional[Dict[str, Any]]:
+    for event in directory.get("events") or []:
+        if event["id"] == event_id:
+            return event
+    return None
+
+
+def find_mail_event_by_slug(directory: Dict[str, Any], slug: str) -> Optional[Dict[str, Any]]:
+    for event in directory.get("events") or []:
+        if event.get("slug") == slug:
+            return event
+    return None
+
+
+def _validate_event(directory: Dict[str, Any], event: Dict[str, Any], *,
+                    exclude_id: Optional[str] = None) -> None:
+    for other in directory.get("events") or []:
+        if other["id"] == exclude_id:
+            continue
+        if other.get("slug") == event["slug"]:
+            raise ValueError(f"The event address name \"{event['slug']}\" is already used by {other['name']}.")
+    local = f"{directory['slug']}-{event['slug']}"
+    # Within the team, the event address must not be a player's alias address
+    # read the other way round (slug ``s``, event ``x-s``, alias ``s-x``).
+    parsed = _addresses.parse_local_part(local, [directory["slug"]])
+    if parsed and parsed[0] == "player":
+        for contact in directory["contacts"]:
+            if contact.get("alias") == parsed[2]:
+                raise ValueError(f"The address \"{local}\" is already {contact['name']}'s player address.")
+
+
+def add_mail_event(team_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    """Create an event list. ``event`` carries ``slug`` and ``name`` (required),
+    optionally ``eventId`` (a tournament event to sync the roster from) and
+    ``playerIds``. Raises ValueError on a bad or clashing name."""
+    clean = _clean_event_updates(event)
+    if "slug" not in clean or "name" not in clean:
+        raise ValueError("slug and name are required.")
+    with entity_lock(f"mail:{team_id}"):
+        directory = get_mail_directory(team_id)
+        if directory is None:
+            raise FileNotFoundError(team_id)
+        record = {
+            "id": _new_id("me"),
+            "slug": clean["slug"],
+            "name": clean["name"],
+            "eventId": clean.get("eventId"),
+            **default_event_settings(directory["displayName"], clean["name"]),
+            "playerIds": clean.get("playerIds", []),
+            "contacts": [],
+            "createdAt": _now(),
+            "updatedAt": _now(),
+        }
+        for field in LIST_FIELDS:
+            if field in clean:
+                record[field] = clean[field]
+        _validate_event(directory, record)
+        with _slugs.update() as index:
+            _sync_event_locals(index, team_id, directory["slug"],
+                               [e["slug"] for e in directory["events"]] + [record["slug"]])
+        directory["events"].append(record)
+        _save_directory(directory)
+    return record
+
+
+def get_mail_event(team_id: str, event_id: str) -> Optional[Dict[str, Any]]:
+    directory = get_mail_directory(team_id)
+    return _find_event(directory, event_id) if directory else None
+
+
+def update_mail_event(team_id: str, event_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Edit an event list's name, address name, settings, linked tournament
+    event or the roster players on it. None when the list does not exist."""
+    clean = _clean_event_updates(updates)
+    with entity_lock(f"mail:{team_id}"):
+        directory = get_mail_directory(team_id)
+        if directory is None:
+            raise FileNotFoundError(team_id)
+        event = _find_event(directory, event_id)
+        if event is None:
+            return None
+        candidate = {**event, **clean}
+        _validate_event(directory, candidate, exclude_id=event_id)
+        if candidate["slug"] != event["slug"]:
+            with _slugs.update() as index:
+                _sync_event_locals(index, team_id, directory["slug"],
+                                   [candidate["slug"] if e["id"] == event_id else e["slug"]
+                                    for e in directory["events"]])
+        candidate["updatedAt"] = _now()
+        event.clear()
+        event.update(candidate)
+        _save_directory(directory)
+        return event
+
+
+def remove_mail_event(team_id: str, event_id: str) -> bool:
+    with entity_lock(f"mail:{team_id}"):
+        directory = get_mail_directory(team_id)
+        if directory is None:
+            return False
+        before = len(directory["events"])
+        directory["events"] = [e for e in directory["events"] if e["id"] != event_id]
+        if len(directory["events"]) == before:
+            return False
+        with _slugs.update() as index:
+            _sync_event_locals(index, team_id, directory["slug"], [e["slug"] for e in directory["events"]])
+        _save_directory(directory)
+        return True
+
+
+def _validate_event_contact(event: Dict[str, Any], contact: Dict[str, Any], *,
+                            exclude_id: Optional[str] = None) -> None:
+    """Pickup players and their guardians: a player carries exactly one id
+    (its own pickup id, which its guardians point at), a guardian at least
+    one; nobody has an alias; an address appears once per kind."""
+    kind = contact["kind"]
+    if kind not in EVENT_CONTACT_KINDS:
+        raise ValueError("An event list holds pickup players and their parents / guardians only.")
+    if contact.get("alias"):
+        raise ValueError("Pickup players do not get their own address.")
+    player_ids = contact.get("playerIds") or []
+    if kind == "player" and len(player_ids) != 1:
+        raise ValueError("A pickup player carries exactly one id.")
+    if kind == "guardian":
+        pickups = {c["playerIds"][0] for c in event["contacts"] if c["kind"] == "player" and c.get("playerIds")}
+        if not player_ids or not all(p in pickups for p in player_ids):
+            raise ValueError("A guardian must be linked to a pickup player on this event.")
+    emails = contact.get("emails") or []
+    if not emails and kind != "player":
+        raise ValueError("An email address is required.")
+    for other in event["contacts"]:
+        if other["id"] == exclude_id:
+            continue
+        if kind == "player" and other["kind"] == "player" and other.get("playerIds") == player_ids:
+            raise ValueError(f"{other['name']} is already on this event list.")
+        if other["kind"] == kind:
+            shared = [e for e in emails if e in (other.get("emails") or [])]
+            if shared:
+                raise ValueError(f"{shared[0]} is already on this event list as {other['name']}.")
+
+
+def add_mail_event_contact(team_id: str, event_id: str, contact: Dict[str, Any]) -> Dict[str, Any]:
+    """Add a pickup player (``kind: player``; an id is generated unless
+    ``playerIds`` names one, e.g. the tournament event's pickup id) or a
+    guardian of one (``playerIds`` naming the pickup ids). Raises KeyError
+    for an unknown event list, ValueError for a bad contact."""
+    clean = _clean_contact_updates(contact)
+    if "kind" not in clean or "name" not in clean:
+        raise ValueError("kind and name are required.")
+    emails = clean.get("emails", [])
+    with entity_lock(f"mail:{team_id}"):
+        directory = get_mail_directory(team_id)
+        if directory is None:
+            raise FileNotFoundError(team_id)
+        event = _find_event(directory, event_id)
+        if event is None:
+            raise KeyError(event_id)
+        player_ids = clean.get("playerIds", [])
+        if clean["kind"] == "player" and not player_ids:
+            player_ids = [_new_id("pickup")]
+        record = {
+            "id": _new_id("mc"),
+            "kind": clean["kind"],
+            "name": clean["name"],
+            "emails": emails,
+            "email": emails[0] if emails else None,
+            "playerIds": player_ids,
+            "alias": None,
+            "status": clean.get("status", "active"),
+            "optOut": [],
+            "notes": clean.get("notes", ""),
+            "bounces": {},
+            "createdAt": _now(),
+            "updatedAt": _now(),
+        }
+        _validate_event_contact(event, record)
+        event["contacts"].append(record)
+        event["updatedAt"] = _now()
+        _save_directory(directory)
+    return record
+
+
+def update_mail_event_contact(team_id: str, event_id: str, contact_id: str,
+                              updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    clean = _clean_contact_updates(updates)
+    clean.pop("kind", None)        # a pickup stays a pickup, a guardian a guardian
+    clean.pop("alias", None)       # and nobody on an event list has an address of their own
+    clear_bounce = any(k in updates and updates[k] is None for k in ("bounce", "bounces"))
+    with entity_lock(f"mail:{team_id}"):
+        directory = get_mail_directory(team_id)
+        if directory is None:
+            raise FileNotFoundError(team_id)
+        event = _find_event(directory, event_id)
+        if event is None:
+            raise KeyError(event_id)
+        for contact in event["contacts"]:
+            if contact["id"] != contact_id:
+                continue
+            candidate = dict(contact)
+            candidate.update(clean)
+            if clear_bounce:
+                candidate["bounces"] = {}
+            elif "emails" in clean:
+                candidate["bounces"] = {k: v for k, v in (candidate.get("bounces") or {}).items()
+                                        if k in candidate["emails"]}
+            _validate_event_contact(event, candidate, exclude_id=contact_id)
+            candidate["updatedAt"] = _now()
+            contact.clear()
+            contact.update(candidate)
+            event["updatedAt"] = _now()
+            _save_directory(directory)
+            return contact
+    return None
+
+
+def remove_mail_event_contact(team_id: str, event_id: str, contact_id: str) -> bool:
+    """Remove a pickup player (and the guardians linked only to them) or a
+    guardian from an event list."""
+    with entity_lock(f"mail:{team_id}"):
+        directory = get_mail_directory(team_id)
+        if directory is None:
+            return False
+        event = _find_event(directory, event_id)
+        if event is None:
+            return False
+        target = next((c for c in event["contacts"] if c["id"] == contact_id), None)
+        if target is None:
+            return False
+        kept = []
+        gone = set(target.get("playerIds") or []) if target["kind"] == "player" else set()
+        for contact in event["contacts"]:
+            if contact["id"] == contact_id:
+                continue
+            if gone and contact["kind"] == "guardian":
+                remaining = [p for p in (contact.get("playerIds") or []) if p not in gone]
+                if not remaining:
+                    continue
+                contact["playerIds"] = remaining
+            kept.append(contact)
+        event["contacts"] = kept
+        event["updatedAt"] = _now()
+        _save_directory(directory)
+        return True
+
+
+# ==========================================================================
 # Bounces and complaints
 # ==========================================================================
 
@@ -579,7 +964,8 @@ def record_mail_bounce(email: str, kind: str, detail: str = "", provider_id: Opt
                 record["subject"] = relayed.get("subject") or ""
                 record["relayedId"] = relayed.get("id")
             changed = False
-            for contact in directory["contacts"]:
+            everyone = list(directory["contacts"]) + [c for e in directory.get("events", []) for c in e["contacts"]]
+            for contact in everyone:
                 if email in (contact.get("emails") or []):
                     contact.setdefault("bounces", {})[email] = dict(record)
                     contact["updatedAt"] = _now()
@@ -826,11 +1212,17 @@ def scrub_player_from_mail(player_id: str, *, dry_run: bool = False) -> Dict[str
                 else:
                     counts["contacts"] += 1
                     removed_emails.update(contact.get("emails") or [])
+            # An event list the player was going to forgets them too.
+            for event in directory.get("events", []):
+                if player_id in (event.get("playerIds") or []):
+                    if not dry_run:
+                        event["playerIds"] = [p for p in event["playerIds"] if p != player_id]
+                        event["updatedAt"] = _now()
             if not dry_run and len(kept) != len(directory["contacts"]):
                 directory["contacts"] = kept
                 _save_directory(directory)
-            elif not dry_run and counts["contacts"] == 0:
-                # playerIds may have changed on a guardian with other kids
+            elif not dry_run:
+                # playerIds may have changed on a guardian with other kids, or on an event
                 _save_directory(directory)
 
             alias_locals = {f"{a}-{slug}" for a in removed_aliases}

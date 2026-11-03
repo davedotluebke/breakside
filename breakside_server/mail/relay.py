@@ -91,6 +91,7 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
     subject = str(msg.get("Subject", "") or "")[:200]
     message_id = str(msg.get("Message-ID", "") or "")[:200]
     slugs = storage.list_mail_slugs()
+    event_locals = storage.list_mail_event_locals()
 
     results: List[Optional[RelayResult]] = []
     # Player aliases of one team addressed by the same message are relayed
@@ -100,7 +101,7 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
     pending: Dict[str, List[_PlayerTarget]] = {}
     for local in target_locals(msg, envelope_recipients, domain):
         address = f"{local}@{domain}"
-        parsed = addresses.parse_local_part(local, slugs.keys())
+        parsed = addresses.parse_local_part(local, slugs.keys(), event_locals)
         if parsed is None:
             logger.info("mail: dropped message to unknown address %s from %s", address, addresses.mask_address(author_email))
             results.append(RelayResult(address, None, "drop", "unknown-address"))
@@ -172,6 +173,8 @@ def _list_display(directory: Dict[str, Any], decision: policy.Decision) -> str:
     kind = decision.kind
     if kind == "player" and decision.player:
         return f"{decision.player['name']} ({name})"
+    if kind == "event" and decision.event:
+        return f"{decision.event['name']} ({name})"
     prefix = {"parents": "Parents", "coaches": "Coaches", "staff": "Staff", "players": "Players"}.get(kind)
     return f"{prefix} {name}" if prefix else name
 
@@ -374,6 +377,7 @@ def _quarantine(raw, team_id, directory, decision, local, domain, contacts, base
 REASON_TEXT = {
     "unknown-sender": "the sender's address is not in the team directory",
     "not-allowed-to-post": "the sender is in the directory but may not post to this list",
+    "not-on-event": "the sender is in the directory but not on this event's list",
     "dmarc-fail": "the sender's mail provider says the message did not come from them (possible spoof)",
     "auth-fail": "the message failed both sender checks (possible spoof)",
     "list-disabled": "this list is turned off",

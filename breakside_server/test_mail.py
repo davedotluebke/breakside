@@ -1032,3 +1032,251 @@ class TestSesTransport:
         ses = transport.SesTransport("us-east-1", client=FakeSesClient(fail=True))
         with pytest.raises(transport.TransportError):
             ses.send(from_addr="coaches-cudo@team.breakside.pro", recipients=["a@x.test"], raw=self.RAW)
+
+
+# =============================================================================
+# Event lists (<slug>-<event>@): a subset of the roster plus pickup players
+# =============================================================================
+
+@pytest.fixture
+def with_event(configured):
+    """configured plus an event list ``cudo-states``: Alice Smith going (so
+    mom and dad), Bob not; a pickup player Zed with two parent addresses."""
+    from storage import mail_storage as ms
+    tid = configured["team_id"]
+    ev = ms.add_mail_event(tid, {"slug": "states", "name": "States", "playerIds": [configured["alice"]]})
+    zed = ms.add_mail_event_contact(tid, ev["id"], {"kind": "player", "name": "Zed Pickup", "email": "zed@x.test"})
+    zed_parents = ms.add_mail_event_contact(tid, ev["id"], {
+        "kind": "guardian", "name": "Parents of Zed", "emails": "zedmom@x.test, zeddad@x.test", "playerIds": zed["playerIds"]})
+    configured.update({"event": ev, "zed": zed, "zed_parents": zed_parents})
+    return configured
+
+
+class TestEventLists:
+    def test_address_rules(self):
+        from mail import addresses as a
+        assert a.validate_event_slug(" States ") == "states"
+        for bad in ("", "x" * 25, "Sta tes", "parents", "coaches", "-states"):
+            with pytest.raises(a.AddressError):
+                a.validate_event_slug(bad)
+        assert a.local_part("event", "cudo", "states") == "cudo-states"
+        locals_ = {"cudo-states": ("cudo", "states")}
+        assert a.parse_local_part("Cudo-States", ["cudo", "states"], locals_) == ("event", "cudo", "states")
+        # without the registration the same local reads as a player on team "states"
+        assert a.parse_local_part("cudo-states", ["cudo", "states"]) == ("player", "states", "cudo")
+        assert a.parse_local_part("parents-cudo", ["cudo"], locals_) == ("parents", "cudo", None)
+
+    def test_storage_and_index(self, with_event):
+        from storage import mail_storage as ms
+        tid, ev = with_event["team_id"], with_event["event"]
+        assert ms.list_mail_event_locals() == {"cudo-states": ("cudo", "states")}
+        assert ev["subjectTag"] == "[CUDO States]" and ev["postPolicy"] == ["anyone"] and ev["replyTo"] == "list"
+        assert ev["enabled"] is True and ev["playerIds"] == [with_event["alice"]]
+        # duplicates and bad names
+        with pytest.raises(ValueError):
+            ms.add_mail_event(tid, {"slug": "states", "name": "Again"})
+        with pytest.raises(Exception):
+            ms.add_mail_event(tid, {"slug": "bad name", "name": "X"})
+        with pytest.raises(ValueError):
+            ms.add_mail_event(tid, {"slug": "x", "name": ""})
+        # rename the event: the index follows
+        ev2 = ms.update_mail_event(tid, ev["id"], {"slug": "states-2026", "name": "States 2026", "subjectTag": "[States]"})
+        assert ev2["slug"] == "states-2026" and ms.list_mail_event_locals() == {"cudo-states-2026": ("cudo", "states-2026")}
+        assert ms.update_mail_event(tid, "me_missing", {"name": "x"}) is None
+        # rename the team: the index follows too
+        ms.update_mail_settings(tid, slug="cudo-mixed")
+        assert ms.list_mail_event_locals() == {"cudo-mixed-states-2026": ("cudo-mixed", "states-2026")}
+        ms.update_mail_settings(tid, slug="cudo")
+        # the event list's own contacts
+        contacts = ms.get_mail_event(tid, ev["id"])["contacts"]
+        assert [c["kind"] for c in contacts] == ["player", "guardian"]
+        assert contacts[0]["playerIds"][0].startswith("pickup_") and contacts[1]["playerIds"] == contacts[0]["playerIds"]
+        assert contacts[1]["emails"] == ["zedmom@x.test", "zeddad@x.test"]
+        for bad in (
+            {"kind": "manager", "name": "X", "email": "m@x.test"},                       # only players + guardians
+            {"kind": "guardian", "name": "X", "email": "g@x.test"},                      # no pickup
+            {"kind": "guardian", "name": "X", "email": "g@x.test", "playerIds": ["nope"]},
+            {"kind": "player", "name": "Zed Again", "playerIds": contacts[0]["playerIds"]},
+            {"kind": "guardian", "name": "Dup", "email": "zedmom@x.test", "playerIds": contacts[0]["playerIds"]},
+        ):
+            with pytest.raises(ValueError):
+                ms.add_mail_event_contact(tid, ev["id"], bad)
+        with pytest.raises(KeyError):
+            ms.add_mail_event_contact(tid, "me_missing", {"kind": "player", "name": "X"})
+        # editing keeps the kind and gives nobody an alias; removing the pickup takes the guardians linked only to them
+        zed = ms.update_mail_event_contact(tid, ev["id"], with_event["zed"]["id"], {"kind": "guardian", "alias": "zed", "emails": "zed2@x.test"})
+        assert zed["kind"] == "player" and zed["alias"] is None and zed["emails"] == ["zed2@x.test"]
+        assert ms.remove_mail_event_contact(tid, ev["id"], with_event["zed"]["id"]) is True
+        assert ms.get_mail_event(tid, ev["id"])["contacts"] == []
+        assert ms.remove_mail_event_contact(tid, ev["id"], "mc_missing") is False
+        # removing the list clears its address
+        assert ms.remove_mail_event(tid, ev["id"]) is True and ms.list_mail_event_locals() == {}
+        assert ms.remove_mail_event(tid, ev["id"]) is False
+
+    def test_event_address_cannot_shadow_another_team(self, with_event):
+        """Team "cudo" wants an event "mixed"; team "cudo-mixed" exists and
+        cudo-mixed@ is its everyone address. And team "states" exists: a
+        player alias "cudo" there would be cudo-states@, which is our event."""
+        from storage import mail_storage as ms, team_storage
+        tid, other = with_event["team_id"], with_event["other_team"]
+        ms.create_mail_directory(other, "cudo-mixed", "Other")
+        with pytest.raises(ValueError):
+            ms.add_mail_event(tid, {"slug": "mixed", "name": "Mixed"})
+        third = team_storage.save_team({"name": "Third", "playerIds": []})
+        with pytest.raises(ValueError):            # cudo-states@ is already an event address
+            ms.update_mail_settings(other, slug="cudo-states")
+        ms.create_mail_directory(third, "states", "States Team")
+        with pytest.raises(ValueError):            # alias cudo on team states = cudo-states@
+            ms.add_mail_contact(third, {"kind": "player", "name": "Cudo Kid", "playerIds": ["Kid-1"], "alias": "cudo"})
+        # and the other way round: our event "zz-states" would be cudo-zz-states@,
+        # which reads as player "cudo-zz" on team "states"
+        with pytest.raises(ValueError):
+            ms.add_mail_event(tid, {"slug": "zz-states", "name": "x"})
+        # within the team: slug "cudo", event "x-cudo" is cudo-x-cudo@, player alias "cudo-x"
+        ms.add_mail_contact(tid, {"kind": "player", "name": "Odd Kid", "playerIds": ["Kid-3"], "alias": "cudo-x"})
+        with pytest.raises(ValueError):
+            ms.add_mail_event(tid, {"slug": "x-cudo", "name": "x"})
+        assert ms.add_mail_event(tid, {"slug": "y-cudo", "name": "y"})["slug"] == "y-cudo"
+
+    def test_recipients_and_posting(self, with_event):
+        from mail import relay
+        from storage import mail_storage as ms
+        tid = with_event["team_id"]
+        addr = f"cudo-states@{DOMAIN}"
+        # Alice's dad posts: coaches, the manager, Alice's guardians, Zed and Zed's parents. Not Bob.
+        r = relay.process_inbound(raw_mail("Dad Smith <dad@x.test>", addr, subject="Hotel block"), envelope_recipients=[addr])
+        assert (r[0].action, r[0].recipients) == ("relay", 8)
+        send = with_event["outbox"].sent()[-1]
+        assert sorted(send["recipients"]) == ["carol@x.test", "coach2@x.test", "coach@x.test", "dad@x.test", "mom@x.test",
+                                              "zed@x.test", "zeddad@x.test", "zedmom@x.test"]
+        import email as email_lib
+        from email import policy as email_policy
+        out = email_lib.message_from_bytes(send["raw"], policy=email_policy.default)
+        assert out["From"].addresses[0].display_name == "Dad Smith via States (CUDO)"
+        assert out["From"].addresses[0].addr_spec == addr
+        assert out["Subject"] == "[CUDO States] Hotel block"
+        assert [(a.display_name, a.addr_spec) for a in out["Reply-To"].addresses] == [("States (CUDO)", addr)]
+        assert out["X-Breakside-List"] == "cudo-states"
+        entry = ms.read_mail_log(tid, 1)[0]
+        assert entry["kind"] == "event" and entry["list"] == "cudo-states" and entry["senderKinds"] == ["guardian"]
+        # Zed's mom (an event-only contact) may post to the event list …
+        r = relay.process_inbound(raw_mail("Zed Mom <zedmom@x.test>", addr), envelope_recipients=[addr])
+        assert r[0].action == "relay"
+        # … but is a stranger to every other list.
+        r = relay.process_inbound(raw_mail("Zed Mom <zedmom@x.test>", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+        assert (r[0].action, r[0].reason) == ("quarantine", "unknown-sender")
+        assert "zedmom@x.test" not in sum((s["recipients"] for s in with_event["outbox"].sent() if s["from"] != addr), [])
+        # Bob (in the directory, not going) is held with its own reason; a coach can release.
+        r = relay.process_inbound(raw_mail("Bob <bob@x.test>", addr), envelope_recipients=[addr])
+        assert (r[0].action, r[0].reason) == ("quarantine", "not-on-event")
+        held = ms.list_mail_quarantine(tid)[0]
+        out = relay.release_quarantine(tid, held["id"])
+        assert out[0].action == "relay"
+        # A stranger is still unknown-sender; a disabled list holds everything.
+        r = relay.process_inbound(raw_mail("who@x.test", addr), envelope_recipients=[addr])
+        assert (r[0].action, r[0].reason) == ("quarantine", "unknown-sender")
+        ms.update_mail_event(tid, with_event["event"]["id"], {"enabled": False})
+        r = relay.process_inbound(raw_mail("coach@x.test", addr), envelope_recipients=[addr])
+        assert (r[0].action, r[0].reason) == ("quarantine", "list-disabled")
+        # Post policy by kind applies within the membership.
+        ms.update_mail_event(tid, with_event["event"]["id"], {"enabled": True, "postPolicy": ["coach"]})
+        r = relay.process_inbound(raw_mail("dad@x.test", addr), envelope_recipients=[addr])
+        assert (r[0].action, r[0].reason) == ("quarantine", "not-allowed-to-post")
+
+    def test_bounces_and_erasure_reach_event_contacts(self, with_event):
+        from mail import relay
+        from storage import erasure, mail_storage as ms
+        tid, ev = with_event["team_id"], with_event["event"]
+        assert ms.record_mail_bounce("zeddad@x.test", "hard") == 1
+        parents = next(c for c in ms.get_mail_event(tid, ev["id"])["contacts"] if c["kind"] == "guardian")
+        assert parents["bounces"]["zeddad@x.test"]["kind"] == "hard"
+        addr = f"cudo-states@{DOMAIN}"
+        relay.process_inbound(raw_mail("coach@x.test", addr), envelope_recipients=[addr])
+        assert "zeddad@x.test" not in with_event["outbox"].sent()[-1]["recipients"]
+        ms.update_mail_event_contact(tid, ev["id"], parents["id"], {"bounces": None})
+        assert ms.get_mail_event(tid, ev["id"])["contacts"][1]["bounces"] == {}
+        # Erasing Alice takes her off the event list.
+        erasure.erase_player(with_event["alice"])
+        assert ms.get_mail_event(tid, ev["id"])["playerIds"] == []
+
+    def test_sync_from_tournament_event(self, with_event):
+        from mail import directory as dm
+        from storage import event_storage, mail_storage as ms
+        tid, ev = with_event["team_id"], with_event["event"]
+        with pytest.raises(ValueError):
+            dm.sync_event_roster(tid, ev["id"])                    # not linked
+        with pytest.raises(KeyError):
+            dm.sync_event_roster(tid, "me_missing")
+        tourney = event_storage.save_event({"name": "HS States", "teamId": tid, "roster": {
+            "playerIds": [with_event["bob"], with_event["alice2"], "Gone-0000"],
+            "pickupPlayers": [{"id": "Pickup-Yul-1a2b", "name": "Yul Pickup", "gender": "MMP"},
+                              {"id": with_event["zed"]["playerIds"][0], "name": "Zed Pickup"}],
+        }})
+        ms.update_mail_event(tid, ev["id"], {"eventId": tourney})
+        result = dm.sync_event_roster(tid, ev["id"])
+        assert sorted(result["playerIds"]) == sorted([with_event["bob"], with_event["alice2"]])     # unknown ids dropped
+        assert [c["name"] for c in result["added"]] == ["Yul Pickup"]                            # Zed already there
+        updated = ms.get_mail_event(tid, ev["id"])
+        assert [c["name"] for c in updated["contacts"] if c["kind"] == "player"] == ["Zed Pickup", "Yul Pickup"]
+        assert dm.sync_event_roster(tid, ev["id"])["added"] == []                                 # idempotent
+        view = dm.directory_view(tid)
+        assert view["tournamentEvents"][0] == {"id": tourney, "name": "HS States", "status": "open", "playerCount": 3, "pickupCount": 2}
+        e = view["events"][0]
+        assert e["address"] == f"cudo-states@{DOMAIN}" and e["eventId"] == tourney
+        assert {r["email"] for r in e["recipients"]} == {"coach@x.test", "coach2@x.test", "carol@x.test", "bob@x.test", "dad@x.test",
+                                                          "zed@x.test", "zedmom@x.test", "zeddad@x.test"}
+
+    def test_api(self, client, configured):
+        from storage import event_storage
+        _as(COACH)
+        tid = configured["team_id"]
+        base = f"/api/teams/{tid}/mail/events"
+        r = client.post(base, json={"slug": "States", "name": "States 2026", "playerIds": [configured["alice"]]})
+        assert r.status_code == 200, r.text
+        ev = r.json()["event"]
+        assert ev["address"] == f"cudo-states@{DOMAIN}" and ev["slug"] == "states" and len(ev["recipients"]) == 5
+        assert client.post(base, json={"slug": "states", "name": "Again"}).status_code == 400
+        assert client.post(base, json={"slug": "parents", "name": "Nope"}).status_code == 400
+        # a pickup with parent addresses in one call
+        r = client.post(f"{base}/{ev['id']}/contacts", json={"kind": "player", "name": "Zed Pickup",
+                                                             "email": "", "guardianEmails": "zm@x.test, zd@x.test"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["contact"]["kind"] == "player" and body["guardian"]["name"] == "Parents of Zed Pickup"
+        assert body["guardian"]["emails"] == ["zm@x.test", "zd@x.test"] and len(body["event"]["recipients"]) == 7
+        # a bad guardian address rolls the pickup back too
+        r = client.post(f"{base}/{ev['id']}/contacts", json={"kind": "player", "name": "Yul", "guardianEmails": "not-an-address"})
+        assert r.status_code == 400 and [c["name"] for c in client.get(f"/api/teams/{tid}/mail").json()["events"][0]["contacts"]] == ["Zed Pickup", "Parents of Zed Pickup"]
+        # another guardian by name, edit, remove
+        pickup_id = body["contact"]["playerIds"][0]
+        r = client.post(f"{base}/{ev['id']}/contacts", json={"kind": "guardian", "name": "Zed Gran", "emails": "gran@x.test", "playerIds": [pickup_id]})
+        assert r.status_code == 200
+        gran = r.json()["contact"]
+        r = client.patch(f"{base}/{ev['id']}/contacts/{gran['id']}", json={"emails": "gran@x.test, gran2@x.test"})
+        assert r.status_code == 200 and r.json()["contact"]["emails"] == ["gran@x.test", "gran2@x.test"]
+        assert client.patch(f"{base}/{ev['id']}/contacts/mc_missing", json={"name": "x"}).status_code == 404
+        assert client.delete(f"{base}/{ev['id']}/contacts/{gran['id']}").status_code == 200
+        # settings and roster
+        r = client.patch(f"{base}/{ev['id']}", json={"playerIds": [configured["alice"], configured["bob"]], "replyTo": "coaches", "subjectTag": "[States]"})
+        assert r.status_code == 200 and len(r.json()["event"]["recipients"]) == 8
+        assert client.patch(f"{base}/{ev['id']}", json={"replyTo": "me"}).status_code == 400
+        assert client.patch(f"{base}/me_missing", json={"name": "x"}).status_code == 404
+        # link to a tournament event and sync
+        tourney = event_storage.save_event({"name": "HS States", "teamId": tid, "roster": {"playerIds": [configured["alice2"]], "pickupPlayers": []}})
+        assert client.post(f"{base}/{ev['id']}/sync").status_code == 400          # not linked yet
+        r = client.patch(f"{base}/{ev['id']}", json={"eventId": tourney})
+        r = client.post(f"{base}/{ev['id']}/sync")
+        assert r.status_code == 200 and r.json()["playerIds"] == [configured["alice2"]]
+        # creating a linked list copies the roster on creation
+        r = client.post(base, json={"slug": "states-b", "name": "States B", "eventId": tourney})
+        assert r.status_code == 200 and r.json()["event"]["playerIds"] == [configured["alice2"]]
+        view = client.get(f"/api/teams/{tid}/mail").json()
+        assert [e["slug"] for e in view["events"]] == ["states", "states-b"] and view["addresses"]["eventPattern"] == f"cudo-<event>@{DOMAIN}"
+        assert view["tournamentEvents"][0]["id"] == tourney
+        # viewers and outsiders see nothing
+        _as(VIEWER)
+        assert client.post(base, json={"slug": "x", "name": "x"}).status_code == 403
+        assert client.get(f"/api/teams/{tid}/mail").status_code == 403
+        _as(COACH)
+        assert client.delete(f"{base}/{ev['id']}").status_code == 200
+        assert client.delete(f"{base}/{ev['id']}").status_code == 404

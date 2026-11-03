@@ -9,15 +9,26 @@ Every team address is ``<local>@<domain>`` where the local part is one of:
     staff-<slug>           coaches + managers              ("staff")
     players-<slug>         players + coaches               ("players")
     <alias>-<slug>         one player + their guardians + all coaches ("player")
+    <slug>-<event>         an event list: coaches, managers, the players
+                           going (with their guardians) and any pickup
+                           players with theirs                  ("event")
 
 ``slug`` is chosen by a coach and is globally unique across Breakside;
 ``alias`` is a player's address name (``alice``, ``alice-b``), unique within
-the team. Both are lowercase ASCII so an address survives being read aloud,
+the team; ``event`` is an event list's name (``states``), unique within the
+team. All are lowercase ASCII so an address survives being read aloud,
 typed on a phone, and folded by every mail client on earth.
+
+Event lists put the team's slug FIRST (``cudo-states``), player aliases put
+it last (``alice-cudo``), so the two can only collide across teams (team
+``cudo``'s event ``states`` against a player ``cudo`` on a team whose slug is
+``states``). Storage refuses an event name whose address already resolves
+to another team under the slug rules, and an alias or slug that would form
+an existing event address, so every address resolves one way.
 """
 import re
 import unicodedata
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Dict, Iterable, Mapping, Optional, Tuple
 
 # Kinds of list a local part can resolve to, and the prefix each one uses.
 LIST_PREFIXES: Dict[str, str] = {
@@ -26,7 +37,7 @@ LIST_PREFIXES: Dict[str, str] = {
     "staff": "staff",
     "players": "players",
 }
-LIST_KINDS = ("all", "parents", "coaches", "staff", "players", "player")
+LIST_KINDS = ("all", "parents", "coaches", "staff", "players", "player", "event")
 
 # Local parts nobody may claim as a slug or an alias. RFC 2142 role addresses,
 # the words we use for list prefixes, and things that would look official.
@@ -105,6 +116,28 @@ def validate_alias(alias: str) -> str:
     return alias
 
 
+def validate_event_slug(slug: str) -> str:
+    """Return an event list's address name folded, or raise AddressError.
+
+    Same shape as a player alias (``states``, ``spring-break-2026``). The
+    reserved words are refused so ``cudo-parents@`` can never look like a
+    list it is not.
+    """
+    slug = _fold((slug or "").strip())
+    if not slug:
+        raise AddressError("Event address name is required.")
+    if len(slug) < ALIAS_MIN or len(slug) > ALIAS_MAX:
+        raise AddressError(f"Event address name must be {ALIAS_MIN}–{ALIAS_MAX} characters.")
+    if not SLUG_RE.match(slug):
+        raise AddressError(
+            "Event address name may use only lowercase letters, digits and single hyphens "
+            "(e.g. \"states\" or \"spring-break\")."
+        )
+    if slug in RESERVED or slug in LIST_PREFIXES:
+        raise AddressError(f"\"{slug}\" is reserved; pick another name.")
+    return slug
+
+
 def _name_tokens(name: str) -> Tuple[str, str]:
     """(first, last-initial) from a display name, folded to ``[a-z0-9]``."""
     folded = _fold(name)
@@ -154,6 +187,10 @@ def local_part(kind: str, slug: str, alias: Optional[str] = None) -> str:
         if not alias:
             raise ValueError("player lists need an alias")
         return f"{alias}-{slug}"
+    if kind == "event":
+        if not alias:
+            raise ValueError("event lists need an event name")
+        return f"{slug}-{alias}"
     if kind in LIST_PREFIXES:
         return f"{LIST_PREFIXES[kind]}-{slug}"
     raise ValueError(f"unknown list kind: {kind}")
@@ -163,17 +200,27 @@ def address(kind: str, slug: str, domain: str, alias: Optional[str] = None) -> s
     return f"{local_part(kind, slug, alias)}@{domain}"
 
 
-def parse_local_part(local: str, slugs: Iterable[str]) -> Optional[Tuple[str, str, Optional[str]]]:
+def parse_local_part(local: str, slugs: Iterable[str],
+                     event_locals: Optional[Mapping[str, Tuple[str, str]]] = None,
+                     ) -> Optional[Tuple[str, str, Optional[str]]]:
     """Resolve a local part to ``(kind, slug, alias)`` or None.
 
-    Matches the longest known slug that the local part ends with, so with
-    slugs ``mixed`` and ``cudo-mixed`` both registered, ``parents-cudo-mixed``
-    resolves to the parents list of ``cudo-mixed``, not to a player called
-    ``parents-cudo`` on ``mixed``. Anything left over in front of the slug is
-    either a list prefix or a player alias; whether that alias exists is the
-    caller's business (policy.py).
+    ``event_locals`` maps every registered event address local part to its
+    ``(team slug, event name)``; an exact match wins, as ``("event", slug,
+    event)``, and the storage layer guarantees such a local never resolves
+    to another team under the rules below.
+
+    Otherwise, matches the longest known slug that the local part ends with,
+    so with slugs ``mixed`` and ``cudo-mixed`` both registered,
+    ``parents-cudo-mixed`` resolves to the parents list of ``cudo-mixed``,
+    not to a player called ``parents-cudo`` on ``mixed``. Anything left over
+    in front of the slug is either a list prefix or a player alias; whether
+    that alias exists is the caller's business (policy.py).
     """
     local = _fold(local.strip())
+    if event_locals and local in event_locals:
+        slug, event = event_locals[local]
+        return ("event", slug, event)
     candidates = sorted((s for s in slugs if s), key=len, reverse=True)
     for slug in candidates:
         if local == slug:

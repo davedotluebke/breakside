@@ -89,14 +89,85 @@ def team_addresses(directory: Dict[str, Any], domain: Optional[str] = None) -> D
     slug = directory["slug"]
     out = {kind: addresses.address(kind, slug, domain) for kind in LIST_ORDER}
     out["playerPattern"] = f"<name>-{slug}@{domain}"
+    out["eventPattern"] = f"{slug}-<event>@{domain}"
     return out
 
 
-def list_members_view(kind: str, contacts: List[Dict[str, Any]], alias: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_members_view(kind: str, contacts: List[Dict[str, Any]], alias: Optional[str] = None,
+                      event: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Who a list currently delivers to, for the admin screen."""
     from . import policy
-    expanded = policy.recipients_for(kind, contacts, alias=alias) or []
+    expanded = policy.recipients_for(kind, contacts, alias=alias, event=event) or []
     return [{"id": c["id"], "name": c["name"], "email": c["email"], "kind": c["kind"]} for c in expanded]
+
+
+def tournament_events(team_id: str) -> List[Dict[str, Any]]:
+    """The team's tournament events, newest first, as the event-list form
+    offers them: id, name, status and how many players / pickups the event
+    roster holds."""
+    try:
+        events = storage.list_team_events(team_id)
+    except (FileNotFoundError, ValueError):
+        return []
+    out = []
+    for e in events:
+        roster = e.get("roster") or {}
+        out.append({
+            "id": e["id"], "name": e.get("name") or e["id"], "status": e.get("status") or "open",
+            "playerCount": len(roster.get("playerIds") or []),
+            "pickupCount": len(roster.get("pickupPlayers") or []),
+        })
+    return out
+
+
+def event_view(directory: Dict[str, Any], event: Dict[str, Any], contacts: List[Dict[str, Any]],
+               domain: Optional[str] = None) -> Dict[str, Any]:
+    """One event list as the admin screen renders it: the record plus its
+    address and who it reaches right now."""
+    domain = domain or config.MAIL_DOMAIN
+    return {
+        **event,
+        "address": addresses.address("event", directory["slug"], domain, event["slug"]),
+        "recipients": list_members_view("event", contacts, event=event),
+    }
+
+
+def sync_event_roster(team_id: str, mail_event_id: str) -> Dict[str, Any]:
+    """Copy the linked tournament event's roster onto the event list: the
+    roster players going replace ``playerIds``; each pickup player on the
+    tournament roster who is not yet on the list is added by name (no
+    address yet — the coach fills those in). Returns ``{playerIds, added}``.
+
+    Raises KeyError for an unknown list, ValueError when it has no linked
+    tournament event or that event is gone.
+    """
+    mail_event = storage.get_mail_event(team_id, mail_event_id)
+    if mail_event is None:
+        raise KeyError(mail_event_id)
+    if not mail_event.get("eventId"):
+        raise ValueError("This list is not linked to a tournament event.")
+    try:
+        event = storage.get_event(mail_event["eventId"])
+    except (FileNotFoundError, ValueError):
+        raise ValueError("The linked tournament event no longer exists.")
+    if event.get("teamId") != team_id:
+        raise ValueError("The linked tournament event belongs to another team.")
+    roster = event.get("roster") or {}
+    on_team = {p["id"] for p in roster_players(team_id)}
+    player_ids = [p for p in (roster.get("playerIds") or []) if p in on_team]
+    updated = storage.update_mail_event(team_id, mail_event_id, {"playerIds": player_ids})
+    have = {c["playerIds"][0] for c in updated["contacts"] if c["kind"] == "player" and c.get("playerIds")}
+    added = []
+    for pickup in roster.get("pickupPlayers") or []:
+        pid = pickup.get("id")
+        name = (pickup.get("name") or "").strip()
+        if not pid or not name or pid in have:
+            continue
+        added.append(storage.add_mail_event_contact(team_id, mail_event_id, {
+            "kind": "player", "name": name, "playerIds": [pid],
+        }))
+        have.add(pid)
+    return {"playerIds": player_ids, "added": added}
 
 
 def directory_view(team_id: str) -> Dict[str, Any]:
@@ -151,6 +222,7 @@ def directory_view(team_id: str) -> Dict[str, Any]:
     player_settings = dict(directory["lists"].get("player") or {})
     player_settings["address"] = f"<name>-{directory['slug']}@{domain}"
     lists["player"] = player_settings
+    events = [event_view(directory, e, contacts, domain) for e in directory.get("events") or []]
 
     return {
         "configured": True,
@@ -165,6 +237,8 @@ def directory_view(team_id: str) -> Dict[str, Any]:
         "contacts": contacts,
         "roster": roster_out,
         "members": members,
+        "events": events,
+        "tournamentEvents": tournament_events(team_id),
         "quarantineCount": len(storage.list_mail_quarantine(team_id)),
         "createdAt": directory.get("createdAt"),
         "updatedAt": directory.get("updatedAt"),

@@ -59,6 +59,7 @@ class Decision:
     recipients: List[Dict[str, Any]] = field(default_factory=list)
     list_settings: Dict[str, Any] = field(default_factory=dict)
     player: Optional[Dict[str, Any]] = None       # the alias's player contact
+    event: Optional[Dict[str, Any]] = None        # the event list record
 
 
 # ==========================================================================
@@ -213,16 +214,38 @@ def find_player_contact(contacts: Iterable[Dict[str, Any]], alias: str) -> Optio
     return None
 
 
+def event_members(event: Mapping[str, Any], contacts: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Everyone an event list reaches, before opt-outs and deliverability:
+    every coach and manager, the roster players going (their own contact
+    and their guardians), and the event's own contacts — pickup players
+    and their guardians, who exist only on this list."""
+    contacts = list(contacts)
+    going = set(event.get("playerIds") or [])
+    chosen = [c for c in contacts if c.get("kind") in ("coach", "manager")]
+    chosen += [c for c in contacts if c.get("kind") == "player"
+               and (c.get("playerIds") or [None])[0] in going]
+    chosen += [c for c in contacts if c.get("kind") == "guardian"
+               and any(p in going for p in (c.get("playerIds") or []))]
+    chosen += list(event.get("contacts") or [])
+    return chosen
+
+
 def recipients_for(kind: str, contacts: Iterable[Dict[str, Any]], *,
-                   alias: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+                   alias: Optional[str] = None,
+                   event: Optional[Mapping[str, Any]] = None) -> Optional[List[Dict[str, Any]]]:
     """Expand a list into deliverable, deduplicated contacts.
 
     Returns None when a player alias does not exist (the caller quarantines
     or drops). Each entry is a contact with ``email`` set to ONE of its
     addresses (a contact with two addresses yields two entries). The same
     expansion serves the "who's on this list" view in the admin screen.
+    ``event`` is the event list record for ``kind == "event"``.
     """
     contacts = list(contacts)
+    if kind == "event":
+        if event is None:
+            return None
+        return _expand(event_members(event, contacts))
     if kind == "player":
         player = find_player_contact(contacts, alias or "")
         if player is None:
@@ -258,16 +281,28 @@ def decide(directory: Mapping[str, Any], kind: str, alias: Optional[str],
     """
     contacts = list(contacts)
     lists = directory.get("lists") or {}
-    settings = lists.get(kind) or {}
+    event = None
+    if kind == "event":
+        event = next((e for e in directory.get("events") or [] if e.get("slug") == alias), None)
+        settings = event or {}
+    else:
+        settings = lists.get(kind) or {}
     decision = Decision(action="drop", kind=kind, slug=directory.get("slug"),
-                        alias=alias, list_settings=settings)
+                        alias=alias, list_settings=settings, event=event)
+
+    if kind == "event" and event is None:
+        decision.reason = "unknown-list"
+        return decision
 
     if not settings.get("enabled", kind != "players"):
         decision.action = "quarantine"
         decision.reason = "list-disabled"
         return decision
 
-    matches = find_contacts_by_email(contacts, sender_email)
+    # Pickup players and their guardians can write to their event's list
+    # (and nothing else): the sender lookup covers them for that list only.
+    known = contacts + list(event.get("contacts") or []) if event else contacts
+    matches = find_contacts_by_email(known, sender_email)
     decision.sender = matches[0] if matches else None
     decision.sender_kinds = sorted({m["kind"] for m in matches})
 
@@ -276,12 +311,20 @@ def decide(directory: Mapping[str, Any], kind: str, alias: Optional[str],
             decision.action = "quarantine"
             decision.reason = "unknown-sender"
             return decision
+        if event is not None:
+            # On the list, or not: a parent whose player is not going does
+            # not post to the trip's logistics, however well they mean it.
+            member_addresses = {a for c in event_members(event, contacts) for a in contact_addresses(c)}
+            if normalize_email(sender_email) not in member_addresses:
+                decision.action = "quarantine"
+                decision.reason = "not-on-event"
+                return decision
         if not may_post(settings, decision.sender_kinds):
             decision.action = "quarantine"
             decision.reason = "not-allowed-to-post"
             return decision
 
-    expanded = recipients_for(kind, contacts, alias=alias)
+    expanded = recipients_for(kind, contacts, alias=alias, event=event)
     if expanded is None:
         decision.action = "quarantine" if kind == "player" else "drop"
         decision.reason = "unknown-alias" if kind == "player" else "unknown-list"
