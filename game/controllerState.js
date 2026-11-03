@@ -1164,13 +1164,14 @@ function showControllerToast(message, type = 'info', duration = 4000, options = 
     };
     
     // Optional pill buttons under the message (options.actions, an array of
-    // {label, onClick}); tapping one dismisses the toast and runs its
-    // handler. They live inside .toast-message so the icon | message | ×
-    // row is unchanged. Styles: css/toasts.css .toast-actions.
+    // {label, onClick, className?}); tapping one dismisses the toast and
+    // runs its handler. They live inside .toast-message so the icon |
+    // message | × row is unchanged. Styles: css/toasts.css .toast-actions;
+    // className adds a variant (e.g. toast-action-prominent).
     const actions = Array.isArray(options.actions) ? options.actions : [];
     const actionsHtml = actions.length
         ? `<span class="toast-actions">${actions.map((a, i) =>
-            `<button type="button" class="toast-action-btn" data-action-index="${i}">${escapeToastText(a.label)}</button>`
+            `<button type="button" class="toast-action-btn${a.className ? ' ' + escapeToastText(a.className) : ''}" data-action-index="${i}">${escapeToastText(a.label)}</button>`
         ).join('')}</span>`
         : '';
 

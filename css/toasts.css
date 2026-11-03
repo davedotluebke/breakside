@@ -242,6 +242,22 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* The one action a toast exists for — the Redo after an undo-to-here
+   (game/gameScreenSync.js): big and yellow so it reads as "the way back". */
+.toast-action-btn.toast-action-prominent {
+    background: var(--color-warning);
+    border-color: transparent;
+    color: var(--text-primary);
+    font-size: 1rem;
+    padding: 10px 24px;
+    min-height: 44px;
+}
+
+.toast-action-btn.toast-action-prominent:hover,
+.toast-action-btn.toast-action-prominent:active {
+    background: var(--color-warning-hover);
+}
+
 .toast.toast-swiping {
     transition: none;
 }

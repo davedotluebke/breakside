@@ -5,7 +5,10 @@
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
 import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
-import { currentTeam, currentEvent, saveAllTeamsData, getActiveRoster } from '../store/storage.js';
+import {
+    currentTeam, currentEvent, saveAllTeamsData, getActiveRoster,
+    serializeGame, deserializePointsFromServer,
+} from '../store/storage.js';
 import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     NO_SCORE, VARIATIONS, TWO_POINT_HINT, variationById, normalizeRules, gameRules,
@@ -814,6 +817,7 @@ function undoToLogEntry(entryIndex) {
     const targetPoint = game.points[target.pointIdx];
     if (!targetPoint) return null;
     const targetRoster = [...(targetPoint.players || [])];
+    const before = snapshotForRedo(game);
 
     const summary = undoToTarget(game, target, {
         getActivePossession,
@@ -868,6 +872,100 @@ function undoToLogEntry(entryIndex) {
     const n = summary.eventsUndone;
     logEvent(`Undo: ${n} event${n === 1 ? '' : 's'} back to point ${target.pointIdx + 1}`);
     saveAllTeamsData();
+    lastUndoToHere = {
+        gameId: game.id, before, after: fingerprint(game), summary,
+        removedEvents: summary.removedEvents,
+    };
+    return summary;
+}
+
+// ── Redo of an undo-to-here ───────────────────────────────────────────────
+// The batch is the one undo that can take a lot in a single gesture, so its
+// toast offers the way back. The snapshot is the game as serialized for
+// storage (points, score, the pending line) plus the roster's live
+// counters — everything the batch can touch — and Redo is offered only
+// while the game still reads as the batch left it (fingerprint), so it can
+// never clobber plays recorded since.
+let lastUndoToHere = null;
+
+/** What the batch can change, as plain data. */
+function snapshotForRedo(game) {
+    const ser = serializeGame(game);
+    return {
+        points: ser.points,
+        scores: Object.assign({}, game.scores),
+        pendingNextLine: game.pendingNextLine ? JSON.parse(JSON.stringify(game.pendingNextLine)) : null,
+        players: (currentTeam ? currentTeam.teamRoster : []).map(p => {
+            const counters = {};
+            Object.keys(p).forEach(k => { if (typeof p[k] === 'number') counters[k] = p[k]; });
+            return { player: p, counters };
+        }),
+    };
+}
+
+/** The recorded shape of the game: what Redo must find unchanged. */
+function fingerprint(game) {
+    return JSON.stringify([
+        game.scores,
+        (game.points || []).map(p => [
+            p.winner, p.pendingConversion || null, p.pendingValue || 0,
+            (p.possessions || []).map(ps => (ps.events || []).length),
+        ]),
+    ]);
+}
+
+/** Is a Redo of the last undo-to-here available for the current game? */
+function canRedoUndoToHere() {
+    const game = currentGame();
+    return !!(lastUndoToHere && game && game.id === lastUndoToHere.gameId
+        && fingerprint(game) === lastUndoToHere.after);
+}
+
+/**
+ * Put back what the last undo-to-here took: the points, score, pending line
+ * and live counters as they were, then the screen to match. Returns the
+ * undo summary that was reversed, or null when there is nothing to redo
+ * (another game, or plays recorded since — the caller says so).
+ */
+function redoUndoToHere() {
+    if (!canRedoUndoToHere()) return null;
+    const game = currentGame();
+    const { before, summary, removedEvents } = lastUndoToHere;
+    lastUndoToHere = null;
+
+    game.points = deserializePointsFromServer(before.points);
+    game.scores = Object.assign({}, before.scores);
+    before.players.forEach(({ player, counters }) => Object.assign(player, counters));
+
+    // Halftimes come back with their events: the Field tab's end swap too.
+    revertPeriodBreakDisplay(removedEvents);
+    announceRulesState();
+
+    const latest = getLatestPoint();
+    if (latest && isPointInProgress()) {
+        stopCountdown();
+        if (typeof window.updateGameScreenScore === 'function') {
+            window.updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+        }
+        if (typeof window.updatePlayByPlayPanelState === 'function') window.updatePlayByPlayPanelState();
+    } else {
+        moveToNextPoint();
+    }
+    // The pending line as it was, over moveToNextPoint's reseed.
+    if (before.pendingNextLine) {
+        game.pendingNextLine = before.pendingNextLine;
+        if (typeof window.updateSelectLinePanel === 'function') window.updateSelectLinePanel();
+    }
+
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        if (removedEvents.length) {
+            window.narrationEventBus.publish('eventAdded', { event: removedEvents[0], source: 'manual', provisionalId: null });
+        }
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    const n = summary.eventsUndone;
+    logEvent(`Redo: ${n} event${n === 1 ? '' : 's'} put back`);
+    saveAllTeamsData();
     return summary;
 }
 
@@ -900,7 +998,8 @@ document.addEventListener('DOMContentLoaded', function() {
 export {
     updateScore, recordScore, settlePointAfterTurnover, bankPendingPoints, endPointWithoutScore,
     summarizeGame, summarizeGameEntries, gameLogEntryOptions, downloadJSON, undoEvent,
-    undoToLogEntry, describeUndoToEntry, configureStartGameMode, appVersion,
+    undoToLogEntry, describeUndoToEntry, redoUndoToHere, canRedoUndoToHere,
+    configureStartGameMode, appVersion,
 };
 // window survivor: late-bound back-edge hook (called by ui/eventLogDisplay.js,
 // which evaluates before this file — importing from here would add a

@@ -113,6 +113,8 @@ const advancedSettings = (function() {
         'replay.capWithinMs': 4000,                       // dead time clipped between plays within a point (0 = Off)
         'replay.capBetweenMs': 8000,                      // dead time clipped between points (0 = Off)
         'replay.orientation': 'landscape',                // default orientation the replay field opens in: landscape (wide) | portrait (tall); the ⟳ button writes here too
+        // --- Undo ---
+        'undo.confirmUndoToHere': true,                   // ask before "undo to here" from a Log line (the dialog's "Don't ask again" turns this off)
         // --- Hints ---
         'hints.hideAll': false                            // suppress all new-user hint toasts (see ui/hints.js)
     };
@@ -504,6 +506,17 @@ const advancedSettings = (function() {
                         ['landscape', 'Landscape (wide)'],
                         ['portrait', 'Portrait (tall)']
                     ]
+                }
+            ]
+        },
+        {
+            group: 'Undo',
+            note: 'Press and hold a line in the Log tab to undo it and everything after it, across points. The toast afterwards has a Redo button.',
+            fields: [
+                {
+                    key: 'undo.confirmUndoToHere', label: 'Confirm before undoing from the Log',
+                    help: 'Ask what will be undone before doing it. Ticking “Don’t ask again” in that dialog turns this off; turn it back on here.',
+                    type: 'toggle'
                 }
             ]
         },

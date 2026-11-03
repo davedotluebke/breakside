@@ -3024,3 +3024,37 @@ body.panel-dragging .panel-content {
 }
 .pbp-panel-content.layout-full .pbp-btn-rules-end .pbp-btn-label { display: inline; }
 .pbp-panel-content.layout-full .pbp-btn-rules-end i { display: none; }
+
+/* Undo-to-here confirm (game/gameScreenSync.js showUndoToHereDialog): the
+   Swap O & D dialog's shape, two buttons side by side, and a "Don't ask
+   again" row above them. */
+.undo-here-buttons {
+    grid-template-columns: 1fr 1fr;
+}
+
+.undo-here-question {
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.undo-here-skip {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.undo-here-skip input {
+    margin: 2px 0 0;
+    flex: none;
+    width: 18px;
+    height: 18px;
+}
+
+.undo-here-skip small {
+    display: block;
+    color: var(--text-muted);
+}

@@ -6,7 +6,7 @@
  * at the end of updateControllerUI — replaced the old monkey-patch wrapper).
  * Split from the former monolithic gameScreen.js (refactor, no behavior change).
  */
-import { Role, isTestGame } from '../store/models.js';
+import { Role } from '../store/models.js';
 import {
     currentTeam, currentEvent, setCurrentEvent, deserializeTournamentEvent,
     saveAllTeamsData,
@@ -33,10 +33,11 @@ import {
     canEditPlayByPlay,
 } from './controllerState.js';
 import {
-    summarizeGameEntries, gameLogEntryOptions, undoToLogEntry, describeUndoToEntry,
+    summarizeGameEntries, gameLogEntryOptions, undoToLogEntry, describeUndoToEntry, redoUndoToHere,
 } from './gameLogic.js';
 import { mountReplayView } from '../playByPlay/replayView.js';
 import { wireLongPress } from '../ui/longPress.js';
+import { advancedSettings } from '../settings/advancedSettings.js';
 import { currentGame as currentGameFn, getPlayerFromName } from '../utils/helpers.js';
 import { renderGameLogEntriesHTML, escapeHtml } from '../utils/gameLogRenderer.js';
 import {
@@ -223,15 +224,84 @@ function onLogLineLongPress(lineEl) {
         showControllerToast('Stop the mic before undoing past plays', 'warning');
         return;
     }
-    // The app's plain confirm() convention (as for End Game); skipped for
-    // test games (throwaway dev data).
-    if (!isTestGame(game) && !confirm(undoToHereQuestion(d))) return;
-    const r = undoToLogEntry(entryIndex);
-    if (!r) return;
+    const go = () => {
+        const r = undoToLogEntry(entryIndex);
+        if (!r) return;
+        const n = r.eventsUndone;
+        const what = r.targetPointReopened ? `point ${d.pointNumber} reopened`
+            : r.pointsRemoved ? `point ${d.pointNumber} removed` : `back to point ${d.pointNumber}`;
+        // Twice the usual toast, with the way back on it: this is the one
+        // undo that can take a lot in a single gesture.
+        showControllerToast(`Undid ${n} event${n === 1 ? '' : 's'} — ${what}`, 'info', 8000, {
+            actions: [{ label: 'Redo events', className: 'toast-action-prominent', onClick: redoFromToast }],
+        });
+    };
+    if (advancedSettings.get('undo.confirmUndoToHere') === false) { go(); return; }
+    showUndoToHereDialog(undoToHereQuestion(d), go);
+}
+
+function redoFromToast() {
+    const r = redoUndoToHere();
+    if (!r) {
+        showControllerToast('Nothing to redo — the game has changed since the undo', 'warning');
+        return;
+    }
     const n = r.eventsUndone;
-    const what = r.targetPointReopened ? `point ${d.pointNumber} reopened`
-        : r.pointsRemoved ? `point ${d.pointNumber} removed` : `back to point ${d.pointNumber}`;
-    showControllerToast(`Undid ${n} event${n === 1 ? '' : 's'} — ${what}`, 'info');
+    showControllerToast(`Put back ${n} event${n === 1 ? '' : 's'}`, 'success');
+}
+
+/**
+ * The undo-to-here confirm: the question (what goes), a "Don't ask again"
+ * box that writes the undo.confirmUndoToHere setting (Advanced Settings →
+ * Undo turns it back on), Undo and Cancel. Created lazily, like the Game
+ * Events modal; the × and a backdrop tap cancel.
+ */
+function showUndoToHereDialog(question, onConfirm) {
+    let modal = document.getElementById('undoToHereModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'undoToHereModal';
+        modal.className = 'modal game-events-modal';
+        modal.innerHTML = `
+            <div class="modal-content game-events-modal-content">
+                <div class="dialog-header prominent-dialog-header">
+                    <h2>Undo back to here?</h2>
+                    <span class="close" id="undoToHereModalClose">&times;</span>
+                </div>
+                <p class="text-hint undo-here-question"></p>
+                <label class="undo-here-skip">
+                    <input type="checkbox" id="undoToHereSkipConfirm">
+                    <span>Don’t ask again <small>(Advanced Settings → Undo turns this back on)</small></span>
+                </label>
+                <div class="game-events-buttons undo-here-buttons">
+                    <button id="undoToHereConfirmBtn" class="ge-btn ge-btn-who-us">
+                        <i class="fas fa-undo"></i>
+                        <span>Undo</span>
+                    </button>
+                    <button id="undoToHereCancelBtn" class="ge-btn ge-btn-who-neither">
+                        <i class="fas fa-times"></i>
+                        <span>Cancel</span>
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const hide = () => { modal.style.display = 'none'; modal._onConfirm = null; };
+        modal.querySelector('#undoToHereModalClose').addEventListener('click', hide);
+        modal.querySelector('#undoToHereCancelBtn').addEventListener('click', hide);
+        modal.addEventListener('click', (e) => { if (e.target === modal) hide(); });
+        modal.querySelector('#undoToHereConfirmBtn').addEventListener('click', () => {
+            const skip = modal.querySelector('#undoToHereSkipConfirm').checked;
+            if (skip) advancedSettings.set('undo.confirmUndoToHere', false);
+            const fn = modal._onConfirm;
+            hide();
+            if (typeof fn === 'function') fn();
+        });
+    }
+    modal.querySelector('.undo-here-question').textContent = question;
+    modal.querySelector('#undoToHereSkipConfirm').checked = false;
+    modal._onConfirm = onConfirm;
+    modal.style.display = 'flex';
 }
 
 // ---------------------------------------------------------------------------

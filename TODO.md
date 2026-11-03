@@ -1466,9 +1466,15 @@ Remaining work:
   step in a loop, so counters come out as a hand-chained Undo would leave
   them. Unit tests in `tests/unit/undoLogic.test.mjs`, e2e
   `tests/scenarios/26-undo-across-points.spec.ts`.
+  - **2026-11-03 (Dave's staging pass):** too easy to take a lot by accident,
+    so the native `confirm()` became a dialog with a *Don't ask again* box
+    (the `undo.confirmUndoToHere` setting, Advanced Settings → Undo turns it
+    back on), and the toast afterwards lasts 8 s with a large yellow **Redo
+    events** button that puts everything back (`gameLogic.redoUndoToHere`:
+    a storage-format snapshot plus the roster's live counters, offered only
+    while the game still reads as the undo left it).
   - **Left out, deliberately:** undoing End Game (the Review screen has no
-    undo), and a styled confirm sheet in place of the native `confirm()`
-    (the End Game convention; revisit if the native dialog grates on a phone).
+    undo).
   - **Field-watch:** whether the warn-then-reopen double tap annoys when a
     coach taps We Score by mistake and reaches straight for Undo (one extra
     tap now), and whether a reopened point's stopped clock is the right
