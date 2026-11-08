@@ -67,8 +67,18 @@ async function callTimeout(page: Page) {
   await expect(page.locator('#timeoutWhoModal')).not.toBeVisible({ timeout: 5_000 });
 }
 
-/** Press and hold a Log line (the undo-to-here gesture). */
+/**
+ * Press and hold a Log line (the undo-to-here gesture). Earlier toasts are
+ * dismissed first: they stack from the top of the viewport and on the wide
+ * test window can cover the top log lines, so a press would land on a toast.
+ */
 async function pressAndHold(page: Page, line: ReturnType<typeof logLine>) {
+  // Removed outright rather than clicked away: a toast mid-animation fails
+  // Playwright's actionability check. The clock-stopped toast is rebuilt
+  // from point state every second, so it is left alone (one toast at the
+  // very top never reaches a log line).
+  await page.evaluate(() => document.querySelectorAll('.toast:not(.toast-clock-stopped)').forEach(t => t.remove()));
+  await expect(page.locator('.toast:not(.toast-clock-stopped)')).toHaveCount(0);
   await line.scrollIntoViewIfNeeded();
   const box = (await line.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -246,6 +256,7 @@ test.describe('undo across point boundaries', () => {
     await dialog(page).locator('#undoToHereConfirmBtn').click();
     await expectScore(page, 0, 0);
     expect(await page.evaluate(() => (window as any).advancedSettings.get('undo.confirmUndoToHere'))).toBe(false);
+    await expect(page.locator('.toast', { hasText: 'Undo confirmations are off' }), 'the toast says where to turn it back on').toBeVisible({ timeout: 5_000 });
 
     // Redo: the points, score, pending line and counters as they were.
     await redoBtn(page).click();

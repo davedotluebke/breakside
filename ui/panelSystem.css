@@ -3027,7 +3027,20 @@ body.panel-dragging .panel-content {
 
 /* Undo-to-here confirm (game/gameScreenSync.js showUndoToHereDialog): the
    Swap O & D dialog's shape, two buttons side by side, and a "Don't ask
-   again" row above them. */
+   again" row above them. The dialog opens under a finger that is still
+   held, so nothing in it is selectable (the iOS callout was landing on
+   Cancel). The × floats right; the title keeps clear of it. */
+.undo-here-content {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.undo-here-content .prominent-dialog-header h2 {
+    padding: 0 28px;
+    font-size: 1.6rem;
+}
+
 .undo-here-buttons {
     grid-template-columns: 1fr 1fr;
 }
@@ -3039,22 +3052,19 @@ body.panel-dragging .panel-content {
 
 .undo-here-skip {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin-top: 12px;
-    font-size: 0.9rem;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: fit-content;
+    margin: 12px auto 0;
+    font-size: 0.95rem;
     color: var(--text-secondary);
     cursor: pointer;
 }
 
 .undo-here-skip input {
-    margin: 2px 0 0;
+    margin: 0;
     flex: none;
     width: 18px;
     height: 18px;
-}
-
-.undo-here-skip small {
-    display: block;
-    color: var(--text-muted);
 }

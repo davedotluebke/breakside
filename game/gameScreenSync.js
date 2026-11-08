@@ -252,9 +252,11 @@ function redoFromToast() {
 
 /**
  * The undo-to-here confirm: the question (what goes), a "Don't ask again"
- * box that writes the undo.confirmUndoToHere setting (Advanced Settings →
- * Undo turns it back on), Undo and Cancel. Created lazily, like the Game
- * Events modal; the × and a backdrop tap cancel.
+ * box that writes the undo.confirmUndoToHere setting (a toast then says
+ * where it is turned back on: Advanced Settings → Undo), Undo and Cancel.
+ * Created lazily, like the Game Events modal; the × and a backdrop tap
+ * cancel. The dialog appears under a finger that is still down, so its text
+ * is unselectable (the OS callout would otherwise land on Cancel).
  */
 function showUndoToHereDialog(question, onConfirm) {
     let modal = document.getElementById('undoToHereModal');
@@ -263,15 +265,15 @@ function showUndoToHereDialog(question, onConfirm) {
         modal.id = 'undoToHereModal';
         modal.className = 'modal game-events-modal';
         modal.innerHTML = `
-            <div class="modal-content game-events-modal-content">
+            <div class="modal-content game-events-modal-content undo-here-content">
                 <div class="dialog-header prominent-dialog-header">
-                    <h2>Undo back to here?</h2>
                     <span class="close" id="undoToHereModalClose">&times;</span>
+                    <h2>Undo to here?</h2>
                 </div>
                 <p class="text-hint undo-here-question"></p>
                 <label class="undo-here-skip">
                     <input type="checkbox" id="undoToHereSkipConfirm">
-                    <span>Don’t ask again <small>(Advanced Settings → Undo turns this back on)</small></span>
+                    <span>Don’t ask again</span>
                 </label>
                 <div class="game-events-buttons undo-here-buttons">
                     <button id="undoToHereConfirmBtn" class="ge-btn ge-btn-who-us">
@@ -296,6 +298,9 @@ function showUndoToHereDialog(question, onConfirm) {
             const fn = modal._onConfirm;
             hide();
             if (typeof fn === 'function') fn();
+            if (skip) {
+                showControllerToast('Undo confirmations are off — turn them back on in Advanced Settings → Undo', 'info', 8000);
+            }
         });
     }
     modal.querySelector('.undo-here-question').textContent = question;
