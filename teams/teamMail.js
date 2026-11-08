@@ -199,16 +199,21 @@ function renderTransportNote() {
 
 function renderAddresses() {
     const a = state.addresses;
-    // Both spellings of an address work once the server has a base domain;
-    // the preferred one is the row, the other a quiet "also" line beneath,
-    // so a coach can tell a parent that the address they saved still works.
+    // Other names that reach the same list — a synonym (coach@ for the
+    // coaches list) and, once the server has a base domain, the other
+    // spelling — as a quiet "also" line beneath the preferred address, so a
+    // coach can tell a parent that the address they saved still works.
     const alt = state.altAddresses || {};
+    const also = (key) => {
+        const names = key ? [].concat(alt[key] || []) : [];
+        return names.length ? `<span class="mail-address-alt">also ${names.map(a => `<code>${esc(a)}</code>`).join(', ')}</span>` : '';
+    };
     const row = (label, addr, key = null) => `
         <div class="mail-address-row">
             <span class="mail-address-label">${esc(label)}</span>
             <code class="mail-address">${esc(addr)}</code>
             <button class="icon-button copy-address-btn" data-copy="${escAttr(addr)}" title="Copy address"><i class="fas fa-copy"></i></button>
-            ${key && alt[key] ? `<span class="mail-address-alt">also <code>${esc(alt[key])}</code></span>` : ''}
+            ${also(key)}
         </div>`;
     return `
         <div class="settings-section">

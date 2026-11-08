@@ -45,17 +45,35 @@ def address_patterns(slug: str, *, style: Optional[str] = None) -> Dict[str, str
 def spelling_view(slug: str) -> Dict[str, Any]:
     """What the screen needs to show and preview addresses: the list domain,
     the base domain (empty when there is none), which spelling is preferred,
-    and — when both exist — the other spelling of every list, so a coach can
-    tell a parent "the old address still works"."""
+    and ``altAddresses``: for each list (and pattern) the other names that
+    reach it — a synonym such as ``coach@`` for the coaches list, and, when a
+    base domain exists, the other spelling — so a coach can tell a parent
+    "the old address still works"."""
     style = address_style()
     base = getattr(config, "MAIL_BASE_DOMAIN", "")
     out: Dict[str, Any] = {"domain": config.MAIL_DOMAIN, "baseDomain": base, "addressStyle": style}
-    if base and slug:
+    if not slug:
+        return out
+    alt: Dict[str, List[str]] = {}
+    for word, kind in addresses.LIST_SYNONYMS.items():
+        alt.setdefault(kind, []).append(synonym_address(word, slug))
+    if base:
         other = "list" if style == "subdomain" else "subdomain"
-        alt = {kind: preferred_address(kind, slug, style=other) for kind in LIST_ORDER}
-        alt.update(address_patterns(slug, style=other))
-        out["altAddresses"] = alt
+        for kind in LIST_ORDER:
+            alt.setdefault(kind, []).append(preferred_address(kind, slug, style=other))
+        for key, value in address_patterns(slug, style=other).items():
+            alt.setdefault(key, []).append(value)
+    out["altAddresses"] = alt
     return out
+
+
+def synonym_address(word: str, slug: str, *, style: Optional[str] = None) -> str:
+    """``coach@cudo.<base>`` or ``coach-cudo@<domain>``, matching the preferred spelling."""
+    style = style or address_style()
+    base = getattr(config, "MAIL_BASE_DOMAIN", "")
+    if style == "subdomain" and base:
+        return f"{word}@{slug}.{base}"
+    return f"{word}-{slug}@{config.MAIL_DOMAIN}"
 
 
 def derived_coach_contacts(team_id: str) -> List[Dict[str, Any]]:

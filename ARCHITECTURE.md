@@ -889,7 +889,7 @@ reached from Team Settings.
 |---|---|
 | `<slug>@` | everyone in the directory |
 | `parents-<slug>@` | guardians, managers, coaches |
-| `coaches-<slug>@` | coaches (anyone on the team may write to it) |
+| `coaches-<slug>@` | coaches (anyone on the team may write to it); `coach-<slug>@` is a synonym, for the team with one coach |
 | `staff-<slug>@` | coaches and managers |
 | `players-<slug>@` | players and coaches (off unless the team turns it on) |
 | `<alias>-<slug>@` | one player, all of their guardians, every coach |
@@ -899,7 +899,9 @@ reached from Team Settings.
 `BREAKSIDE_MAIL_BASE_DOMAIN` set (`breakside.pro`), every list is also
 reachable with the team in the domain and only the list in the local part:
 `team@cudo.breakside.pro` (everyone; also `cudo@breakside.pro` and
-`cudo@cudo.breakside.pro`), `parents@cudo.…`, `coaches@cudo.…`,
+`cudo@cudo.breakside.pro`), `parents@cudo.…`, `coaches@cudo.…` (also
+`coach@cudo.…`; `addresses.LIST_SYNONYMS` names the extra words, accepted
+in both spellings and shown on the screen's "also" line),
 `alice@cudo.…` (a player), `states@cudo.…` (an event list). The DNS side is
 a wildcard MX on the base domain plus the base domain verified in SES
 (`scripts/setup-mail-aws.sh` with `MAIL_BASE_DOMAIN`). `addresses.resolve`

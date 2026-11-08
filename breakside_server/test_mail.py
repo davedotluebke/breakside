@@ -1478,8 +1478,9 @@ class TestSubdomainSpelling:
         a = view["addresses"]
         assert a["all"] == f"team@cudo.{BASE}" and a["apex"] == f"cudo@{BASE}" and a["coaches"] == f"coaches@cudo.{BASE}"
         assert a["playerPattern"] == f"<name>@cudo.{BASE}" and a["eventPattern"] == f"<event>@cudo.{BASE}"
-        assert view["altAddresses"]["parents"] == f"parents-cudo@{DOMAIN}"
-        assert view["altAddresses"]["playerPattern"] == f"<name>-cudo@{DOMAIN}"
+        assert view["altAddresses"]["parents"] == [f"parents-cudo@{DOMAIN}"]
+        assert view["altAddresses"]["coaches"] == [f"coach@cudo.{BASE}", f"coaches-cudo@{DOMAIN}"]
+        assert view["altAddresses"]["playerPattern"] == [f"<name>-cudo@{DOMAIN}"]
         assert view["lists"]["player"]["address"] == f"<name>@cudo.{BASE}"
         assert next(p for p in view["roster"] if p["alias"] == "alice")["address"] == f"alice@cudo.{BASE}"
         # the test message goes out from the new spelling and replies to the new coaches address
@@ -1492,13 +1493,24 @@ class TestSubdomainSpelling:
         view = dm.directory_view(with_base["team_id"])
         assert view["addressStyle"] == "list"
         assert view["addresses"]["all"] == f"cudo@{DOMAIN}" and view["addresses"]["apex"] == f"cudo@{BASE}"
-        assert view["altAddresses"]["all"] == f"team@cudo.{BASE}"
-        assert view["altAddresses"]["eventPattern"] == f"<event>@cudo.{BASE}"
+        assert view["altAddresses"]["all"] == [f"team@cudo.{BASE}"]
+        assert view["altAddresses"]["coaches"] == [f"coach-cudo@{DOMAIN}", f"coaches@cudo.{BASE}"]
+        assert view["altAddresses"]["eventPattern"] == [f"<event>@cudo.{BASE}"]
 
-    def test_no_base_domain_means_no_alt_and_no_apex(self, configured):
+    def test_no_base_domain_means_only_synonyms_and_no_apex(self, configured):
         from mail import directory as dm
         view = dm.directory_view(configured["team_id"])
-        assert view["baseDomain"] == "" and "altAddresses" not in view and "apex" not in view["addresses"]
+        assert view["baseDomain"] == "" and "apex" not in view["addresses"]
+        assert view["altAddresses"] == {"coaches": [f"coach-cudo@{DOMAIN}"]}
+
+    def test_coach_singular_reaches_the_coaches(self, with_base):
+        from mail import relay
+        from storage import mail_storage as ms
+        for to in (f"coach@cudo.{BASE}", f"coach-cudo@{DOMAIN}"):
+            results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", to), envelope_recipients=[to])
+            assert (results[0].action, results[0].address) == ("relay", f"coaches-cudo@{DOMAIN}")
+            assert sorted(with_base["outbox"].sent()[-1]["recipients"]) == ["coach2@x.test", "coach@x.test"]   # a parent writing in is not a coach
+            assert ms.read_mail_log(with_base["team_id"], 1)[0]["list"] == "coaches-cudo"
 
     def test_quarantine_release_and_notice_use_the_preferred_spelling(self, with_base, monkeypatch):
         import config

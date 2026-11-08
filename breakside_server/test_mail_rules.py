@@ -116,6 +116,9 @@ class TestSpellings:
         ("cudo@cudo.breakside.pro", ("all", "cudo", None)),
         ("Parents@CUDO.breakside.pro", ("parents", "cudo", None)),
         ("coaches@cudo-mixed.breakside.pro", ("coaches", "cudo-mixed", None)),
+        ("coach@cudo.breakside.pro", ("coaches", "cudo", None)),                    # synonym, singular
+        ("coach-cudo@team.breakside.pro", ("coaches", "cudo", None)),
+        ("coach-cudo@breakside.pro", ("coaches", "cudo", None)),
         ("alice@cudo.breakside.pro", ("player", "cudo", "alice")),
         ("mary-kate@mixed.breakside.pro", ("player", "mixed", "mary-kate")),
         ("states@cudo.breakside.pro", ("event", "cudo", "states")),
@@ -177,6 +180,19 @@ class TestSpellings:
         for host in ("api", "staging", "www", "team", "app"):
             with pytest.raises(addresses.AddressError):
                 addresses.validate_slug(host)
+
+    def test_synonyms_are_nobodys_name(self):
+        for bad in ("coach", "coach-cudo"):
+            with pytest.raises(addresses.AddressError):
+                addresses.validate_slug(bad)
+        for bad in ("coach",):
+            with pytest.raises(addresses.AddressError):
+                addresses.validate_alias(bad)
+            with pytest.raises(addresses.AddressError):
+                addresses.validate_event_slug(bad)
+        assert addresses.make_alias("Coach", []) == "coach2"
+        # the legacy parser reads the synonym as the list, never as a player
+        assert addresses.parse_local_part("coach-cudo", ["cudo"]) == ("coaches", "cudo", None)
 
 
 # =============================================================================

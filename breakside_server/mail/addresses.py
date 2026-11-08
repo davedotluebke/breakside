@@ -32,7 +32,7 @@ and nothing but the list in the local part::
 
     team@cudo.<base>         everyone        (also cudo@<base>, and cudo@cudo.<base>)
     parents@cudo.<base>      guardians + coaches (+managers)
-    coaches@cudo.<base>      coaches
+    coaches@cudo.<base>      coaches         (also coach@cudo.<base>; LIST_SYNONYMS)
     alice@cudo.<base>        the player alias
     states@cudo.<base>       the event list
 
@@ -59,6 +59,12 @@ LIST_PREFIXES: Dict[str, str] = {
     "players": "players",
 }
 LIST_KINDS = ("all", "parents", "coaches", "staff", "players", "player", "event")
+# Extra names that read as a list: ``coach@cudo.<base>`` / ``coach-cudo@`` is
+# the coaches list, since a team with one coach finds the singular natural.
+# Accepted inbound in both spellings; the app shows and sends the plural.
+LIST_SYNONYMS: Dict[str, str] = {
+    "coach": "coaches",
+}
 
 # Local parts nobody may claim as a slug or an alias. RFC 2142 role addresses,
 # the words we use for list prefixes, and things that would look official.
@@ -117,7 +123,7 @@ def validate_slug(slug: str) -> str:
     if slug in RESERVED:
         raise AddressError(f"\"{slug}\" is reserved; pick another name.")
     head = slug.split("-", 1)[0]
-    if head in LIST_PREFIXES:
+    if head in LIST_PREFIXES or head in LIST_SYNONYMS:
         raise AddressError(
             f"Team address name may not start with \"{head}-\"; that prefix "
             "is used for the team's lists."
@@ -136,7 +142,7 @@ def validate_alias(alias: str) -> str:
         raise AddressError(
             "Address name may use only lowercase letters, digits and single hyphens."
         )
-    if alias in RESERVED or alias in LIST_PREFIXES:
+    if alias in RESERVED or alias in LIST_PREFIXES or alias in LIST_SYNONYMS:
         raise AddressError(f"\"{alias}\" is reserved; pick another name.")
     return alias
 
@@ -158,7 +164,7 @@ def validate_event_slug(slug: str) -> str:
             "Event address name may use only lowercase letters, digits and single hyphens "
             "(e.g. \"states\" or \"spring-break\")."
         )
-    if slug in RESERVED or slug in LIST_PREFIXES:
+    if slug in RESERVED or slug in LIST_PREFIXES or slug in LIST_SYNONYMS:
         raise AddressError(f"\"{slug}\" is reserved; pick another name.")
     return slug
 
@@ -294,6 +300,8 @@ def parse_local_part(local: str, slugs: Iterable[str],
             for kind, word in LIST_PREFIXES.items():
                 if prefix == word:
                     return (kind, slug, None)
+            if prefix in LIST_SYNONYMS:
+                return (LIST_SYNONYMS[prefix], slug, None)
             if SLUG_RE.match(prefix):
                 return ("player", slug, prefix)
     return None
@@ -316,6 +324,8 @@ def parse_subdomain_local(local: str, slug: str,
     for kind, word in LIST_PREFIXES.items():
         if local == word:
             return (kind, slug, None)
+    if local in LIST_SYNONYMS:
+        return (LIST_SYNONYMS[local], slug, None)
     if local in set(event_names):
         return ("event", slug, local)
     if SLUG_RE.match(local) and local not in RESERVED:
