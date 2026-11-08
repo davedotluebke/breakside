@@ -3094,3 +3094,19 @@ body.panel-dragging .panel-content {
     line-height: 1.3;
     color: var(--text-muted);
 }
+
+/* The footer has room for the word, where the Line tab's action row does
+   not; and the mic FAB sits over its right end when it is showing
+   (body.mic-button-visible: narration/micButton.js), so the hint stops
+   short of it. */
+.game-log-footer .line-tab-undo-btn span {
+    display: inline;
+}
+
+.game-log-footer-hint {
+    text-align: left;
+}
+
+body.mic-button-visible .game-log-footer {
+    padding-right: calc(96px + env(safe-area-inset-right, 0px));
+}
