@@ -723,6 +723,11 @@ function wirePlayByPlayEvents() {
     if (lineTabUndoBtn) {
         lineTabUndoBtn.addEventListener('click', handlePbpUndo);
     }
+    // The Log tab's footer Undo (game/gameScreenPanels.js createGameLogContent).
+    const logUndoBtn = document.getElementById('logUndoBtn');
+    if (logUndoBtn) {
+        logUndoBtn.addEventListener('click', handlePbpUndo);
+    }
     const lineTabGameEventsBtn = document.getElementById('lineTabGameEventsBtn');
     if (lineTabGameEventsBtn) {
         lineTabGameEventsBtn.addEventListener('click', handlePbpGameEvents);
@@ -2236,6 +2241,15 @@ function updatePlayByPlayPanelState() {
             btn.classList.toggle('disabled', !hasActiveCoachRole);
         }
     });
+    // The Log tab's footer: greyed without play-by-play control (its
+    // handler still explains), gone for a viewer, who cannot undo at all.
+    const logUndoBtn = document.getElementById('logUndoBtn');
+    if (logUndoBtn) logUndoBtn.classList.toggle('disabled', !hasActiveCoachRole);
+    const logFooter = document.getElementById('gameLogFooter');
+    if (logFooter) {
+        const viewer = typeof window.isViewer === 'function' && window.isViewer();
+        logFooter.style.display = viewer ? 'none' : '';
+    }
     
     // Update panel layout based on height
     updatePlayByPlayLayout();

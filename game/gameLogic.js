@@ -35,7 +35,7 @@ import {
 } from './pointManagement.js';
 import { showControllerToast } from './controllerState.js';
 import {
-    applyUndoToGame, undoToTarget, describeUndoTo, targetFromEntry, isBetweenPointsEvent,
+    applyUndoToGame, undoToTarget, describeUndoTo, targetAfterEntry, isBetweenPointsEvent,
 } from './undoLogic.js';
 import {
     rearmPointClockIfUntouched, resumePointClockFromStop, stopReasonOf, stopPointClock,
@@ -689,6 +689,7 @@ function undoEvent() {
         }
     }
     undoReopenTimestamp = null;
+    const wasInProgress = isPointInProgress();
 
     // The decision tree lives in undoLogic.js (pure, unit-tested); this
     // function handles the UI/persistence side effects it prescribes.
@@ -700,6 +701,11 @@ function undoEvent() {
     // A pending conversion may have been taken back (scrimmage variations).
     announceRulesState();
     if (result.undoneEvent) revertPeriodBreakDisplay([result.undoneEvent]);
+    // A finished point reopened from the Line tab: back to the surface the
+    // coach records on, as Start Point does (a no-op off the Line tab).
+    if (!wasInProgress && isPointInProgress() && typeof window.switchToTrackingTab === 'function') {
+        window.switchToTrackingTab();
+    }
 
     // Undoing the first touch of an offensive point puts the clock back to
     // waiting for it (store/pointClock.js): the time since the mistaken tap
@@ -792,27 +798,29 @@ function revertPeriodBreakDisplay(events) {
 }
 
 /**
- * Undo across point boundaries — "Undo to here" on a Log-tab line
+ * Undo across point boundaries — press and hold a Log-tab line
  * (ARCHITECTURE.md § Undo). `entryIndex` indexes summarizeGameEntries();
- * the line's event and everything after it are undone, one single-step
- * undo at a time (game/undoLogic.js undoToTarget), then the screen is
- * brought to wherever the game now stands: a reopened point is live with
- * its clock stopped (the coach is fixing history, not playing), a removed
- * point leaves the game between points with that point's line seeded as
- * Next so it can be replayed. Returns the undo summary, or null when the
- * line is not undoable.
+ * the line stays and everything recorded after it is undone, one
+ * single-step undo at a time (game/undoLogic.js undoToTarget), then the
+ * screen is brought to wherever the game now stands: a reopened point is
+ * live with its clock stopped (the coach is fixing history, not playing),
+ * a removed point leaves the game between points with that point's line
+ * seeded as Next so it can be replayed. Returns the undo summary; null when
+ * the line is not part of the game; { nothingAfter: true } when nothing
+ * was recorded after it.
  */
 function describeUndoToEntry(entryIndex) {
     const entry = summarizeGameEntries()[entryIndex];
-    const target = targetFromEntry(entry);
-    if (!target) return null;
+    if (!entry || entry.pointIdx == null) return null;
+    const target = targetAfterEntry(currentGame(), entry);
+    if (!target) return { nothingAfter: true, pointNumber: entry.pointIdx + 1 };
     return Object.assign({ target, pointNumber: target.pointIdx + 1 }, describeUndoTo(currentGame(), target));
 }
 
 function undoToLogEntry(entryIndex) {
     const game = currentGame();
     const entry = summarizeGameEntries()[entryIndex];
-    const target = targetFromEntry(entry);
+    const target = targetAfterEntry(game, entry);
     if (!target || !game) return null;
     const targetPoint = game.points[target.pointIdx];
     if (!targetPoint) return null;
@@ -839,6 +847,10 @@ function undoToLogEntry(entryIndex) {
             // is not play. Stopped, with the usual Restart toast; the next
             // recorded play restarts it (store/pointClock.js § Stoppages).
             if (stopPointClock(latest, 'manual')) logEvent('Point clock stopped — point reopened');
+            // Reopened from the Line tab (its own Undo chain): back to the
+            // recording surface. From the Log tab this is a no-op — the coach
+            // stays where the Redo toast and the result are.
+            if (typeof window.switchToTrackingTab === 'function') window.switchToTrackingTab();
         } else {
             // Inside the live point: the same clock rules as a single Undo.
             const mode = (typeof window.getCurrentMode === 'function') ? window.getCurrentMode() : 'simple';

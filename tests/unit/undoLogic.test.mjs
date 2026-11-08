@@ -392,7 +392,7 @@ test('pop the only event of a DEFENSIVE point → point removed, as before', () 
 
 // ── Branch 0: between-points events ──────────────────────────────────────
 
-import { targetFromEntry, undoToTarget, describeUndoTo } from '../../game/undoLogic.js';
+import { targetAfterEntry, undoToTarget, describeUndoTo } from '../../game/undoLogic.js';
 
 test('between-points timeout on a scored point → the timeout is popped, the score stays', () => {
     const alice = makePlayer('Alice'), bob = makePlayer('Bob');
@@ -455,20 +455,39 @@ function twoPointGame() {
     return { game, p1, p2, pass, goal, timeout, alice, bob };
 }
 
-test('targetFromEntry maps log lines to undo targets', () => {
-    assert.deepEqual(targetFromEntry({ kind: 'event', pointIdx: 2, possIdx: 1, eventIdx: 3 }),
-        { kind: 'event', pointIdx: 2, possIdx: 1, eventIdx: 3 });
-    assert.deepEqual(targetFromEntry({ kind: 'after', pointIdx: 2, possIdx: 1, eventIdx: 3 }),
-        { kind: 'event', pointIdx: 2, possIdx: 1, eventIdx: 3 });
-    assert.deepEqual(targetFromEntry({ kind: 'possession', pointIdx: 2, possIdx: 1 }), { kind: 'possession', pointIdx: 2, possIdx: 1 });
-    assert.equal(targetFromEntry({ kind: 'possession', pointIdx: 2, possIdx: null }), null, 'inline turnover delimiter with no possession yet');
-    assert.deepEqual(targetFromEntry({ kind: 'score', pointIdx: 2 }), { kind: 'score', pointIdx: 2 });
-    assert.deepEqual(targetFromEntry({ kind: 'currentscore', pointIdx: 2 }), { kind: 'score', pointIdx: 2 });
-    assert.deepEqual(targetFromEntry({ kind: 'roster', pointIdx: 2 }), { kind: 'point', pointIdx: 2 });
-    assert.deepEqual(targetFromEntry({ kind: 'pullnote', pointIdx: 2 }), { kind: 'point', pointIdx: 2 });
-    assert.equal(targetFromEntry({ kind: 'header', pointIdx: null }), null);
-    assert.equal(targetFromEntry({ kind: 'periodnote', pointIdx: 1 }), null);
-    assert.equal(targetFromEntry(null), null);
+test('targetAfterEntry: the pressed line stays, the first thing after it is the target', () => {
+    const { game } = twoPointGame();
+    const e = (kind, pointIdx, possIdx = null, eventIdx = null) => ({ kind, pointIdx, possIdx, eventIdx });
+    // Point 1: pass, scoring throw. Point 2: a between-points timeout only ("They Score").
+    assert.deepEqual(targetAfterEntry(game, e('event', 0, 0, 0)), { kind: 'event', pointIdx: 0, possIdx: 0, eventIdx: 1 },
+        'the pass stays; the goal after it is the target');
+    assert.deepEqual(targetAfterEntry(game, e('event', 0, 0, 1)), { kind: 'point', pointIdx: 1 },
+        'a scoring play keeps its score: the next point is what goes');
+    assert.deepEqual(targetAfterEntry(game, e('score', 0)), { kind: 'point', pointIdx: 1 });
+    assert.deepEqual(targetAfterEntry(game, e('currentscore', 0)), { kind: 'point', pointIdx: 1 });
+    assert.deepEqual(targetAfterEntry(game, e('possession', 0, 0)), { kind: 'event', pointIdx: 0, possIdx: 0, eventIdx: 0 },
+        'a possession delimiter keeps the possession open: its first play goes');
+    assert.deepEqual(targetAfterEntry(game, e('roster', 0)), { kind: 'possession', pointIdx: 0, possIdx: 0 },
+        'a roster line keeps the point started: its first possession goes');
+    assert.deepEqual(targetAfterEntry(game, e('pullnote', 1)), { kind: 'possession', pointIdx: 1, possIdx: 0 });
+    assert.deepEqual(targetAfterEntry(game, e('score', 1)), { kind: 'event', pointIdx: 1, possIdx: 0, eventIdx: 0 },
+        'the score stays; the timeout after it goes');
+    assert.equal(targetAfterEntry(game, e('after', 1, 0, 0)), null, 'the last thing recorded — nothing after it');
+    assert.deepEqual(targetAfterEntry(game, e('currentscore', 1)), { kind: 'event', pointIdx: 1, possIdx: 0, eventIdx: 0 },
+        'the running-score line sits before the between-points timeout in the log, so the timeout is after it');
+    assert.equal(targetAfterEntry(game, e('header', null)), null);
+    assert.equal(targetAfterEntry(game, e('possession', 0, null)), null, 'inline turnover delimiter with no possession yet');
+    assert.equal(targetAfterEntry(game, null), null);
+    assert.equal(targetAfterEntry(null, e('event', 0, 0, 0)), null);
+
+    // A "They Score" after plays: the last play keeps, the score goes (reopen).
+    const alice = makePlayer('Alice'), bob = makePlayer('Bob');
+    const pass = new Throw({ thrower: alice, receiver: bob });
+    const scoredOnUs = makeGame({ points: [makePoint({ winner: Role.OPPONENT, possessions: [makePossession([pass])] })] });
+    assert.deepEqual(targetAfterEntry(scoredOnUs, e('event', 0, 0, 0)), { kind: 'score', pointIdx: 0 });
+    // A started-but-empty point's roster line: nothing after it.
+    const empty = makeGame({ points: [makePoint({ possessions: [] })] });
+    assert.equal(targetAfterEntry(empty, e('roster', 0)), null);
 });
 
 test('undo to the scoring throw of point 1 → point 2 removed (timeout, score), point 1 reopened with its pass', () => {

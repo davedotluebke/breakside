@@ -6,9 +6,11 @@
  *     own by the first Undo tap; the score stays
  *   - with nothing on top of the score, the first Undo from between points
  *     only warns, and a second tap within the window reopens the point
- *   - press and hold a Log line: the confirm dialog names what goes, and the
- *     line's event and everything after it are undone — a reopened point is
- *     live again with its clock stopped, a removed point seeds the next line
+ *   - press and hold a Log line: the line stays, everything after it goes;
+ *     the confirm dialog names what that is — a reopened point is live again
+ *     with its clock stopped, a removed point seeds the next line
+ *   - the Log tab's footer Undo is the single-step Undo; reopening a point
+ *     from the Line tab returns to the recording surface
  *   - the toast afterwards carries a Redo that puts everything back; Cancel
  *     and a backdrop tap do nothing; "Don't ask again" skips the dialog from
  *     then on and is the undo.confirmUndoToHere setting
@@ -131,16 +133,17 @@ test.describe('undo across point boundaries', () => {
     let s = await state(page);
     expect(s.lastEvents, 'the timeout sits on the finished point').toBe(1);
 
-    // The Simple panel's Undo is live between points.
-    await tabButton(page, 'simple').click();
-    await page.click('#pbpUndoBtn');
+    // The Log tab's footer Undo is live between points, with the hold hint beside it.
+    await tabButton(page, 'log').click();
+    await expect(page.locator('.game-log-footer-hint')).toContainText('Press and hold a line');
+    await page.click('#logUndoBtn');
     s = await state(page);
     expect(s.lastEvents, 'the timeout is gone').toBe(0);
     expect(s.lastWinner, 'the score stays').toBe('opponent');
     await expectScore(page, 0, 1);
 
     // Nothing on top of the score now: the first tap warns.
-    await page.click('#pbpUndoBtn');
+    await page.click('#logUndoBtn');
     await expect(page.locator('.toast', { hasText: 'tap Undo again to reopen' })).toBeVisible({ timeout: 5_000 });
     s = await state(page);
     expect(s.lastWinner).toBe('opponent');
@@ -148,7 +151,7 @@ test.describe('undo across point boundaries', () => {
 
     // The second tap reopens — a They Score with nothing recorded is simply
     // removed, back to between points.
-    await page.click('#pbpUndoBtn');
+    await page.click('#logUndoBtn');
     await expectScore(page, 0, 0);
     s = await state(page);
     expect(s.points).toBe(0);
@@ -165,7 +168,7 @@ test.describe('undo across point boundaries', () => {
     await pressAndHold(page, line);
 
     await expect(dialog(page)).toBeVisible({ timeout: 5_000 });
-    await expect(question(page)).toHaveText('Undo 4 events back to here? Point 1 is reopened and point 2 is removed.');
+    await expect(question(page)).toHaveText('Undo the 3 events after this line? Point 1 is reopened and point 2 is removed.');
     await expectScore(page, 1, 1);   // nothing happens until Undo is tapped
     await dialog(page).locator('#undoToHereConfirmBtn').click();
     await expect(dialog(page)).not.toBeVisible();
@@ -174,7 +177,7 @@ test.describe('undo across point boundaries', () => {
     const s = await state(page);
     expect(s.points).toBe(1);
     expect(s.lastWinner, 'point 1 is live again').toBe('');
-    expect(s.lastEvents, 'the pass went too — it was the pressed line').toBe(0);
+    expect(s.lastEvents, 'the pass stays — it was the pressed line').toBe(1);
     expect(s.lastStopped, 'a reopened point does not count the wall time as play').toBe('manual');
     expect(s.lastStart).toBeNull();
     await expect(page.locator('.toast', { hasText: 'point 1 reopened' })).toBeVisible({ timeout: 5_000 });
@@ -203,7 +206,7 @@ test.describe('undo across point boundaries', () => {
     // Cancel, the ×, and a backdrop tap all leave the game alone.
     await pressAndHold(page, line);
     await expect(dialog(page)).toBeVisible({ timeout: 5_000 });
-    await expect(question(page)).toHaveText('Undo 2 events back to here? Point 2 is removed.');
+    await expect(question(page)).toHaveText('Undo the 2 events after this line? Point 2 is removed.');
     await dialog(page).locator('#undoToHereCancelBtn').click();
     await expect(dialog(page)).not.toBeVisible();
     await pressAndHold(page, line);
@@ -243,6 +246,28 @@ test.describe('undo across point boundaries', () => {
     await page.waitForTimeout(500);
     await expect(dialog(page)).toHaveCount(0);
     expect((await state(page)).points).toBe(2);
+
+    // The last line: nothing recorded after it.
+    await pressAndHold(page, page.locator('#gameLogEvents [data-entry]', { hasText: 'Current score' }).last());
+    await expect(page.locator('.toast', { hasText: 'Nothing recorded after this line' })).toBeVisible({ timeout: 5_000 });
+    await expect(dialog(page)).not.toBeVisible();
+    await expectScore(page, 1, 1);
+  });
+
+  test('reopening a point with the Line tab\'s Undo returns to the recording surface', async ({ page }) => {
+    await twoPoints(page);
+    // Between points on the Line tab (where a score lands the app).
+    await expect(tabButton(page, 'line')).toHaveClass(/\bactive\b/, { timeout: 5_000 });
+    await page.click('#lineTabUndoBtn');
+    await expect(page.locator('.toast', { hasText: 'tap Undo again to reopen' })).toBeVisible({ timeout: 5_000 });
+    await page.click('#lineTabUndoBtn');
+    // Point 2 (a They Score after the pull) is live again, and the app is
+    // back on Simple — the tab the score was recorded on.
+    await expectScore(page, 1, 0);
+    const s = await state(page);
+    expect(s.points).toBe(2);
+    expect(s.lastWinner).toBe('');
+    await expect(tabButton(page, 'simple')).toHaveClass(/\bactive\b/, { timeout: 5_000 });
   });
 
   test('Redo on the toast puts everything back; "Don\'t ask again" skips the dialog and is a setting', async ({ page }) => {
@@ -260,7 +285,7 @@ test.describe('undo across point boundaries', () => {
 
     // Redo: the points, score, pending line and counters as they were.
     await redoBtn(page).click();
-    await expect(page.locator('.toast', { hasText: 'Put back 4 events' })).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('.toast', { hasText: 'Put back 3 events' })).toBeVisible({ timeout: 5_000 });
     await expectScore(page, 1, 1);
     const after = await state(page);
     expect(after.points).toBe(2);

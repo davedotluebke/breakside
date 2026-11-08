@@ -195,7 +195,7 @@ function undoToHereQuestion(d) {
     const n = d.eventsUndone;
     const p = d.pointNumber;
     const last = p + d.pointsRemoved - (d.targetPointReopened ? 0 : 1);
-    let s = n > 0 ? `Undo ${n} event${n === 1 ? '' : 's'} back to here?` : 'Undo back to here?';
+    let s = n > 0 ? `Undo the ${n} event${n === 1 ? '' : 's'} after this line?` : 'Undo everything after this line?';
     if (d.targetPointReopened) {
         s += ` Point ${p} is reopened`;
         if (d.pointsRemoved === 1) s += ` and point ${p + 1} is removed`;
@@ -215,9 +215,13 @@ function onLogLineLongPress(lineEl) {
     if (typeof window.isViewer === 'function' && window.isViewer()) return;
     const entryIndex = Number(lineEl.dataset.entry);
     const d = describeUndoToEntry(entryIndex);
-    if (!d) return;   // a header, the period note — nothing to undo
+    if (!d) return;   // a header — not part of the game
     if (!canEditPlayByPlay()) {
         showControllerToast('You need Play-by-Play control to undo', 'warning');
+        return;
+    }
+    if (d.nothingAfter) {
+        showControllerToast('Nothing recorded after this line', 'info');
         return;
     }
     if (micRecording()) {

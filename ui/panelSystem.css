@@ -3068,3 +3068,29 @@ body.panel-dragging .panel-content {
     width: 18px;
     height: 18px;
 }
+
+/* Log tab footer (game/gameScreenPanels.js createGameLogContent): the
+   Line tab's Undo button, and the hold gesture spelled out beside it.
+   Outside the scrolling list, so it stays put. */
+.game-log-footer {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-lighter);
+    background: var(--surface-card);
+}
+
+.game-log-footer .line-tab-undo-btn.disabled {
+    opacity: 0.5;
+}
+
+.game-log-footer-hint {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    color: var(--text-muted);
+}

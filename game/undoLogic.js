@@ -270,31 +270,87 @@ function applyUndoToGame(game, deps) {
 // before the batch already covered it).
 
 /**
- * The undo target a game-log entry (utils/gameLogRenderer.js
- * buildGameLogEntries) stands for, or null when the line is not a thing
- * that can be undone (headers, the roster line, the period note, an
- * inline turnover delimiter with no possession of its own yet).
+ * The undo target for "everything after this log line" (utils/gameLogRenderer.js
+ * buildGameLogEntries): the coach presses the last line they know was right,
+ * and that line stays. Returns null when the line is not part of the game
+ * (headers) or when nothing was recorded after it.
  *
- * Kinds: 'event' (this event and everything after it), 'possession'
- * (this possession's start and everything after it), 'score' (the point's
- * score — a "They Score" / Skip with no scoring event — and everything
- * after it), 'point' (the point itself, from its roster line).
+ * Target kinds name the first thing that goes: 'event' (that event and
+ * everything after it), 'possession' (that possession and after), 'score'
+ * (the point's score — a "They Score" / Skip that left no scoring play — so
+ * the point reopens with its plays kept), 'point' (that whole point and
+ * after).
+ *
+ * The line's own meaning decides what "after" is: an event line → the next
+ * event of its possession, else the next possession, else — a finished
+ * point whose score is not this play — the score, else the next point. A
+ * scoring play keeps its score (they are one thing: popping the play
+ * reverts the score, so the next target is the next point). An after-point
+ * line (a timeout between points) → the next such event, else the next
+ * point. A possession delimiter → its first event (an empty one: what
+ * follows it). A roster or pull line → the point's first possession, else
+ * its score, else the next point. A score line or the period note → the
+ * first between-points event, else the next point.
  */
-function targetFromEntry(entry) {
-    if (!entry || entry.pointIdx == null) return null;
+function targetAfterEntry(game, entry) {
+    if (!game || !entry || entry.pointIdx == null) return null;
+    const { pointIdx } = entry;
+    const point = game.points[pointIdx];
+    if (!point) return null;
+    const nextPoint = () => (pointIdx + 1 < game.points.length ? { kind: 'point', pointIdx: pointIdx + 1 } : null);
+    const firstBetweenPoints = () => {
+        for (let pi = 0; pi < point.possessions.length; pi++) {
+            const evts = point.possessions[pi].events;
+            for (let ei = 0; ei < evts.length; ei++) {
+                if (isBetweenPointsEvent(evts[ei])) return { kind: 'event', pointIdx, possIdx: pi, eventIdx: ei };
+            }
+        }
+        return null;
+    };
+    const afterPossession = (possIdx) => {
+        if (possIdx + 1 < point.possessions.length) return { kind: 'possession', pointIdx, possIdx: possIdx + 1 };
+        return null;
+    };
+
     switch (entry.kind) {
-        case 'event':
-        case 'after':
-            return { kind: 'event', pointIdx: entry.pointIdx, possIdx: entry.possIdx, eventIdx: entry.eventIdx };
-        case 'possession':
+        case 'event': {
+            const poss = point.possessions[entry.possIdx];
+            if (!poss) return null;
+            if (entry.eventIdx + 1 < poss.events.length) {
+                return { kind: 'event', pointIdx, possIdx: entry.possIdx, eventIdx: entry.eventIdx + 1 };
+            }
+            const next = afterPossession(entry.possIdx);
+            if (next) return next;
+            if (point.winner && !isScoreEvent(poss.events[entry.eventIdx])) return { kind: 'score', pointIdx };
+            return nextPoint();
+        }
+        case 'after': {
+            const poss = point.possessions[entry.possIdx];
+            if (!poss) return null;
+            if (entry.eventIdx + 1 < poss.events.length) {
+                return { kind: 'event', pointIdx, possIdx: entry.possIdx, eventIdx: entry.eventIdx + 1 };
+            }
+            return nextPoint();
+        }
+        case 'possession': {
             if (entry.possIdx == null) return null;
-            return { kind: 'possession', pointIdx: entry.pointIdx, possIdx: entry.possIdx };
-        case 'score':
-        case 'currentscore':
-            return { kind: 'score', pointIdx: entry.pointIdx };
+            const poss = point.possessions[entry.possIdx];
+            if (!poss) return null;
+            if (poss.events.length) return { kind: 'event', pointIdx, possIdx: entry.possIdx, eventIdx: 0 };
+            const next = afterPossession(entry.possIdx);
+            if (next) return next;
+            if (point.winner) return { kind: 'score', pointIdx };
+            return nextPoint();
+        }
         case 'roster':
         case 'pullnote':
-            return { kind: 'point', pointIdx: entry.pointIdx };
+            if (point.possessions.length) return { kind: 'possession', pointIdx, possIdx: 0 };
+            if (point.winner) return { kind: 'score', pointIdx };
+            return nextPoint();
+        case 'score':
+        case 'currentscore':
+        case 'periodnote':
+            return firstBetweenPoints() || nextPoint();
         default:
             return null;
     }
@@ -407,4 +463,4 @@ function describeUndoTo(game, target) {
     });
 }
 
-export { applyUndoToGame, targetFromEntry, targetPresent, undoToTarget, describeUndoTo, isBetweenPointsEvent };
+export { applyUndoToGame, targetAfterEntry, targetPresent, undoToTarget, describeUndoTo, isBetweenPointsEvent };

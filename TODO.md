@@ -1473,6 +1473,11 @@ Remaining work:
     events** button that puts everything back (`gameLogic.redoUndoToHere`:
     a storage-format snapshot plus the roster's live counters, offered only
     while the game still reads as the undo left it).
+  - **2026-11-07 (second staging pass):** the pressed line now *stays* and
+    everything after it goes (press the last line you know was right); the
+    Log tab has a footer with the single-step Undo and the hold hint; and
+    reopening a point from the Line tab returns to the recording tab, as
+    Start Point does.
   - **Left out, deliberately:** undoing End Game (the Review screen has no
     undo).
   - **Field-watch:** whether the warn-then-reopen double tap annoys when a

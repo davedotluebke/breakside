@@ -568,6 +568,9 @@ function createGameLogContent() {
     const content = document.createElement('div');
     content.className = 'game-log-content';
     
+    // The footer's Undo is the Line tab's (same handler, role toast and
+    // between-points guard included); the hint names the hold gesture
+    // (gameScreenSync.wireLogUndoToHere). Hidden for viewers.
     content.innerHTML = `
         <div class="game-log-events" id="gameLogEvents">
             <div class="game-log-placeholder">
@@ -575,8 +578,14 @@ function createGameLogContent() {
                 <span>Game events will appear here</span>
             </div>
         </div>
+        <div class="game-log-footer" id="gameLogFooter">
+            <button id="logUndoBtn" class="line-tab-undo-btn" title="Undo last event">
+                <i class="fas fa-undo"></i><span>Undo</span>
+            </button>
+            <span class="game-log-footer-hint">Press and hold a line to undo everything after it</span>
+        </div>
     `;
-    
+
     return content;
 }
 
