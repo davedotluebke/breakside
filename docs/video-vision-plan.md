@@ -2,7 +2,7 @@
 
 Breakside already knows *what* happened in a game: every event, who, when, and (from the Field tab) where. A Veo Cam 3 now records *how it looked*. This plan joins the two in three moves: play the right second of video for any event; let the video fill in what the coach did not tap; let the video propose events the coach only has to confirm.
 
-**Status (2026-10-18):** plan drafted after the Veo research in [dev-notes/veo-platform-capabilities.md](dev-notes/veo-platform-capabilities.md). Nothing is built. Decisions marked *pending* need Dave; the footage question (§ 2) gates everything past Tier 0. This supersedes the 2026-10 "video linking" design (YouTube / Vimeo embeds), which assumed footage we would never control; what survives from it is in § 3. **2026-11-08:** § 11 added, a clip-level audio-video-language-model route recorded as a plausible alternative for Tiers 3–4, not as plan of record.
+**Status (2026-10-18):** plan drafted after the Veo research in [dev-notes/veo-platform-capabilities.md](dev-notes/veo-platform-capabilities.md). Nothing is built. Decisions marked *pending* need Dave; the footage question (§ 2) gates everything past Tier 0. This supersedes the 2026-10 "video linking" design (YouTube / Vimeo embeds), which assumed footage we would never control; what survives from it is in § 3. **2026-11-08:** § 11 added, a clip-level audio-video-language-model route recorded as a plausible alternative for Tiers 3–4, not as plan of record. **Also 2026-11-08: the footage question in § 2 is resolved.** Veo confirmed in conversation that the captured footage is the camera owner's, analytics included, and gave no prospect of API or engineering help; Scenario A proceeds by fetching the panorama master through the web viewer's own endpoints (Decision 13).
 
 ## 1. What Veo gives us
 
@@ -11,9 +11,9 @@ Breakside already knows *what* happened in a game: every event, who, when, and (
 | Format | 1080p H.264, ~4.5 Mbps, 30 fps; downloadable MP4 on every plan | Two 3840×2160 HEVC lens streams, ~17 Mbps, 30 fps; exists for every recording, streamed for 90 days, cold storage after; **not downloadable through the product** |
 | Camera model | Virtual pan-tilt-zoom over a fixed camera; players away from the disc are often out of frame | Fixed camera; the whole field in every frame; factory calibration (`camera_alignment`) to pitch metres |
 | Veo's own data | None for ultimate | Same, plus an "action centre" track at 30 Hz in field metres (not a disc track) |
-| How to get it | Download button; ask Veo support to switch the camera to **tactical** mode (wide, steady zoom) | Partner API (invite-only, through the account rep) or written permission |
+| How to get it | Download button; ask Veo support to switch the camera to **tactical** mode (wide, steady zoom) | The web viewer's own endpoints, with the owner's login (see § 2); no partner API is expected |
 
-The rep's claim that the dual-4K footage is downloadable is the first thing to resolve; see § 2.
+The rep's claim that the dual-4K footage is downloadable was resolved on 2026-11-08; see § 2.
 
 ## 2. Footage scenarios
 
@@ -23,7 +23,13 @@ The rep's claim that the dual-4K footage is downloadable is the first thing to r
 
 Both scenarios: archive the footage ourselves. Veo keeps Interactive mode for 90 days and the recording for 6–12 months; nothing we build may depend on Veo still having the game.
 
-**Decision pending (Dave):** ask the rep for A in writing: API access with a one-paragraph intended use (own-team analysis, non-commercial, open source), and the question "can the dual-4K panorama and its camera-alignment file be downloaded or fetched for our own recordings?" Until answered, design for B and keep A's hooks (a `panorama` source type, calibration ingestion) cheap.
+**Decision (2026-11-08): Scenario A, through the web viewer.** When asked directly about downloading the full-resolution dual-4K footage, Veo's sales representative said that "all captured footage is yours", confirmed on being asked again that the camera owner has full rights to the captured footage including running their own video analytics on it, and implied that their engineers were unlikely to help with the process. We read that as: no API is coming, and fetching our own recordings' panorama master and calibration through the endpoints the web viewer itself uses is within the intent of the rights Veo describes. So:
+
+- Footage acquisition is the web app's own `/api/app/matches/<slug>/` and `/videos/` listing with the owner's login, then the `panorama/video.ts` master, the 2048×2048 transcode, the follow-cam MP4, `camera_alignment` and `ball_detections` per recording, archived to S3. Own recordings only, never a shared or public one.
+- Fetch within the 90 days after processing while the renders are "available"; after that, trigger "Restore Interactive Mode" in the viewer and wait up to 24 h before fetching.
+- The interface is internal and unversioned: expect it to change without notice, keep the fetcher small and separate, verify every download against its `content-length`, and keep Scenario B (follow-cam only) working as the fallback.
+- Ask the rep to put the ownership statement in a reply email, and keep it with the ops notes.
+- Still ask support for **tactical** recording mode: it shapes the follow-cam, which remains the viewing file for Tier 0 and the single-view input for any clip-level model test (§ 11); the master is two lens streams that need stitching or cropping before a model can look at them. The master itself is unaffected by the mode.
 
 ## 3. Decisions
 
@@ -40,7 +46,8 @@ Both scenarios: archive the footage ourselves. Veo keeps Interactive mode for 90
 | 9 | **Detector licence: Apache-2.0 model families (RT-DETR upstream, RF-DETR, D-FINE) rather than Ultralytics YOLO (AGPL).** | settled | The repo is MIT and public. |
 | 10 | **No faces, no re-identification across games.** Identity comes from the lineup prior, jersey numbers and one coach tap per point; crops are not stored. | settled | Youth players; Veo's own terms already license footage to Veo for AI training, and we will not add to the exposure. |
 | 11 | **The pipeline runs off the API box**: a Python batch package `breakside_vision/`, run on a Mac (MPS) for development and on an AWS GPU spot instance for whole games; results are sidecar files in S3 referenced from the game. | settled | The EC2 box is a JSON store; GPUs are rented by the hour. |
-| 12 | **Veo's `ball_detections`, if we ever get it, is a prior for "where play is", never a disc track.** | settled | Measured on a 93-minute ultimate demo: it never reaches disc-flight speeds. |
+| 12 | **Veo's `ball_detections` is a prior for "where play is", never a disc track.** | settled | Measured on a 93-minute ultimate demo: it never reaches disc-flight speeds. |
+| 13 | **Footage is fetched from Veo through the web viewer's own endpoints with the owner's login**: the panorama master, the 2048×2048 transcode, the follow-cam MP4, `camera_alignment` and `ball_detections` per recording, within the 90-day window, archived to S3. Own recordings only. | settled 2026-11-08 | Veo confirmed the owner's rights to the footage and to their own analytics, and offered no API; the viewer already fetches these files by URL. |
 
 ## 4. What exists today in Breakside (verified 2026-10-17)
 
@@ -66,7 +73,7 @@ Tiers 3 and 4 as written assume the classical route (track, then infer). § 11 r
 
 ## 6. Architecture
 
-- `breakside_vision/` (Python, sibling of `breakside_server/`, added to `scripts/deploy-excludes.txt`): `ingest` (Veo MP4 or TS → S3, proxy transcodes), `segment` (Tier 1), `track` (Tier 2), `events` (Tier 3), `calib` (field corners → homography; reads Veo's `camera_alignment` when present). Code only in this repo: no footage, no weights, no fixtures with real players (ARCHITECTURE.md § Names in examples).
+- `breakside_vision/` (Python, sibling of `breakside_server/`, added to `scripts/deploy-excludes.txt`): `ingest` (`veo`: list the owner's recordings and fetch the master, transcode, follow-cam and sidecars per Decision 13, credentials from the environment and never in the repo; then → S3 and proxy transcodes), `segment` (Tier 1), `track` (Tier 2), `events` (Tier 3), `calib` (field corners → homography; reads Veo's `camera_alignment` when present). Code only in this repo: no footage, no weights, no fixtures with real players (ARCHITECTURE.md § Names in examples).
 - Storage: `s3://<bucket>/video/<gameId>/{source.mp4 | master.ts, proxy-720.mp4, points.json, tracks.parquet, suggestions.json}`; bucket names and policies live in `breakside-ops`. Signed URLs from a new `GET /api/games/{id}/video`; coaches of the team only; share guests get nothing in v1.
 - Game JSON: `video: { source: 'veo' | 'mp4', veoSlug, key, durationS, anchors: [{ eventAt, videoT }], pointOffsets: { [pointIndex]: videoT } }`. Events gain an optional `videoT` once Tier 1 or 3 refines them; `at` is never rewritten.
 - Frontend: a `video/` module layer (player, sync model, reels, anchor UI, suggestion review as a Log-tab mode) at the Features position in `main.js`'s import order.
@@ -74,7 +81,7 @@ Tiers 3 and 4 as written assume the classical route (track, then infer). § 11 r
 
 ## 7. Sequence
 
-0. **Dave, this week:** the written question to the rep (§ 2); request API access; ask support for tactical mode; record one game with Field-tab stats so a paired fixture exists while its Interactive mode is live; download that game's follow-cam MP4 the day it processes.
+0. **Dave, this week:** get the rep's ownership statement in a reply email (§ 2); ask support for tactical mode; record one game with Field-tab stats so a paired fixture exists; fetch that game's follow-cam MP4, panorama master and `camera_alignment` while its renders are still "available" (Decision 13).
 1. **Tier 0 spike** on the fixture: S3 upload, anchor, modal player on the replay playhead, one reel.
 2. **Feasibility spike** on ten minutes of the fixture (follow-cam, and the master if A lands): person-detection recall, disc pixel size and visibility, camera-motion statistics, pose-from-cones error, the segmentation heuristic. The numbers decide Tier 2 / 3 scope.
 3. Tier 1 → ship (automatic sync, point clips, dead-time-free game).
@@ -95,7 +102,7 @@ Live or in-game video; hosting other teams' footage; server-side video editing b
 
 ## 10. Risks
 
-- Veo never grants A: Tier 3 stalls; Tiers 0–2 still pay for themselves.
+- Veo's internal endpoints change, add authentication we cannot satisfy, or Veo objects despite the rep's statement: fall back to Scenario B (follow-cam only); Tier 3 stalls, Tiers 0–2 still pay for themselves. Archive early so what we already have is ours.
 - The follow-cam's 4.5 Mbps smears the disc: Tier 3 on B is likely infeasible; step 2 measures it.
 - Veo deletes or re-encodes: our S3 copy is the system of record from day one.
 - Public repo: bucket names, keys and anything deployment-specific stay in `breakside-ops`.
