@@ -30,9 +30,14 @@ import { showSelectTeamScreen } from '../teams/teamList.js';
 import {
     getControllerState, getCurrentUserId, startControllerPolling,
     stopControllerPolling, showControllerToast, dismissToast, getPingGameStamp,
+    canEditPlayByPlay,
 } from './controllerState.js';
-import { summarizeGameEntries, gameLogEntryOptions } from './gameLogic.js';
+import {
+    summarizeGameEntries, gameLogEntryOptions, undoToLogEntry, describeUndoToEntry, redoUndoToHere,
+} from './gameLogic.js';
 import { mountReplayView } from '../playByPlay/replayView.js';
+import { wireLongPress } from '../ui/longPress.js';
+import { advancedSettings } from '../settings/advancedSettings.js';
 import { currentGame as currentGameFn, getPlayerFromName } from '../utils/helpers.js';
 import { renderGameLogEntriesHTML, escapeHtml } from '../utils/gameLogRenderer.js';
 import {
@@ -152,6 +157,7 @@ function updateGameLogEvents() {
     // Format for display — line classification + escaping live in the shared
     // renderer (utils/gameLogRenderer.js, G6 merge).
     const html = renderGameLogEntriesHTML(entries, getTeamName());
+    wireLogUndoToHere(eventsEl);
 
     // Only update DOM and auto-scroll if content actually changed
     if (eventsEl.innerHTML !== html) {
@@ -163,6 +169,148 @@ function updateGameLogEvents() {
     } else {
         ensureReplayView();
     }
+}
+
+// ---------------------------------------------------------------------------
+// "Undo to here" — press and hold a Log line to undo its event and everything
+// after it, across point boundaries (ARCHITECTURE.md § Undo). Wired once on
+// the log container (delegated: the lines are rebuilt on every update) and
+// gated at press time: play-by-play control, a game still in progress, a
+// line that stands for something undoable, and the mic not recording (the
+// engine holds references into the possessions the batch would remove).
+// ---------------------------------------------------------------------------
+function wireLogUndoToHere(eventsEl) {
+    wireLongPress(eventsEl, { selector: '[data-entry]', onLongPress: onLogLineLongPress });
+}
+
+function micRecording() {
+    // The mic button carries the engine's phase as a class (as
+    // ui/standbyTimer.js reads it) — no import of narration/ from here.
+    const btn = document.getElementById('narrationMicBtn');
+    return !!btn && (btn.classList.contains('mic-recording') || btn.classList.contains('mic-connecting'));
+}
+
+/** The confirm question for an undo-to-here summary (gameLogic.describeUndoToEntry). */
+function undoToHereQuestion(d) {
+    const n = d.eventsUndone;
+    const p = d.pointNumber;
+    const last = p + d.pointsRemoved - (d.targetPointReopened ? 0 : 1);
+    let s = n > 0 ? `Undo the ${n} event${n === 1 ? '' : 's'} after this line?` : 'Undo everything after this line?';
+    if (d.targetPointReopened) {
+        s += ` Point ${p} is reopened`;
+        if (d.pointsRemoved === 1) s += ` and point ${p + 1} is removed`;
+        else if (d.pointsRemoved > 1) s += ` and points ${p + 1}–${last} are removed`;
+        s += '.';
+    } else if (d.pointsRemoved === 1) {
+        s += ` Point ${p} is removed.`;
+    } else if (d.pointsRemoved > 1) {
+        s += ` Points ${p}–${last} are removed.`;
+    }
+    return s;
+}
+
+function onLogLineLongPress(lineEl) {
+    const game = currentGameFn();
+    if (!game || game.gameEndTimestamp) return;
+    if (typeof window.isViewer === 'function' && window.isViewer()) return;
+    const entryIndex = Number(lineEl.dataset.entry);
+    const d = describeUndoToEntry(entryIndex);
+    if (!d) return;   // a header — not part of the game
+    if (!canEditPlayByPlay()) {
+        showControllerToast('You need Play-by-Play control to undo', 'warning');
+        return;
+    }
+    if (d.nothingAfter) {
+        showControllerToast('Nothing recorded after this line', 'info');
+        return;
+    }
+    if (micRecording()) {
+        showControllerToast('Stop the mic before undoing past plays', 'warning');
+        return;
+    }
+    const go = () => {
+        const r = undoToLogEntry(entryIndex);
+        if (!r) return;
+        const n = r.eventsUndone;
+        const what = r.targetPointReopened ? `point ${d.pointNumber} reopened`
+            : r.pointsRemoved ? `point ${d.pointNumber} removed` : `back to point ${d.pointNumber}`;
+        // Twice the usual toast, with the way back on it: this is the one
+        // undo that can take a lot in a single gesture.
+        showControllerToast(`Undid ${n} event${n === 1 ? '' : 's'} — ${what}`, 'info', 8000, {
+            actions: [{ label: 'Redo events', className: 'toast-action-prominent', onClick: redoFromToast }],
+        });
+    };
+    if (advancedSettings.get('undo.confirmUndoToHere') === false) { go(); return; }
+    showUndoToHereDialog(undoToHereQuestion(d), go);
+}
+
+function redoFromToast() {
+    const r = redoUndoToHere();
+    if (!r) {
+        showControllerToast('Nothing to redo — the game has changed since the undo', 'warning');
+        return;
+    }
+    const n = r.eventsUndone;
+    showControllerToast(`Put back ${n} event${n === 1 ? '' : 's'}`, 'success');
+}
+
+/**
+ * The undo-to-here confirm: the question (what goes), a "Don't ask again"
+ * box that writes the undo.confirmUndoToHere setting (a toast then says
+ * where it is turned back on: Advanced Settings → Undo), Undo and Cancel.
+ * Created lazily, like the Game Events modal; the × and a backdrop tap
+ * cancel. The dialog appears under a finger that is still down, so its text
+ * is unselectable (the OS callout would otherwise land on Cancel).
+ */
+function showUndoToHereDialog(question, onConfirm) {
+    let modal = document.getElementById('undoToHereModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'undoToHereModal';
+        modal.className = 'modal game-events-modal';
+        modal.innerHTML = `
+            <div class="modal-content game-events-modal-content undo-here-content">
+                <div class="dialog-header prominent-dialog-header">
+                    <span class="close" id="undoToHereModalClose">&times;</span>
+                    <h2>Undo to here?</h2>
+                </div>
+                <p class="text-hint undo-here-question"></p>
+                <label class="undo-here-skip">
+                    <input type="checkbox" id="undoToHereSkipConfirm">
+                    <span>Don’t ask again</span>
+                </label>
+                <div class="game-events-buttons undo-here-buttons">
+                    <button id="undoToHereConfirmBtn" class="ge-btn ge-btn-who-us">
+                        <i class="fas fa-undo"></i>
+                        <span>Undo</span>
+                    </button>
+                    <button id="undoToHereCancelBtn" class="ge-btn ge-btn-who-neither">
+                        <i class="fas fa-times"></i>
+                        <span>Cancel</span>
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const hide = () => { modal.style.display = 'none'; modal._onConfirm = null; };
+        modal.querySelector('#undoToHereModalClose').addEventListener('click', hide);
+        modal.querySelector('#undoToHereCancelBtn').addEventListener('click', hide);
+        modal.addEventListener('click', (e) => { if (e.target === modal) hide(); });
+        modal.querySelector('#undoToHereConfirmBtn').addEventListener('click', () => {
+            const skip = modal.querySelector('#undoToHereSkipConfirm').checked;
+            if (skip) advancedSettings.set('undo.confirmUndoToHere', false);
+            const fn = modal._onConfirm;
+            hide();
+            if (typeof fn === 'function') fn();
+            if (skip) {
+                showControllerToast('Undo confirmations are off — turn them back on in Advanced Settings → Undo', 'info', 8000);
+            }
+        });
+    }
+    modal.querySelector('.undo-here-question').textContent = question;
+    modal.querySelector('#undoToHereSkipConfirm').checked = false;
+    modal._onConfirm = onConfirm;
+    modal.style.display = 'flex';
 }
 
 // ---------------------------------------------------------------------------

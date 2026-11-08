@@ -1450,12 +1450,40 @@ Remaining work:
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.
   - Touch points: `store/models.js` (constructor + summarize), `playByPlay/fullPbp.js` (extend `TURNOVER_MODIFIERS`), `breakside_server/narration.py` slow-pass schema (add fields to the turnover event spec), `narration/narrationEngine.js` `applyTurnover` (forward the flags), and possibly `teams/gameSummary.js` if CSV columns enumerate flags.
   - Backwards compat: existing serialized turnovers without these flags should default false on load — no migration needed.
-- [ ] **Feature**: Undo across point boundaries
-  - Today the global Undo (`undoEvent` in `gameLogic.js`) handles in-point events and rolls back possessions/scores within the current point, but there's no UI affordance to undo *backwards* across a point boundary (e.g. "the previous point's last event was actually wrong"). Once a point ends, its events are effectively read-only from the UI even though they're still in the data model.
-  - Two interaction ideas — **either could be the v1**, or both can ship together:
-    1. Extend the existing `Undo` button so when the current point has no events, it walks back into the previous point's last event. Confirm-prompt before crossing the boundary.
-    2. **"Undo to this row" in Log view.** Long-press (or context-menu / kebab) on any event row in the Game Log to expose `Undo to here`. Tapping it pops every event after that row, restoring scores / possession state / point structure. Confirm-prompt with a count if more than 3–4 events would be removed: "This will undo 7 events, including the end of point 4. Continue?"
-  - Touch points: `gameLogic.js` (extend `undoEvent` to optionally cross point boundaries; new `undoToEvent(eventRef)` helper), `ui/eventLogDisplay.js` (long-press handler, confirm modal), score/possession rollback already exists for in-point undo and would extend naturally. Watch for: stat re-derivation, narration provisional events that may be tied to specific possessions, and `moveToNextPoint` side effects (timer, sync) that need to be reversed when popping a "Point ended" event.
+- [x] **Feature**: Undo across point boundaries *(built 2026-10-25, branch
+  `undo-across-points`; see ARCHITECTURE.md § Undo)*. The premise here was
+  stale: every Undo button was already live between points, so one tap after
+  a score silently reopened the finished point — and after a between-points
+  timeout it reverted the *score* and left the timeout on the reopened point
+  (halftime likewise, still flipping the pull side). Shipped: a between-points
+  event is undone on its own (branch 0 of `undoLogic`); the first Undo from
+  between points only warns, a second tap within 4 s reopens; and **press and
+  hold a Log line** to undo it and everything after it, across points, behind
+  a confirm that names what goes ("Undo 4 events back to here? Point 1 is
+  reopened and point 2 is removed."). A reopened point is live with its clock
+  stopped; a removed point seeds Next with its line. Gated on play-by-play
+  control, a live game, and the mic not recording. The batch is the single
+  step in a loop, so counters come out as a hand-chained Undo would leave
+  them. Unit tests in `tests/unit/undoLogic.test.mjs`, e2e
+  `tests/scenarios/26-undo-across-points.spec.ts`.
+  - **2026-11-03 (Dave's staging pass):** too easy to take a lot by accident,
+    so the native `confirm()` became a dialog with a *Don't ask again* box
+    (the `undo.confirmUndoToHere` setting, Advanced Settings → Undo turns it
+    back on), and the toast afterwards lasts 8 s with a large yellow **Redo
+    events** button that puts everything back (`gameLogic.redoUndoToHere`:
+    a storage-format snapshot plus the roster's live counters, offered only
+    while the game still reads as the undo left it).
+  - **2026-11-07 (second staging pass):** the pressed line now *stays* and
+    everything after it goes (press the last line you know was right); the
+    Log tab has a footer with the single-step Undo and the hold hint; and
+    reopening a point from the Line tab returns to the recording tab, as
+    Start Point does.
+  - **Left out, deliberately:** undoing End Game (the Review screen has no
+    undo).
+  - **Field-watch:** whether the warn-then-reopen double tap annoys when a
+    coach taps We Score by mistake and reaches straight for Undo (one extra
+    tap now), and whether a reopened point's stopped clock is the right
+    default or the coach expects it running.
 
 - [ ] **Bug**: `point.startTimestamp` is null at score time despite being set at point start
   - **Symptom**: `gameLogic.js` logs `Warning: point.startTimestamp is null; setting to now` during `updateScore()`, then sets it to the current time (score time, not point start time).

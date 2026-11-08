@@ -2579,10 +2579,20 @@ body.mic-button-visible .panel-selectLine.tab-fullscreen .select-line-table-cont
     font-size: 0.85rem;
 }
 
-/* Individual event lines */
+/* Individual event lines. Press and hold one to undo back to it
+   (game/gameScreenSync.js wireLogUndoToHere): no text selection or OS
+   callout on the hold, and a tint while the finger is down. */
 .game-log-line {
     padding: 4px 0;
     border-bottom: 1px solid var(--border-lighter);
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    transition: background-color 0.15s;
+}
+
+.game-log-line.pressing {
+    background-color: var(--color-warning-surface);
 }
 
 .game-log-line:last-child {
@@ -3014,3 +3024,89 @@ body.panel-dragging .panel-content {
 }
 .pbp-panel-content.layout-full .pbp-btn-rules-end .pbp-btn-label { display: inline; }
 .pbp-panel-content.layout-full .pbp-btn-rules-end i { display: none; }
+
+/* Undo-to-here confirm (game/gameScreenSync.js showUndoToHereDialog): the
+   Swap O & D dialog's shape, two buttons side by side, and a "Don't ask
+   again" row above them. The dialog opens under a finger that is still
+   held, so nothing in it is selectable (the iOS callout was landing on
+   Cancel). The × floats right; the title keeps clear of it. */
+.undo-here-content {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.undo-here-content .prominent-dialog-header h2 {
+    padding: 0 28px;
+    font-size: 1.6rem;
+}
+
+.undo-here-buttons {
+    grid-template-columns: 1fr 1fr;
+}
+
+.undo-here-question {
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.undo-here-skip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: fit-content;
+    margin: 12px auto 0;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.undo-here-skip input {
+    margin: 0;
+    flex: none;
+    width: 18px;
+    height: 18px;
+}
+
+/* Log tab footer (game/gameScreenPanels.js createGameLogContent): the
+   Line tab's Undo button, and the hold gesture spelled out beside it.
+   Outside the scrolling list, so it stays put. */
+.game-log-footer {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-lighter);
+    background: var(--surface-card);
+}
+
+.game-log-footer .line-tab-undo-btn.disabled {
+    opacity: 0.5;
+}
+
+.game-log-footer-hint {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    color: var(--text-muted);
+}
+
+/* The footer has room for the word, where the Line tab's action row does
+   not; and the mic FAB sits over its right end when it is showing
+   (body.mic-button-visible: narration/micButton.js), so the hint stops
+   short of it. */
+.game-log-footer .line-tab-undo-btn span {
+    display: inline;
+}
+
+.game-log-footer-hint {
+    text-align: left;
+}
+
+body.mic-button-visible .game-log-footer {
+    padding-right: calc(96px + env(safe-area-inset-right, 0px));
+}

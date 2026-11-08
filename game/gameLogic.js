@@ -5,7 +5,10 @@
  * Phase 4 update: Games use teamId and create rosterSnapshot
  */
 import { Role, Game, createRosterSnapshot, isTestGame } from '../store/models.js';
-import { currentTeam, currentEvent, saveAllTeamsData, getActiveRoster } from '../store/storage.js';
+import {
+    currentTeam, currentEvent, saveAllTeamsData, getActiveRoster,
+    serializeGame, deserializePointsFromServer,
+} from '../store/storage.js';
 import { isScrimmageGame } from '../store/scrimmage.js';
 import {
     NO_SCORE, VARIATIONS, TWO_POINT_HINT, variationById, normalizeRules, gameRules,
@@ -15,7 +18,8 @@ import {
 import { syncGameToCloud, deleteGameFromCloud } from '../store/sync.js';
 import {
     currentGame, getLatestPoint, getActivePossession, getPlayerFromName,
-    buildPointPlayerLookup, buildPointMembership,
+    buildPointPlayerLookup, buildPointMembership, isPointInProgress,
+    determineStartingPosition,
 } from '../utils/helpers.js';
 import { applyPointPlayerStats, revertPointPlayerStats } from './pointStats.js';
 import { buildGameLogEntries } from '../utils/gameLogRenderer.js';
@@ -30,9 +34,11 @@ import {
     setIsPaused, setCountdownSeconds,
 } from './pointManagement.js';
 import { showControllerToast } from './controllerState.js';
-import { applyUndoToGame } from './undoLogic.js';
 import {
-    rearmPointClockIfUntouched, resumePointClockFromStop, stopReasonOf,
+    applyUndoToGame, undoToTarget, describeUndoTo, targetAfterEntry, isBetweenPointsEvent,
+} from './undoLogic.js';
+import {
+    rearmPointClockIfUntouched, resumePointClockFromStop, stopReasonOf, stopPointClock,
 } from '../store/pointClock.js';
 import { log } from '../utils/logger.js';
 
@@ -568,12 +574,16 @@ let undoPastStartTimestamp = null;
 // possessions). Can't share undoPastStartTimestamp: that one is reset at the
 // top of every undoEvent() call that finds points to undo.
 let undoEmptyPointTimestamp = null;
+// Double-tap window for reopening a finished point from between points: the
+// first Undo after a score only warns (ARCHITECTURE.md § Undo).
+let undoReopenTimestamp = null;
 
 /**
- * Revert the score and player stats set by updateScore() for a point.
- * Used by undoEvent() when reverting a scored point.
+ * Revert the score and player stats set by updateScore() for a point — the
+ * data half: game score, per-player point counters, winner / timestamps.
+ * The point reads as live again (startTimestamp set) when this returns.
  */
-function revertPointScore(point) {
+function revertPointScoreData(point) {
     const game = currentGame();
     if (isScoringSide(point.winner)) game.scores[point.winner] -= pointValueOf(point);
 
@@ -593,8 +603,16 @@ function revertPointScore(point) {
     point.winner = "";
     point.pointValue = 1;
     point.endTimestamp = null;
-    announceRulesState();
     point.startTimestamp = new Date();
+}
+
+/**
+ * Revert a point's score (revertPointScoreData) and bring the screen back
+ * to the in-point state. Used by undoEvent() when reverting a scored point.
+ */
+function revertPointScore(point) {
+    revertPointScoreData(point);
+    announceRulesState();
 
     // late-bound back-edge (gameScreenSync lives "above" this layer); see
     // ARCHITECTURE.md § ES modules — the window shim at the owner is kept.
@@ -653,6 +671,26 @@ function undoEvent() {
     }
     undoPastStartTimestamp = null; // Reset if there are events to undo
 
+    // Between points, a single Undo would reopen the finished point (revert
+    // its score, or pop its scoring play) — a bigger step than undoing a
+    // play, and one tap away from the We Score / They Score buttons. Warn
+    // first; a second tap within the window goes ahead. A between-points
+    // event (timeout, halftime) on top of the score is undone on the first
+    // tap: that is just the last thing recorded.
+    const latest = getLatestPoint();
+    if (latest.winner && !endsWithBetweenPointsEvent(latest)) {
+        const now = Date.now();
+        if (!(undoReopenTimestamp && (now - undoReopenTimestamp) < 4000)) {
+            undoReopenTimestamp = now;
+            if (typeof showControllerToast === 'function') {
+                showControllerToast(`Point ${currentGame().points.length} is over — tap Undo again to reopen it`, 'warning');
+            }
+            return;
+        }
+    }
+    undoReopenTimestamp = null;
+    const wasInProgress = isPointInProgress();
+
     // The decision tree lives in undoLogic.js (pure, unit-tested); this
     // function handles the UI/persistence side effects it prescribes.
     const result = applyUndoToGame(currentGame(), {
@@ -662,6 +700,12 @@ function undoEvent() {
     });
     // A pending conversion may have been taken back (scrimmage variations).
     announceRulesState();
+    if (result.undoneEvent) revertPeriodBreakDisplay([result.undoneEvent]);
+    // A finished point reopened from the Line tab: back to the surface the
+    // coach records on, as Start Point does (a no-op off the Line tab).
+    if (!wasInProgress && isPointInProgress() && typeof window.switchToTrackingTab === 'function') {
+        window.switchToTrackingTab();
+    }
 
     // Undoing the first touch of an offensive point puts the clock back to
     // waiting for it (store/pointClock.js): the time since the mistaken tap
@@ -730,6 +774,230 @@ function undoEvent() {
     saveAllTeamsData(); // Save and Sync
 }
 
+/** Is the last recorded thing on this (scored) point a between-points event? */
+function endsWithBetweenPointsEvent(point) {
+    const poss = point.possessions[point.possessions.length - 1];
+    const evt = poss && poss.events[poss.events.length - 1];
+    return !!evt && isBetweenPointsEvent(evt);
+}
+
+/**
+ * Undoing a halftime / switch-sides event takes the Field tab's end swap
+ * back with it (applyPeriodBreak flipped the drawn attack direction when it
+ * was recorded); an even number of them cancels. The Start Point label
+ * follows the recomputed pull side on the pointChanged nudge.
+ */
+function revertPeriodBreakDisplay(events) {
+    const breaks = events.filter(e => e && (e.halftime_flag || e.switchsides_flag)).length;
+    if (breaks % 2 === 1 && window.fieldPbp && typeof window.fieldPbp.swapAttackDefend === 'function') {
+        window.fieldPbp.swapAttackDefend();
+    }
+    if (breaks > 0 && window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+}
+
+/**
+ * Undo across point boundaries — press and hold a Log-tab line
+ * (ARCHITECTURE.md § Undo). `entryIndex` indexes summarizeGameEntries();
+ * the line stays and everything recorded after it is undone, one
+ * single-step undo at a time (game/undoLogic.js undoToTarget), then the
+ * screen is brought to wherever the game now stands: a reopened point is
+ * live with its clock stopped (the coach is fixing history, not playing),
+ * a removed point leaves the game between points with that point's line
+ * seeded as Next so it can be replayed. Returns the undo summary; null when
+ * the line is not part of the game; { nothingAfter: true } when nothing
+ * was recorded after it.
+ */
+function describeUndoToEntry(entryIndex) {
+    const entry = summarizeGameEntries()[entryIndex];
+    if (!entry || entry.pointIdx == null) return null;
+    const target = targetAfterEntry(currentGame(), entry);
+    if (!target) return { nothingAfter: true, pointNumber: entry.pointIdx + 1 };
+    return Object.assign({ target, pointNumber: target.pointIdx + 1 }, describeUndoTo(currentGame(), target));
+}
+
+function undoToLogEntry(entryIndex) {
+    const game = currentGame();
+    const entry = summarizeGameEntries()[entryIndex];
+    const target = targetAfterEntry(game, entry);
+    if (!target || !game) return null;
+    const targetPoint = game.points[target.pointIdx];
+    if (!targetPoint) return null;
+    const targetRoster = [...(targetPoint.players || [])];
+    const before = snapshotForRedo(game);
+
+    const summary = undoToTarget(game, target, {
+        getActivePossession,
+        resolvePlayer: getPlayerFromName,
+        revertPointScore: revertPointScoreData,
+    });
+    undoPastStartTimestamp = null;
+    undoEmptyPointTimestamp = null;
+    undoReopenTimestamp = null;
+
+    revertPeriodBreakDisplay(summary.removedEvents);
+    // A pending conversion may have been taken back (scrimmage variations).
+    announceRulesState();
+
+    const latest = getLatestPoint();
+    if (latest && isPointInProgress()) {
+        if (summary.targetPointReopened) {
+            // Reopened from a finished state: the wall time since the score
+            // is not play. Stopped, with the usual Restart toast; the next
+            // recorded play restarts it (store/pointClock.js § Stoppages).
+            if (stopPointClock(latest, 'manual')) logEvent('Point clock stopped — point reopened');
+            // Reopened from the Line tab (its own Undo chain): back to the
+            // recording surface. From the Log tab this is a no-op — the coach
+            // stays where the Redo toast and the result are.
+            if (typeof window.switchToTrackingTab === 'function') window.switchToTrackingTab();
+        } else {
+            // Inside the live point: the same clock rules as a single Undo.
+            const mode = (typeof window.getCurrentMode === 'function') ? window.getCurrentMode() : 'simple';
+            if (rearmPointClockIfUntouched(latest, mode)) log('⏱ Point clock re-armed — first touch undone');
+            summary.removedEvents.forEach(evt => {
+                if (resumePointClockFromStop(latest, stopReasonOf(evt))) logEvent('Point clock restarted');
+            });
+        }
+        stopCountdown();
+        if (typeof window.updateGameScreenScore === 'function') {
+            window.updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+        }
+        if (typeof window.updatePlayByPlayPanelState === 'function') window.updatePlayByPlayPanelState();
+    } else {
+        // Between points (the target's point is gone): panels, countdown,
+        // the Line tab — then seed Next with the undone point's line, since
+        // the line was probably right and a play was wrong.
+        moveToNextPoint();
+        seedPendingLine(game, targetRoster);
+    }
+
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        if (summary.removedEvents.length) {
+            window.narrationEventBus.publish('eventRetracted', {
+                event: summary.removedEvents[summary.removedEvents.length - 1],
+                source: 'manual', provisionalId: null,
+            });
+        }
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    const n = summary.eventsUndone;
+    logEvent(`Undo: ${n} event${n === 1 ? '' : 's'} back to point ${target.pointIdx + 1}`);
+    saveAllTeamsData();
+    lastUndoToHere = {
+        gameId: game.id, before, after: fingerprint(game), summary,
+        removedEvents: summary.removedEvents,
+    };
+    return summary;
+}
+
+// ── Redo of an undo-to-here ───────────────────────────────────────────────
+// The batch is the one undo that can take a lot in a single gesture, so its
+// toast offers the way back. The snapshot is the game as serialized for
+// storage (points, score, the pending line) plus the roster's live
+// counters — everything the batch can touch — and Redo is offered only
+// while the game still reads as the batch left it (fingerprint), so it can
+// never clobber plays recorded since.
+let lastUndoToHere = null;
+
+/** What the batch can change, as plain data. */
+function snapshotForRedo(game) {
+    const ser = serializeGame(game);
+    return {
+        points: ser.points,
+        scores: Object.assign({}, game.scores),
+        pendingNextLine: game.pendingNextLine ? JSON.parse(JSON.stringify(game.pendingNextLine)) : null,
+        players: (currentTeam ? currentTeam.teamRoster : []).map(p => {
+            const counters = {};
+            Object.keys(p).forEach(k => { if (typeof p[k] === 'number') counters[k] = p[k]; });
+            return { player: p, counters };
+        }),
+    };
+}
+
+/** The recorded shape of the game: what Redo must find unchanged. */
+function fingerprint(game) {
+    return JSON.stringify([
+        game.scores,
+        (game.points || []).map(p => [
+            p.winner, p.pendingConversion || null, p.pendingValue || 0,
+            (p.possessions || []).map(ps => (ps.events || []).length),
+        ]),
+    ]);
+}
+
+/** Is a Redo of the last undo-to-here available for the current game? */
+function canRedoUndoToHere() {
+    const game = currentGame();
+    return !!(lastUndoToHere && game && game.id === lastUndoToHere.gameId
+        && fingerprint(game) === lastUndoToHere.after);
+}
+
+/**
+ * Put back what the last undo-to-here took: the points, score, pending line
+ * and live counters as they were, then the screen to match. Returns the
+ * undo summary that was reversed, or null when there is nothing to redo
+ * (another game, or plays recorded since — the caller says so).
+ */
+function redoUndoToHere() {
+    if (!canRedoUndoToHere()) return null;
+    const game = currentGame();
+    const { before, summary, removedEvents } = lastUndoToHere;
+    lastUndoToHere = null;
+
+    game.points = deserializePointsFromServer(before.points);
+    game.scores = Object.assign({}, before.scores);
+    before.players.forEach(({ player, counters }) => Object.assign(player, counters));
+
+    // Halftimes come back with their events: the Field tab's end swap too.
+    revertPeriodBreakDisplay(removedEvents);
+    announceRulesState();
+
+    const latest = getLatestPoint();
+    if (latest && isPointInProgress()) {
+        stopCountdown();
+        if (typeof window.updateGameScreenScore === 'function') {
+            window.updateGameScreenScore(game.scores[Role.TEAM], game.scores[Role.OPPONENT]);
+        }
+        if (typeof window.updatePlayByPlayPanelState === 'function') window.updatePlayByPlayPanelState();
+    } else {
+        moveToNextPoint();
+    }
+    // The pending line as it was, over moveToNextPoint's reseed.
+    if (before.pendingNextLine) {
+        game.pendingNextLine = before.pendingNextLine;
+        if (typeof window.updateSelectLinePanel === 'function') window.updateSelectLinePanel();
+    }
+
+    if (window.narrationEventBus && typeof window.narrationEventBus.publish === 'function') {
+        if (removedEvents.length) {
+            window.narrationEventBus.publish('eventAdded', { event: removedEvents[0], source: 'manual', provisionalId: null });
+        }
+        window.narrationEventBus.publish('pointChanged', {});
+    }
+    const n = summary.eventsUndone;
+    logEvent(`Redo: ${n} event${n === 1 ? '' : 's'} put back`);
+    saveAllTeamsData();
+    return summary;
+}
+
+/**
+ * Seed the Next line for the upcoming point from a roster, as a fresh
+ * explicit choice (stamped now, so resetPendingLinesAtPointEnd leaves it).
+ * Separate planning mode writes the line for the side the next point
+ * starts on; combined mode writes the O/D line.
+ */
+function seedPendingLine(game, roster) {
+    if (!game.pendingNextLine || !roster.length) return;
+    const separate = !!game.pendingNextLine.useSeparateLines;
+    const typeKey = separate ? (determineStartingPosition() === 'offense' ? 'o' : 'd') : 'od';
+    game.pendingNextLine[typeKey + 'Line'] = [...roster];
+    game.pendingNextLine[typeKey + 'LineModifiedAt'] = new Date().toISOString();
+    // late-bound back-edge (selectLine lives "above" this layer); the window
+    // shim at the owner is kept.
+    if (typeof window.updateSelectLinePanel === 'function') window.updateSelectLinePanel();
+}
+
 // Set up undo button event listener
 document.addEventListener('DOMContentLoaded', function() {
     const undoBtn = document.getElementById('undoBtn');
@@ -742,6 +1010,7 @@ document.addEventListener('DOMContentLoaded', function() {
 export {
     updateScore, recordScore, settlePointAfterTurnover, bankPendingPoints, endPointWithoutScore,
     summarizeGame, summarizeGameEntries, gameLogEntryOptions, downloadJSON, undoEvent,
+    undoToLogEntry, describeUndoToEntry, redoUndoToHere, canRedoUndoToHere,
     configureStartGameMode, appVersion,
 };
 // window survivor: late-bound back-edge hook (called by ui/eventLogDisplay.js,
