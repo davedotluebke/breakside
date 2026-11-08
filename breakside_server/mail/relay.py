@@ -14,7 +14,7 @@ from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
 from email.utils import getaddresses
 from urllib.parse import quote
-from typing import Any, Deque, Dict, List, Optional, Sequence
+from typing import Any, Deque, Dict, List, Optional, Sequence, Tuple
 
 from ._shared import config, storage
 from . import addresses, directory as directory_mod, policy, rewrite
@@ -45,20 +45,41 @@ class RelayResult:
         return asdict(self)
 
 
-def target_locals(msg, envelope_recipients: Optional[Sequence[str]], domain: str) -> List[str]:
-    """Local parts at our domain this message was addressed to.
+def _base_domain() -> str:
+    return getattr(config, "MAIL_BASE_DOMAIN", "") or ""
+
+
+def _resolve(local: str, domain: str, slugs, event_locals) -> Optional[addresses.Target]:
+    return addresses.resolve(local, domain, list_domain=config.MAIL_DOMAIN, base_domain=_base_domain(),
+                             slugs=slugs, event_locals=event_locals, forwards=config.mail_forwards())
+
+
+def _is_list_address(slugs, event_locals):
+    """For the loop guard: does this From address name one of our lists, in
+    any spelling? A system forward (``help@``) is deliberately not one."""
+    def check(addr: str) -> bool:
+        local, dom = addresses.split_address(addr)
+        target = _resolve(local, dom, slugs, event_locals) if dom else None
+        return target is not None and target.kind != "forward"
+    return check
+
+
+def target_addresses(msg, envelope_recipients: Optional[Sequence[str]]) -> List[Tuple[str, str]]:
+    """``(local, domain)`` pairs at our domains this message was addressed
+    to: the list domain, the base domain and its subdomains.
 
     SES hands us the envelope recipients, which is authoritative (a Bcc to a
     list shows up there and nowhere in the headers). The header scan is the
     fallback for the dev endpoint and for releases from quarantine.
     """
-    domain = domain.lower()
-    found: List[str] = []
+    found: List[Tuple[str, str]] = []
 
     def add(addr: str) -> None:
         local, dom = addresses.split_address(addr)
-        if dom == domain and local and local not in found:
-            found.append(local)
+        dom = dom.rstrip(".")
+        if local and addresses.is_our_domain(dom, list_domain=config.MAIL_DOMAIN, base_domain=_base_domain()) \
+                and (local, dom) not in found:
+            found.append((local, dom))
 
     for addr in envelope_recipients or []:
         add(addr)
@@ -81,6 +102,12 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
                     source: str = "sqs", force: bool = False) -> List[RelayResult]:
     """Relay one received message to every list address it was sent to.
 
+    Every spelling of an address (``parents-cudo@team.…``, ``parents@cudo.…``,
+    ``cudo@<base>``) resolves to the same list; from here on ``local`` is the
+    canonical list-spelling local part, which is what every log row,
+    quarantine record and ``X-Breakside-List`` carries, and ``address`` the
+    spelling the deployment prefers, which is what goes out as From.
+
     ``force`` is the quarantine-release path (sender allow-list and post
     policy skipped; loop and enablement checks still apply).
     """
@@ -92,6 +119,7 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
     message_id = str(msg.get("Message-ID", "") or "")[:200]
     slugs = storage.list_mail_slugs()
     event_locals = storage.list_mail_event_locals()
+    is_own = _is_list_address(slugs.keys(), event_locals)
 
     results: List[Optional[RelayResult]] = []
     # Player aliases of one team addressed by the same message are relayed
@@ -99,14 +127,24 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
     # one copy, not one per player. Their slots in ``results`` are filled in
     # afterwards so the order still follows the envelope.
     pending: Dict[str, List[_PlayerTarget]] = {}
-    for local in target_locals(msg, envelope_recipients, domain):
-        address = f"{local}@{domain}"
-        parsed = addresses.parse_local_part(local, slugs.keys(), event_locals)
-        if parsed is None:
+    seen_locals: set = set()
+    for local_in, dom in target_addresses(msg, envelope_recipients):
+        target = _resolve(local_in, dom, slugs.keys(), event_locals)
+        if target is None:
+            address = f"{local_in}@{dom}"
             logger.info("mail: dropped message to unknown address %s from %s", address, addresses.mask_address(author_email))
             results.append(RelayResult(address, None, "drop", "unknown-address"))
             continue
-        kind, slug, alias = parsed
+        if target.kind == "forward":
+            results.append(_forward(raw, target, headers, envelope_from, verdicts, author_name, author_email, is_own))
+            continue
+        kind, slug, alias = target.kind, target.slug, target.alias
+        local = target.local
+        if local in seen_locals:
+            # The same list under two spellings on one envelope is one list.
+            continue
+        seen_locals.add(local)
+        address = directory_mod.preferred_address(kind, slug, alias)
         team_id = slugs[slug]
         directory = storage.get_mail_directory(team_id)
         if directory is None:
@@ -120,7 +158,7 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
             "verdicts": verdicts or None,
         }
 
-        loop = policy.loop_reason(headers, domain, envelope_from=envelope_from)
+        loop = policy.loop_reason(headers, domain, envelope_from=envelope_from, is_own=is_own)
         if loop:
             log_id = _log(team_id, {**base_entry, "action": "dropped", "recipients": 0, "reason": loop})
             results.append(RelayResult(address, team_id, "drop", loop, log_id=log_id))
@@ -156,6 +194,50 @@ def process_inbound(raw: bytes, *, envelope_recipients: Optional[Sequence[str]] 
         for target, result in zip(targets, grouped):
             results[target.index] = result
     return [r for r in results if r is not None]
+
+
+def _forward(raw, target: addresses.Target, headers, envelope_from, verdicts,
+             author_name, author_email, is_own) -> RelayResult:
+    """Relay a system forward (``help@<base>``) to its one configured recipient.
+
+    Open to any sender — nobody reviews a quarantine for the support address,
+    so what SES's scan says to hold (a DMARC failure) is dropped instead —
+    with the From rewritten like any list, Reply-To the author and the To
+    header untouched, so the recipient's mail client picks its "send as"
+    identity from it and a reply comes from the support address as before.
+    No List-* headers (``rewrite_message(list_headers=False)``); our own
+    ``X-Breakside-List`` marker still catches the mail coming back. There is
+    no team, so the only record is the journal line; a bounce of the
+    recipient is likewise journal-only (``inbound.py`` finds no contact to
+    stamp) and never suppresses the next forward.
+    """
+    address = f"{target.local}@{_base_domain()}"
+    masked = addresses.mask_address(author_email)
+    loop = policy.loop_reason(headers, _base_domain(), envelope_from=envelope_from, is_own=is_own, forward=True)
+    if loop:
+        logger.info("mail: dropped forward to %s from %s (%s)", address, masked, loop)
+        return RelayResult(address, None, "drop", loop)
+    verdict = policy.verdict_reason(verdicts)
+    if verdict:
+        logger.info("mail: dropped forward to %s from %s (%s)", address, masked, verdict[1])
+        return RelayResult(address, None, "drop", verdict[1])
+    out = rewrite.rewrite_message(
+        raw,
+        list_address=address,
+        list_display=f"Breakside {target.local.capitalize()}",
+        subject_tag="",
+        reply_to_mode="author",
+        author=(author_name, author_email),
+        list_key=target.local,
+        list_headers=False,
+    )
+    try:
+        provider_id = get_transport().send(from_addr=address, recipients=[target.forward_to], raw=out)
+    except TransportError as exc:
+        logger.error("mail: forward %s failed: %s", address, exc)
+        raise
+    logger.info("mail: forwarded %s from %s", address, masked)
+    return RelayResult(address, None, "relay", None, 1, provider_id)
 
 
 def _team_display(directory: Dict[str, Any]) -> str:
@@ -201,8 +283,12 @@ def _log_action(base_entry: Dict[str, Any]) -> str:
 
 
 def _relay(raw, team_id, directory, decision, local, domain, author_name, author_email, base_entry) -> RelayResult:
-    """One send to everyone on a group list (parents, coaches, staff, all)."""
-    address = f"{local}@{domain}"
+    """One send to everyone on a group list (parents, coaches, staff, all).
+
+    ``local`` is the canonical list key; the From address is the preferred
+    spelling, while List-Id keeps the key at the list domain so parents'
+    filters survive a change of spelling."""
+    address = directory_mod.preferred_address(decision.kind, directory["slug"], decision.alias)
     settings = decision.list_settings
     total = len(decision.recipients)
     out = rewrite.rewrite_message(
@@ -211,10 +297,12 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
         list_display=_list_display(directory, decision),
         subject_tag=settings.get("subjectTag", ""),
         reply_to_mode=settings.get("replyTo", "list"),
-        coaches_address=addresses.address("coaches", directory["slug"], domain),
+        coaches_address=directory_mod.preferred_address("coaches", directory["slug"]),
         coaches_display=f"Coaches {_team_display(directory)}",
         author=(author_name, author_email),
         also_reply_to=_also_reply_to(author_name, author_email, decision.recipients),
+        list_key=local,
+        list_id_domain=domain,
     )
     emails = [c["email"] for c in decision.recipients]
     try:
@@ -284,8 +372,12 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
     directory = targets[0].directory
     settings = targets[0].decision.list_settings
     team_name = _team_display(directory)
-    coaches_address = addresses.address("coaches", directory["slug"], domain)
+    coaches_address = directory_mod.preferred_address("coaches", directory["slug"])
     by_local = {t.local: t for t in targets}
+    slug = directory["slug"]
+
+    def alias_address(target: _PlayerTarget) -> str:
+        return directory_mod.preferred_address("player", slug, target.decision.alias)
 
     # address → its role and the aliases it is behind, in envelope order
     reach: Dict[str, Dict[str, Any]] = {}
@@ -306,7 +398,7 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
     provider_ids: List[str] = []
     for (kind, locals_), emails in sends.items():
         covered = [by_local[local] for local in locals_]
-        address = f"{locals_[0]}@{domain}"
+        address = alias_address(covered[0])
         players = [t.decision.player for t in covered]
         out = rewrite.rewrite_message(
             raw,
@@ -320,8 +412,10 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
             subject_marker=COPY_MARKERS.get(kind, ""),
             also_reply_to=_also_reply_to(author_name, author_email,
                                          [c for t in covered for c in t.decision.recipients]),
-            reply_to_lists=[(_player_display(p, team_name), f"{t.local}@{domain}")
+            reply_to_lists=[(_player_display(p, team_name), alias_address(t))
                             for t, p in zip(covered, players)],
+            list_key=locals_[0],
+            list_id_domain=domain,
         )
         try:
             sent_id = get_transport().send(from_addr=address, recipients=emails, raw=out)
@@ -341,7 +435,7 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
     results = []
     for target in targets:
         total = len(target.decision.recipients)
-        address = f"{target.local}@{domain}"
+        address = alias_address(target)
         others = [t.local for t in targets if t is not target]
         # Every send's id goes on every alias's row: a coach copy covering two
         # aliases can bounce, and either row should show it.
@@ -359,7 +453,7 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
 
 
 def _quarantine(raw, team_id, directory, decision, local, domain, contacts, base_entry) -> RelayResult:
-    address = f"{local}@{domain}"
+    address = directory_mod.preferred_address(decision.kind, directory["slug"], decision.alias)
     item = storage.add_mail_quarantine(team_id, {
         "list": local, "kind": decision.kind, "alias": decision.alias,
         "from": base_entry["from"], "fromName": base_entry["fromName"],
@@ -370,7 +464,7 @@ def _quarantine(raw, team_id, directory, decision, local, domain, contacts, base
     log_id = _log(team_id, {**base_entry, "action": "quarantined", "recipients": 0,
                             "reason": decision.reason, "quarantineId": item["id"]})
     logger.info("mail: held message to %s from %s (%s)", address, addresses.mask_address(base_entry["from"]), decision.reason)
-    _notify_quarantine(team_id, directory, contacts, item, domain, excerpt=rewrite.excerpt(raw))
+    _notify_quarantine(team_id, directory, contacts, item, domain, excerpt=rewrite.excerpt(raw), address=address)
     return RelayResult(address, team_id, "quarantine", decision.reason, quarantine_id=item["id"], log_id=log_id)
 
 
@@ -394,7 +488,7 @@ def review_url(team_id: str) -> str:
 
 
 def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: Dict[str, Any], domain: str,
-                       *, excerpt: str = "") -> None:
+                       *, excerpt: str = "", address: Optional[str] = None) -> None:
     coach_addresses = [a for c in contacts if c.get("kind") == "coach" for a in policy.deliverable_addresses(c)]
     if not coach_addresses:
         return
@@ -408,14 +502,15 @@ def _notify_quarantine(team_id: str, directory: Dict[str, Any], contacts, item: 
             return
         times.append(now)
 
-    coaches_address = addresses.address("coaches", directory["slug"], domain)
+    coaches_address = directory_mod.preferred_address("coaches", directory["slug"])
+    held_address = address or f"{item['list']}@{domain}"
     why = REASON_TEXT.get(item.get("reason") or "", item.get("reason") or "held for review")
     # The opening of the message, so the coaches can tell whose question it
     # is (and whether it is for them at all) from the notice alone.
     begins = (f"It begins:\n\n{textwrap.fill(excerpt, 72, initial_indent='    ', subsequent_indent='    ')}\n\n"
               if excerpt else "It has no readable text (an attachment or image only, perhaps).\n\n")
     body = (
-        f"A message to {item['list']}@{domain} was held and not delivered.\n\n"
+        f"A message to {held_address} was held and not delivered.\n\n"
         f"From:    {item.get('fromName') or ''} <{item.get('from') or 'unknown'}>\n"
         f"Subject: {item.get('subject') or '(no subject)'}\n"
         f"Reason:  {why}\n\n"
@@ -461,8 +556,8 @@ def send_test_message(team_id: str, to_email: str, requester: str) -> str:
     directory = storage.get_mail_directory(team_id)
     if directory is None:
         raise FileNotFoundError(team_id)
-    domain = config.MAIL_DOMAIN
-    from_address = addresses.address("all", directory["slug"], domain)
+    from_address = directory_mod.preferred_address("all", directory["slug"])
+    coaches_address = directory_mod.preferred_address("coaches", directory["slug"])
     body = (
         f"This is a test message from your team's mailing lists.\n\n"
         f"Requested by {requester}. If you can read this, outbound mail from "
@@ -480,8 +575,8 @@ def send_test_message(team_id: str, to_email: str, requester: str) -> str:
     # A test must be answerable: strip the auto-generated marker so a reply
     # to it is a normal human message, and point the reply at the coaches.
     raw = re.sub(rb"(?im)^Auto-Submitted:.*\r?\n", b"", raw, count=1)
-    raw = raw.replace(b"\r\n\r\n", f"\r\nReply-To: {addresses.address('coaches', directory['slug'], domain)}\r\n\r\n".encode(), 1) \
-        if b"\r\n\r\n" in raw else raw.replace(b"\n\n", f"\nReply-To: {addresses.address('coaches', directory['slug'], domain)}\n\n".encode(), 1)
+    raw = raw.replace(b"\r\n\r\n", f"\r\nReply-To: {coaches_address}\r\n\r\n".encode(), 1) \
+        if b"\r\n\r\n" in raw else raw.replace(b"\n\n", f"\nReply-To: {coaches_address}\n\n".encode(), 1)
     provider_id = get_transport().send(from_addr=from_address, recipients=[to_email], raw=raw)
     storage.append_mail_log(team_id, {
         "action": "test", "list": directory["slug"], "from": from_address, "fromName": requester,

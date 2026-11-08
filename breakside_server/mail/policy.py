@@ -25,7 +25,7 @@ The rules, in the order relay.py applies them:
 """
 from dataclasses import dataclass, field
 from email.utils import parseaddr
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 from .addresses import normalize_email
 
@@ -72,12 +72,24 @@ def _is_null_sender(value: Optional[str]) -> bool:
 
 
 def loop_reason(headers: Mapping[str, str], own_domain: str,
-                envelope_from: Optional[str] = None) -> Optional[str]:
+                envelope_from: Optional[str] = None, *,
+                is_own: Optional[Callable[[str], bool]] = None,
+                forward: bool = False) -> Optional[str]:
     """Return why this message must not be relayed, or None if it may be.
 
     ``headers`` is a case-insensitive-ish mapping (relay.py passes a dict of
     lowercased header names to their first value). ``envelope_from`` is the
     SMTP MAIL FROM when the caller knows it.
+
+    ``is_own`` decides whether the From address is one of our list
+    addresses (the relay passes the resolver, so every spelling counts and a
+    system forward such as ``help@`` does not: a coach writing to a list
+    from the support identity is a person, not a loop). Without it, the
+    check falls back to "any address at ``own_domain``". ``forward`` is the
+    system-forward path, which skips the Precedence check: DMARC aggregate
+    reports and the like are addressed to ``help@`` and some carry
+    ``Precedence: bulk``; our own header and the auto-submitted markers
+    still apply, so a vacation responder answering a forward is dropped.
 
     Two families: our own mail coming back (``loop-*``) and mail no human
     wrote (``auto-*``). The important case of the second is a delivery
@@ -91,7 +103,7 @@ def loop_reason(headers: Mapping[str, str], own_domain: str,
     if lower.get("x-breakside-list"):
         return "loop-own-header"
     precedence = lower.get("precedence", "").strip().lower()
-    if precedence in ("list", "bulk", "junk"):
+    if precedence in ("list", "bulk", "junk") and not forward:
         return "loop-precedence"
     auto = lower.get("auto-submitted", "").strip().lower()
     if auto and not auto.startswith("no"):
@@ -107,7 +119,11 @@ def loop_reason(headers: Mapping[str, str], own_domain: str,
         return "auto-mailer-daemon"
     if _is_null_sender(envelope_from) or _is_null_sender(lower.get("return-path")):
         return "auto-null-sender"
-    if own_domain and f"@{own_domain.lower()}" in sender_from.lower():
+    sender_addr = parseaddr(sender_from)[1].strip().lower()
+    if is_own is not None:
+        if sender_addr and is_own(sender_addr):
+            return "loop-own-address"
+    elif own_domain and f"@{own_domain.lower()}" in sender_from.lower():
         return "loop-own-address"
     return None
 

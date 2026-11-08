@@ -199,11 +199,29 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
                     author: Optional[Tuple[str, str]] = None,
                     subject_marker: str = "",
                     also_reply_to: Optional[Tuple[str, str]] = None,
-                    reply_to_lists: Optional[Sequence[Tuple[str, str]]] = None) -> bytes:
+                    reply_to_lists: Optional[Sequence[Tuple[str, str]]] = None,
+                    list_key: Optional[str] = None,
+                    list_id_domain: Optional[str] = None,
+                    list_headers: bool = True) -> bytes:
     """Return the relayed form of ``raw``.
 
     Args:
-        list_address: ``parents-cudo@team.breakside.pro``.
+        list_address: ``parents-cudo@team.breakside.pro`` — or the subdomain
+            spelling, ``parents@cudo.breakside.pro``; whatever the deployment
+            shows, this is what From and List-Post carry.
+        list_key: the list's canonical local part (``parents-cudo``) when it
+            differs from ``list_address``'s: it goes into ``X-Breakside-List``,
+            the RFC 2369 subjects and ``List-Id``, so those stay the same
+            whichever spelling is in use. Defaults to the address's local part.
+        list_id_domain: the domain ``List-Id`` ends in (the list domain,
+            ``team.breakside.pro``). Parents filter on List-Id, so it must
+            not change when the preferred spelling does. Defaults to the
+            address's domain.
+        list_headers: False for a system forward (``help@``): keep the From
+            rewrite, Reply-To and our own ``X-Breakside-List`` loop marker,
+            but add none of the List-* headers or ``Precedence: list``, so
+            a support inbox does not file it under lists or offer to
+            unsubscribe.
         list_display: ``CUDO Parents`` — appears in "Name via CUDO Parents"
             and the List-Id display name.
         subject_tag: ``[CUDO Parents]`` or empty for none.
@@ -228,6 +246,8 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
     name, addr = author or sender_of(msg)
     display = name.strip() or (addr.split("@", 1)[0] if addr else "Someone")
     local, _, domain = list_address.partition("@")
+    key = list_key or local
+    id_domain = list_id_domain or domain
 
     original_from = str(msg.get("From", "") or "")
     original_reply_to = str(msg.get("Reply-To", "") or "")
@@ -268,17 +288,18 @@ def rewrite_message(raw: bytes, *, list_address: str, list_display: str,
     if not msg.get("Message-ID"):
         msg["Message-ID"] = make_msgid(domain=domain or None)
 
-    msg["List-Id"] = f"{_quote_display(list_display)} <{local}.{domain}>"
-    msg["List-Post"] = f"<mailto:{list_address}>"
-    # RFC 2369 contact headers. Membership is managed by the coaches, so the
-    # unsubscribe and help addresses are the coaches list; Gmail and friends
-    # weigh the presence of these on anything that carries List-Id.
-    owner = coaches_address or list_address
-    msg["List-Unsubscribe"] = f"<mailto:{owner}?subject=unsubscribe%20{local}>"
-    msg["List-Help"] = f"<mailto:{owner}?subject=help%20{local}>"
-    msg["List-Owner"] = f"<mailto:{owner}>"
-    msg["Precedence"] = "list"
-    msg["X-Breakside-List"] = local
+    if list_headers:
+        msg["List-Id"] = f"{_quote_display(list_display)} <{key}.{id_domain}>"
+        msg["List-Post"] = f"<mailto:{list_address}>"
+        # RFC 2369 contact headers. Membership is managed by the coaches, so the
+        # unsubscribe and help addresses are the coaches list; Gmail and friends
+        # weigh the presence of these on anything that carries List-Id.
+        owner = coaches_address or list_address
+        msg["List-Unsubscribe"] = f"<mailto:{owner}?subject=unsubscribe%20{key}>"
+        msg["List-Help"] = f"<mailto:{owner}?subject=help%20{key}>"
+        msg["List-Owner"] = f"<mailto:{owner}>"
+        msg["Precedence"] = "list"
+    msg["X-Breakside-List"] = key
 
     return msg.as_bytes()
 

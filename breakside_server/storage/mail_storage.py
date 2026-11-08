@@ -288,6 +288,12 @@ def update_mail_settings(team_id: str, *, slug: Optional[str] = None,
         if directory is None:
             raise FileNotFoundError(team_id)
         if slug and slug != directory["slug"]:
+            for contact in directory["contacts"]:
+                if contact.get("alias") == slug:
+                    raise ValueError(f"The address name \"{slug}\" is already {contact['name']}'s player address name.")
+            for event in directory.get("events") or []:
+                if event.get("slug") == slug:
+                    raise ValueError(f"The address name \"{slug}\" is already the {event['name']} event list's address name.")
             with _slugs.update() as index:
                 _claim_slug(index, slug, team_id)
                 # Event addresses carry the slug: cudo-states → cudo-mixed-states.
@@ -488,6 +494,13 @@ def _validate_contact(directory: Dict[str, Any], contact: Dict[str, Any],
         event_owner = (_slugs.load().get("events") or {}).get(local)
         if event_owner:
             raise ValueError(f"The address name \"{alias}\" would clash with an event list's address.")
+        # In the subdomain spelling (alice@cudo.<base>) an alias shares its
+        # namespace with the team's own name and its event names.
+        if alias == directory["slug"]:
+            raise ValueError(f"The address name \"{alias}\" is the team's own address name.")
+        for event in directory.get("events") or []:
+            if event.get("slug") == alias:
+                raise ValueError(f"The address name \"{alias}\" is already the {event['name']} event list's address name.")
     for other in directory["contacts"]:
         if other["id"] == exclude_id:
             continue
@@ -708,14 +721,19 @@ def _validate_event(directory: Dict[str, Any], event: Dict[str, Any], *,
             continue
         if other.get("slug") == event["slug"]:
             raise ValueError(f"The event address name \"{event['slug']}\" is already used by {other['name']}.")
+    if event["slug"] == directory["slug"]:
+        raise ValueError(f"The event address name \"{event['slug']}\" is the team's own address name.")
     local = f"{directory['slug']}-{event['slug']}"
     # Within the team, the event address must not be a player's alias address
-    # read the other way round (slug ``s``, event ``x-s``, alias ``s-x``).
+    # read the other way round (slug ``s``, event ``x-s``, alias ``s-x``), and
+    # in the subdomain spelling (states@cudo.<base>) not an alias at all.
     parsed = _addresses.parse_local_part(local, [directory["slug"]])
-    if parsed and parsed[0] == "player":
-        for contact in directory["contacts"]:
-            if contact.get("alias") == parsed[2]:
-                raise ValueError(f"The address \"{local}\" is already {contact['name']}'s player address.")
+    reversed_alias = parsed[2] if parsed and parsed[0] == "player" else None
+    for contact in directory["contacts"]:
+        if contact.get("alias") == event["slug"]:
+            raise ValueError(f"The event address name \"{event['slug']}\" is already {contact['name']}'s player address name.")
+        if reversed_alias and contact.get("alias") == reversed_alias:
+            raise ValueError(f"The address \"{local}\" is already {contact['name']}'s player address.")
 
 
 def add_mail_event(team_id: str, event: Dict[str, Any]) -> Dict[str, Any]:

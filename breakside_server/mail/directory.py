@@ -14,6 +14,50 @@ from . import addresses
 LIST_ORDER = ("all", "parents", "coaches", "staff", "players")
 
 
+# ---------------------------------------------------------------- spellings
+# Every list has two spellings once a base domain is configured (see
+# mail/addresses.py): the list spelling, parents-cudo@team.breakside.pro,
+# and the subdomain spelling, parents@cudo.breakside.pro. Inbound both are
+# accepted; these helpers decide what the app shows and the relay sends From.
+
+def address_style() -> str:
+    """``subdomain`` only when configured and a base domain exists; else ``list``."""
+    style = getattr(config, "MAIL_ADDRESS_STYLE", "list")
+    return "subdomain" if style == "subdomain" and getattr(config, "MAIL_BASE_DOMAIN", "") else "list"
+
+
+def preferred_address(kind: str, slug: str, alias: Optional[str] = None, *, style: Optional[str] = None) -> str:
+    return addresses.address(kind, slug, config.MAIL_DOMAIN, alias,
+                             base_domain=getattr(config, "MAIL_BASE_DOMAIN", ""),
+                             style=style or address_style())
+
+
+def address_patterns(slug: str, *, style: Optional[str] = None) -> Dict[str, str]:
+    """``playerPattern`` / ``eventPattern`` with ``<name>`` / ``<event>`` placeholders."""
+    style = style or address_style()
+    base = getattr(config, "MAIL_BASE_DOMAIN", "")
+    if style == "subdomain" and base:
+        return {"playerPattern": f"<name>@{slug}.{base}", "eventPattern": f"<event>@{slug}.{base}"}
+    return {"playerPattern": f"<name>-{slug}@{config.MAIL_DOMAIN}",
+            "eventPattern": f"{slug}-<event>@{config.MAIL_DOMAIN}"}
+
+
+def spelling_view(slug: str) -> Dict[str, Any]:
+    """What the screen needs to show and preview addresses: the list domain,
+    the base domain (empty when there is none), which spelling is preferred,
+    and — when both exist — the other spelling of every list, so a coach can
+    tell a parent "the old address still works"."""
+    style = address_style()
+    base = getattr(config, "MAIL_BASE_DOMAIN", "")
+    out: Dict[str, Any] = {"domain": config.MAIL_DOMAIN, "baseDomain": base, "addressStyle": style}
+    if base and slug:
+        other = "list" if style == "subdomain" else "subdomain"
+        alt = {kind: preferred_address(kind, slug, style=other) for kind in LIST_ORDER}
+        alt.update(address_patterns(slug, style=other))
+        out["altAddresses"] = alt
+    return out
+
+
 def derived_coach_contacts(team_id: str) -> List[Dict[str, Any]]:
     coaches = []
     for membership in storage.get_team_memberships(team_id):
@@ -70,6 +114,8 @@ def ensure_player_aliases(team_id: str) -> List[Dict[str, Any]]:
         raise FileNotFoundError(team_id)
     taken = [c.get("alias") for c in directory["contacts"] if c.get("alias")]
     taken.append(directory["slug"])
+    # In the subdomain spelling an alias and an event name share a namespace.
+    taken.extend(e["slug"] for e in directory.get("events") or [] if e.get("slug"))
     have = {c["playerIds"][0] for c in directory["contacts"]
             if c["kind"] == "player" and c.get("playerIds")}
     plan = []
@@ -85,11 +131,15 @@ def ensure_player_aliases(team_id: str) -> List[Dict[str, Any]]:
 
 
 def team_addresses(directory: Dict[str, Any], domain: Optional[str] = None) -> Dict[str, str]:
-    domain = domain or config.MAIL_DOMAIN
+    """The team's addresses in the preferred spelling, plus the ``<name>`` /
+    ``<event>`` patterns and, with a base domain, ``apex``: ``cudo@<base>``,
+    the shortest way to reach everyone (accepted in either style)."""
     slug = directory["slug"]
-    out = {kind: addresses.address(kind, slug, domain) for kind in LIST_ORDER}
-    out["playerPattern"] = f"<name>-{slug}@{domain}"
-    out["eventPattern"] = f"{slug}-<event>@{domain}"
+    out = {kind: preferred_address(kind, slug) for kind in LIST_ORDER}
+    out.update(address_patterns(slug))
+    base = getattr(config, "MAIL_BASE_DOMAIN", "")
+    if base:
+        out["apex"] = addresses.apex_address(slug, base)
     return out
 
 
@@ -124,10 +174,9 @@ def event_view(directory: Dict[str, Any], event: Dict[str, Any], contacts: List[
                domain: Optional[str] = None) -> Dict[str, Any]:
     """One event list as the admin screen renders it: the record plus its
     address and who it reaches right now."""
-    domain = domain or config.MAIL_DOMAIN
     return {
         **event,
-        "address": addresses.address("event", directory["slug"], domain, event["slug"]),
+        "address": preferred_address("event", directory["slug"], event["slug"]),
         "recipients": list_members_view("event", contacts, event=event),
     }
 
@@ -189,7 +238,7 @@ def directory_view(team_id: str) -> Dict[str, Any]:
     if directory is None:
         return {
             "configured": False,
-            "domain": domain,
+            **spelling_view(""),
             "transport": getattr(config, "MAIL_TRANSPORT", "none"),
             "inboundEnabled": config.mail_inbound_enabled(),
             "roster": roster,
@@ -210,23 +259,23 @@ def directory_view(team_id: str) -> Dict[str, Any]:
             **player,
             "contactId": contact["id"] if contact else None,
             "alias": contact["alias"] if contact else None,
-            "address": addresses.address("player", directory["slug"], domain, contact["alias"]) if contact else None,
+            "address": preferred_address("player", directory["slug"], contact["alias"]) if contact else None,
         })
 
     lists = {}
     for kind in LIST_ORDER:
         settings = dict(directory["lists"].get(kind) or {})
-        settings["address"] = addresses.address(kind, directory["slug"], domain)
+        settings["address"] = preferred_address(kind, directory["slug"])
         settings["recipients"] = list_members_view(kind, contacts)
         lists[kind] = settings
     player_settings = dict(directory["lists"].get("player") or {})
-    player_settings["address"] = f"<name>-{directory['slug']}@{domain}"
+    player_settings["address"] = address_patterns(directory["slug"])["playerPattern"]
     lists["player"] = player_settings
     events = [event_view(directory, e, contacts, domain) for e in directory.get("events") or []]
 
     return {
         "configured": True,
-        "domain": domain,
+        **spelling_view(directory["slug"]),
         "transport": getattr(config, "MAIL_TRANSPORT", "none"),
         "inboundEnabled": config.mail_inbound_enabled(),
         "teamId": team_id,
@@ -309,7 +358,7 @@ def lookup_address(team_id: str, email: str) -> Dict[str, Any]:
                 player_id = (c.get("playerIds") or [None])[0]
                 player_addresses.append({
                     "alias": c["alias"],
-                    "address": addresses.address("player", directory["slug"], domain, c["alias"]),
+                    "address": preferred_address("player", directory["slug"], c["alias"]),
                     "playerName": names.get(player_id, player_id),
                 })
     may_post_players = bool(active) and player_settings.get("enabled", True) \
@@ -341,7 +390,7 @@ def lookup_address(team_id: str, email: str) -> Dict[str, Any]:
             "id": ev["id"],
             "name": ev.get("name") or ev.get("slug"),
             "slug": ev.get("slug"),
-            "address": addresses.address("event", directory["slug"], domain, ev.get("slug")),
+            "address": preferred_address("event", directory["slug"], ev.get("slug")),
             "enabled": enabled,
             "mayPost": ev_may_post,
             "receives": ev_receives,

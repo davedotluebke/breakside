@@ -25,9 +25,30 @@ it last (``alice-cudo``), so the two can only collide across teams (team
 ``states``). Storage refuses an event name whose address already resolves
 to another team under the slug rules, and an alias or slug that would form
 an existing event address, so every address resolves one way.
+
+**The subdomain spelling** (Comms Phase 0.5). When a base domain is
+configured, every list is also reachable with the team named by the domain
+and nothing but the list in the local part::
+
+    team@cudo.<base>         everyone        (also cudo@<base>, and cudo@cudo.<base>)
+    parents@cudo.<base>      guardians + coaches (+managers)
+    coaches@cudo.<base>      coaches
+    alice@cudo.<base>        the player alias
+    states@cudo.<base>       the event list
+
+The slug is in the domain, so there is no longest-suffix guessing and no
+cross-team ambiguity; the one rule it adds is that within a team an alias,
+an event name and the word ``team`` share a single namespace (storage
+refuses an alias that equals an event name and the reverse; where old data
+already has both, the event wins). ``resolve`` reads every spelling back to
+the same ``(kind, slug, alias)``; ``local_part`` of that is the canonical
+key every log and quarantine record keeps, whatever spelling arrived.
+The base domain also carries *system forwards* (``help@<base>``): open
+addresses relayed to one configured recipient, see ``resolve``.
 """
 import re
 import unicodedata
+from dataclasses import dataclass
 from typing import Dict, Iterable, Mapping, Optional, Tuple
 
 # Kinds of list a local part can resolve to, and the prefix each one uses.
@@ -45,6 +66,10 @@ RESERVED = frozenset({
     "postmaster", "abuse", "hostmaster", "webmaster", "admin", "administrator",
     "root", "noreply", "no-reply", "help", "support", "info", "mail", "mailer",
     "mailer-daemon", "bounce", "bounces", "www", "team", "teams", "breakside",
+    # Hostnames that exist in the zone. A wildcard MX never covers a name that
+    # already has records, so a slug equal to one would be a dead address at
+    # <slug>.<base>; add any new hostname here in the change that creates it.
+    "api", "staging", "app",
     "all", "everyone", "list", "lists", "owner", "request", "security",
     "parent", "parents", "coach", "coaches", "staff", "player", "players",
     "guardian", "guardians", "manager", "managers", "captain", "captains",
@@ -196,7 +221,43 @@ def local_part(kind: str, slug: str, alias: Optional[str] = None) -> str:
     raise ValueError(f"unknown list kind: {kind}")
 
 
-def address(kind: str, slug: str, domain: str, alias: Optional[str] = None) -> str:
+# The local part of every list in the subdomain spelling, where the team is
+# named by the domain. "all" is the word ``team`` (reserved, so no alias can
+# claim it); ``resolve`` also reads the slug itself there, since people
+# guess ``cudo@cudo.<base>``.
+ALL_SUBDOMAIN_LOCAL = "team"
+
+
+def subdomain_local(kind: str, slug: str, alias: Optional[str] = None) -> str:
+    """The local part at ``<slug>.<base>``: ``team``, ``parents``, ``alice``, ``states``."""
+    if kind == "all":
+        return ALL_SUBDOMAIN_LOCAL
+    if kind in ("player", "event"):
+        if not alias:
+            raise ValueError(f"{kind} lists need an alias")
+        return alias
+    if kind in LIST_PREFIXES:
+        return LIST_PREFIXES[kind]
+    raise ValueError(f"unknown list kind: {kind}")
+
+
+def apex_address(slug: str, base_domain: str) -> str:
+    """``cudo@<base>``: the short spelling of a team's "everyone" list."""
+    return f"{slug}@{base_domain}"
+
+
+def address(kind: str, slug: str, domain: str, alias: Optional[str] = None, *,
+            base_domain: Optional[str] = None, style: str = "list") -> str:
+    """The address of a list in the spelling the deployment prefers.
+
+    ``style`` ``list`` (the default) is ``parents-cudo@<domain>``;
+    ``subdomain`` is ``parents@cudo.<base_domain>`` and falls back to the
+    list spelling when no base domain is configured. Inbound, both are
+    always accepted (``resolve``); this only decides what the app shows
+    and the relay sends From.
+    """
+    if style == "subdomain" and base_domain:
+        return f"{subdomain_local(kind, slug, alias)}@{slug}.{base_domain}"
     return f"{local_part(kind, slug, alias)}@{domain}"
 
 
@@ -235,6 +296,109 @@ def parse_local_part(local: str, slugs: Iterable[str],
                     return (kind, slug, None)
             if SLUG_RE.match(prefix):
                 return ("player", slug, prefix)
+    return None
+
+
+def parse_subdomain_local(local: str, slug: str,
+                          event_names: Iterable[str] = ()) -> Optional[Tuple[str, str, Optional[str]]]:
+    """Resolve the local part of ``<local>@<slug>.<base>`` to ``(kind, slug, alias)``.
+
+    ``team`` and the slug itself are "everyone"; a list prefix word is that
+    list; a registered event name of this team is its event list; anything
+    else shaped like an alias is a player alias (whether it exists is
+    policy.py's business, as with the list spelling). Event names are
+    checked before aliases so a directory that predates the shared
+    namespace still resolves one way.
+    """
+    local = _fold(local.strip())
+    if local in (ALL_SUBDOMAIN_LOCAL, slug):
+        return ("all", slug, None)
+    for kind, word in LIST_PREFIXES.items():
+        if local == word:
+            return (kind, slug, None)
+    if local in set(event_names):
+        return ("event", slug, local)
+    if SLUG_RE.match(local) and local not in RESERVED:
+        return ("player", slug, local)
+    return None
+
+
+@dataclass(frozen=True)
+class Target:
+    """What one recipient address means to us.
+
+    ``kind`` is a list kind (``all``, ``parents``, …, ``player``, ``event``)
+    with ``slug`` and ``alias`` as ``parse_local_part`` returns them, or
+    ``forward`` for a system forward at the base domain, where ``alias`` is
+    the local part (``help``) and ``forward_to`` the configured recipient.
+    """
+    kind: str
+    slug: Optional[str] = None
+    alias: Optional[str] = None
+    forward_to: Optional[str] = None
+
+    @property
+    def local(self) -> str:
+        """The canonical local part: the list spelling's, which every log and
+        quarantine record keys on; for a forward, its own local part."""
+        if self.kind == "forward":
+            return self.alias or ""
+        return local_part(self.kind, self.slug or "", self.alias)
+
+
+def is_our_domain(domain: str, *, list_domain: str, base_domain: Optional[str] = None) -> bool:
+    """Whether mail to ``domain`` is ours to relay: the list domain, the base
+    domain, or any subdomain of the base (a wildcard MX brings them all)."""
+    domain = (domain or "").strip().lower().rstrip(".")
+    if not domain:
+        return False
+    if list_domain and domain == list_domain.lower():
+        return True
+    base = (base_domain or "").lower()
+    return bool(base) and (domain == base or domain.endswith(f".{base}"))
+
+
+def resolve(local: str, domain: str, *, list_domain: str, base_domain: Optional[str],
+            slugs: Iterable[str],
+            event_locals: Optional[Mapping[str, Tuple[str, str]]] = None,
+            forwards: Optional[Mapping[str, str]] = None) -> Optional[Target]:
+    """Read any spelling of one of our addresses back to a ``Target``.
+
+    - ``<local>@<list_domain>``: the list spelling (``parse_local_part``).
+    - ``<local>@<base>``: a system forward if ``local`` is in ``forwards``,
+      else a slug (``cudo@`` is everyone), else the list spelling again, so
+      ``parents-cudo@<base>`` works too.
+    - ``<local>@<slug>.<base>`` for a registered slug: the subdomain
+      spelling (``parse_subdomain_local``). An unregistered subdomain is
+      nobody's: the wildcard MX accepts it, this returns None, the relay
+      drops it as ``unknown-address``.
+
+    ``slugs`` is every registered slug, ``event_locals`` the registered
+    event addresses as ``list_mail_event_locals()`` gives them.
+    """
+    local = _fold((local or "").strip())
+    domain = (domain or "").strip().lower().rstrip(".")
+    if not local or not domain:
+        return None
+    slug_set = {s for s in slugs if s}
+
+    def listed(parsed):
+        return Target(*parsed) if parsed else None
+
+    if list_domain and domain == list_domain.lower():
+        return listed(parse_local_part(local, slug_set, event_locals))
+    base = (base_domain or "").lower()
+    if not base:
+        return None
+    if domain == base:
+        if forwards and local in forwards:
+            return Target("forward", alias=local, forward_to=forwards[local])
+        return listed(parse_local_part(local, slug_set, event_locals))
+    if domain.endswith(f".{base}"):
+        slug = domain[: -len(base) - 1]
+        if slug in slug_set:
+            event_names = [ev for (s, ev) in (event_locals or {}).values() if s == slug]
+            return listed(parse_subdomain_local(local, slug, event_names))
     return None
 
 

@@ -2,6 +2,7 @@
 Configuration for the Breakside server.
 """
 import os
+from typing import Dict
 from pathlib import Path
 
 # Data directory - can be overridden via environment variable
@@ -121,6 +122,25 @@ NARRATION_SLOW_MODEL = os.getenv("NARRATION_SLOW_MODEL", "claude-sonnet-4-5-2025
 # the AWS identifiers are defaults here: this repo is public, and they belong
 # in /etc/breakside/env on the box (recorded in the private ops repo).
 MAIL_DOMAIN = os.getenv("BREAKSIDE_MAIL_DOMAIN", "team.breakside.pro")
+# Phase 0.5 (TODO.Comms.md): with a base domain set, the relay also answers
+# at ``<local>@<slug>.<base>`` (``parents@cudo.breakside.pro``,
+# ``team@cudo.breakside.pro``, ``alice@cudo.breakside.pro``) and at
+# ``<slug>@<base>`` — the DNS side is a wildcard MX on the base domain and
+# the base domain verified in SES. Empty (the default) means the list domain
+# above is the only one, as for a self-hoster with a single ``team.``
+# subdomain. The legacy local parts (``parents-cudo``) stay the internal
+# key in every log and quarantine record whatever the spelling used.
+MAIL_BASE_DOMAIN = os.getenv("BREAKSIDE_MAIL_BASE_DOMAIN", "").strip().lower().rstrip(".")
+# Which spelling the app shows and the relay sends From: ``list``
+# (``parents-cudo@team.breakside.pro``) or ``subdomain``
+# (``parents@cudo.<base>``; needs the base identity verified for sending).
+# Both spellings are always accepted inbound once a base domain is set.
+MAIL_ADDRESS_STYLE = os.getenv("BREAKSIDE_MAIL_ADDRESS_STYLE", "list").strip().lower() or "list"
+# System forwards at the base domain, ``local=address`` pairs separated by
+# commas: ``help=you@example.org,postmaster=you@example.org``. Open to any
+# sender (that is the point of a help address), relayed to the one address
+# with the author in Reply-To; the real values live in the box's env.
+MAIL_FORWARDS = os.getenv("BREAKSIDE_MAIL_FORWARDS", "")
 # ``ses`` in production, ``file`` for local development and tests (writes each
 # outbound message as .eml into MAIL_OUTBOX_DIR), ``none`` to log and discard.
 MAIL_TRANSPORT = os.getenv("BREAKSIDE_MAIL_TRANSPORT", "none")
@@ -135,6 +155,18 @@ MAIL_CONFIGURATION_SET = os.getenv("BREAKSIDE_MAIL_CONFIGURATION_SET", "")
 MAIL_APP_URL = os.getenv("BREAKSIDE_MAIL_APP_URL", "https://www.breakside.pro/")
 MAIL_DIR = DATA_DIR / "mail"
 MAIL_OUTBOX_DIR = Path(os.getenv("BREAKSIDE_MAIL_OUTBOX_DIR", str(MAIL_DIR / "_outbox")))
+
+
+def mail_forwards() -> Dict[str, str]:
+    """``{local: address}`` parsed from ``MAIL_FORWARDS``; malformed pairs are
+    skipped. Reads the module attribute so a test can patch it."""
+    out: Dict[str, str] = {}
+    for pair in (MAIL_FORWARDS or "").split(","):
+        local, sep, target = pair.partition("=")
+        local, target = local.strip().lower(), target.strip().lower()
+        if sep and local and "@" in target:
+            out[local] = target
+    return out
 
 
 def mail_inbound_enabled() -> bool:
