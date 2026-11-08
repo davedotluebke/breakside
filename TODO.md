@@ -1480,6 +1480,11 @@ Remaining work:
     Start Point does.
   - **Left out, deliberately:** undoing End Game (the Review screen has no
     undo).
+  - **Closed on the phone (Dave, 2026-11-07):** the iOS text-selection
+    callout that landed on the dialog's Cancel under a still-held finger has
+    not recurred since the dialog went unselectable; and the blank mic /
+    hamburger icons seen once on staging were Font Awesome (cdnjs) failing
+    to load for that page load — a reload cleared it, nothing in the app.
   - **Field-watch:** whether the warn-then-reopen double tap annoys when a
     coach taps We Score by mistake and reaches straight for Undo (one extra
     tap now), and whether a reopened point's stopped clock is the right
