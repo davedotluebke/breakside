@@ -1450,8 +1450,8 @@ Remaining work:
   - The Full PBP "Last turnover was a:" panel currently exposes only `huck` and `good D` because those are the only orthogonal flags on the `Turnover` model today. To support "threw it away while attempting a *break* / *hammer* / *dump*" (and `sky` / `layout` for drops, e.g. receiver tried to layout but missed), add `break_flag`, `hammer_flag`, `dump_flag`, `sky_flag`, `layout_flag` to the `Turnover` constructor in `store/models.js` and surface them in `summarize()`.
   - Touch points: `store/models.js` (constructor + summarize), `playByPlay/fullPbp.js` (extend `TURNOVER_MODIFIERS`), `breakside_server/narration.py` slow-pass schema (add fields to the turnover event spec), `narration/narrationEngine.js` `applyTurnover` (forward the flags), and possibly `teams/gameSummary.js` if CSV columns enumerate flags.
   - Backwards compat: existing serialized turnovers without these flags should default false on load — no migration needed.
-- [x] **Feature**: Undo across point boundaries *(built 2026-10-25, branch
-  `undo-across-points`; see ARCHITECTURE.md § Undo)*. The premise here was
+- [x] **Feature**: Undo across point boundaries *(SHIPPED in 2.22.0,
+  2026-11-07, branch `undo-across-points`; see ARCHITECTURE.md § Undo)*. The premise here was
   stale: every Undo button was already live between points, so one tap after
   a score silently reopened the finished point — and after a between-points
   timeout it reverted the *score* and left the timeout on the reopened point
