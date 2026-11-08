@@ -104,7 +104,7 @@ SES identity + DKIM + MAIL FROM, S3 bucket, SNS topic, SQS queue, receipt rule s
 
 ## Phase 0.5 — Per-team subdomains and the apex (`team@cudo.breakside.pro`, `cudo@breakside.pro`)
 
-> Designed 2026-11-07, not started. Phase 0's addresses put the team's slug in
+> Designed 2026-11-07, shipped as 2.21.0 and cut over in production on 2026-11-08 (branch `mail-subdomains`). Phase 0's addresses put the team's slug in
 > the local part (`parents-cudo@team.breakside.pro`) because one subdomain
 > needed one MX record and the apex was Google's. Both constraints can go:
 > a wildcard MX gives every team its own subdomain, and verifying the apex in
@@ -210,14 +210,14 @@ the edges:
 
 ### Work list
 
-- [ ] Confirm the DNS provider accepts a wildcard MX host; lower the apex MX TTL a day ahead of the cutover
+- [x] DNS provider accepts a wildcard MX host (2026-11-08); TTL is zone-wide there, lowered for the cutover
 - [x] `addresses.py`: multi-domain parse + preferred render; in-team alias/event/`team` uniqueness; zone hostnames reserved; tests (branch `mail-subdomains`)
 - [x] `relay.py` / `policy.py`: three recipient shapes, system forwards, loop guard by resolution
 - [x] `config.py`: `BREAKSIDE_MAIL_BASE_DOMAIN`, `BREAKSIDE_MAIL_ADDRESS_STYLE`, `BREAKSIDE_MAIL_FORWARDS`; `breakside_server/README.md` env table
 - [x] `directory.py` views, `teams/teamMail.js` previews, `docs.html`, README, ARCHITECTURE.md § Team mailing lists
 - [x] `scripts/setup-mail-aws.sh`: second identity, receipt-rule recipients, DNS printout (`MAIL_BASE_DOMAIN=…`)
-- [ ] Ops: base identity verified, wildcard MX, DMARC check passes, forwards in the env, apex MX flipped (runbook checklist in breakside-ops)
-- [ ] Field test on the maintainer's team, then switch the display to the new form
+- [x] Ops (2026-11-08): base identity verified, wildcard MX, DMARC PASS on the subdomain From, forwards in the env, apex MX flipped (runbook checklist in breakside-ops)
+- [x] Field test on the maintainer's team in both spellings, display switched to the new form, help@ and <slug>@breakside.pro relayed (2026-11-08)
 
 ---
 
@@ -606,7 +606,7 @@ See [Phase 0](#phase-0--team-mailing-lists-teambreaksidepro) at the top of this 
 
 ### Phase 0.5 — Per-team subdomains and the apex
 
-See [Phase 0.5](#phase-05--per-team-subdomains-and-the-apex-teamcudobreaksidepro-cudobreaksidepro). Designed 2026-11-07; moves the lists to `<slug>.breakside.pro` and the apex MX to SES, with `help@` as a relay forward.
+See [Phase 0.5](#phase-05--per-team-subdomains-and-the-apex-teamcudobreaksidepro-cudobreaksidepro). Shipped as 2.21.0 and cut over 2026-11-08: lists at `<slug>.breakside.pro`, the apex MX on SES, `help@` as a relay forward.
 
 ### v1.0 — Comms MVP
 
