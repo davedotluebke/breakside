@@ -24,7 +24,7 @@
 
 ### Why a subdomain
 
-The apex `breakside.pro` MX points at Google Workspace, which is how `help@breakside.pro` works; DNS allows one MX per name, so the apex cannot be split between Google and a list relay by recipient. Lists therefore live at `team.breakside.pro`: one additive MX record, zero risk to the support address, DMARC reports keep flowing. Moving to the apex later (with `help@` becoming a one-member open list relayed by the same code) is possible once the relay has proven itself for a season.
+The apex `breakside.pro` MX points at Google Workspace, which is how `help@breakside.pro` works; DNS allows one MX per name, so the apex cannot be split between Google and a list relay by recipient. Lists therefore live at `team.breakside.pro`: one additive MX record, zero risk to the support address, DMARC reports keep flowing. Moving to the apex later (with `help@` becoming a one-member open list relayed by the same code) is possible once the relay has proven itself for a season. That move is now designed as [Phase 0.5](#phase-05--per-team-subdomains-and-the-apex-teamcudobreaksidepro-cudobreaksidepro).
 
 ### Architecture
 
@@ -93,12 +93,131 @@ SES identity + DKIM + MAIL FROM, S3 bucket, SNS topic, SQS queue, receipt rule s
 - [x] `scripts/setup-mail-aws.sh` + DNS record list; ops notes to breakside-ops
 - [x] ARCHITECTURE.md § Team mailing lists; `boto3` in requirements
 - [x] Directory search on the admin screen + `GET …/mail/lookup?email=` (2026-10-27, branch `mail-search`): finds a person by any address, linked player or note, and says what the relay would do with mail from an address, event lists included; log senders click through to it. The text filter does not reach inside event cards
-- [ ] Publish the DNS records and set the box environment (ops runbook checklist), then field test with the maintainer's team for a season before considering the apex cutover
+- [x] Publish the DNS records and set the box environment (ops runbook checklist, 2026-09-12); field-tested through the fall season. The apex cutover is Phase 0.5 below
 - [x] Event lists (`<slug>-<event>@`, 2026-11-02, branch `event-mail`): a roster subset plus pickup players with any number of parent addresses, linked to a tournament event to copy its roster; see ARCHITECTURE.md § Team mailing lists "Event lists"
 
 ### Later (not Phase 0)
 
-- `captains-<slug>@` (needs a captain flag), per-coach list-address override, SES suppression-list management from the admin page, an archive with retention beyond 30 days, `help@` on the apex via the same relay.
+- `captains-<slug>@` (needs a captain flag), per-coach list-address override, SES suppression-list management from the admin page, an archive with retention beyond 30 days. (`help@` on the apex is now Phase 0.5.)
+
+---
+
+## Phase 0.5 — Per-team subdomains and the apex (`team@cudo.breakside.pro`, `cudo@breakside.pro`)
+
+> Designed 2026-11-07, not started. Phase 0's addresses put the team's slug in
+> the local part (`parents-cudo@team.breakside.pro`) because one subdomain
+> needed one MX record and the apex was Google's. Both constraints can go:
+> a wildcard MX gives every team its own subdomain, and verifying the apex in
+> SES lets the relay own `breakside.pro` itself, `help@` included. The old
+> spellings keep working forever; the new ones are added, then preferred.
+
+### Addresses
+
+| Today | New form (both accepted) |
+|---|---|
+| `cudo@team.breakside.pro` | `team@cudo.breakside.pro`, and `cudo@breakside.pro` |
+| `parents-cudo@`, `coaches-cudo@`, `staff-cudo@`, `players-cudo@` | `parents@cudo.…`, `coaches@cudo.…`, `staff@cudo.…`, `players@cudo.…` |
+| `alice-cudo@team.breakside.pro` (player alias) | `alice@cudo.breakside.pro` |
+| `cudo-states@team.breakside.pro` (event list) | `states@cudo.breakside.pro` |
+| (none; Google) | `help@breakside.pro`, `postmaster@`, `abuse@` → system forwards |
+
+The subdomain form is less ambiguous than the current one: the team is named
+by the domain, so the longest-suffix slug match in `parse_local_part` and the
+cross-team event-versus-alias check are only needed for the legacy spelling.
+The one new rule is **within a team**: a player alias, an event name and the
+word `team` share one namespace, so an alias may not equal an event name
+(storage refuses both directions; check live directories for an existing
+clash before switching the display). `cudo@cudo.breakside.pro` may as well
+resolve to "everyone" too, since people will guess it.
+
+### Code (small, because the legacy local part stays the internal key)
+
+The activity log, quarantine records, `X-Breakside-List`, the release path
+and the slug index all store `parents-cudo`. Leave that alone and translate at
+the edges:
+
+- **Inbound**, `relay.target_locals`: accept three recipient domains — the
+  list domain (`team.breakside.pro`), `<slug>.<base>` and the bare base — and
+  turn each into the canonical local part. A new `BREAKSIDE_MAIL_BASE_DOMAIN`
+  (default empty) switches the extra shapes on, so a self-hoster with only a
+  `team.` subdomain is unaffected.
+- **System forwards**: `BREAKSIDE_MAIL_FORWARDS="help=<addr>,postmaster=<addr>,abuse=<addr>"`,
+  resolved on the base domain before the slug rules. Policy is "open, one
+  member": no directory check, no quarantine (strangers writing in is the
+  point), From rewritten to `"Name via Breakside Help" <help@…>` with
+  Reply-To the author and the To header preserved (Gmail picks the "send as"
+  identity from To, so replying from the support address keeps working).
+  Drop DMARC failures outright rather than hold them (nobody reviews a
+  quarantine for `help@`); skip the `Precedence: bulk` loop check for
+  forwards (DMARC aggregate reports are addressed here and some carry it);
+  log a bounce of the forward target without suppressing delivery, since it
+  has no contact record. RFC 2142 wants `postmaster@` and `abuse@` to work
+  for a sending domain; with the apex on SES they would otherwise be dropped
+  as unknown.
+- **Outbound**, `addresses.address`: render the preferred spelling. Every
+  `directory.py` view (`addresses`, `playerPattern`, `eventPattern`, per-list
+  `address`), From, Reply-To, `List-Unsubscribe` and the test message follow.
+  **Keep `List-Id` as it is** (`parents-cudo.team.breakside.pro`): it is an
+  identifier, not an address, and parents filter on it.
+- **Loop guard**, `policy.loop_reason`: "From is at our domain" becomes
+  "From resolves to one of our lists", or a note from `help@` to a list would
+  look like a loop.
+- **Reserved words**: add every hostname that exists in the zone (`api`,
+  `staging`, …), since the wildcard will not cover them; from now on any
+  mailbox or alias created on the apex elsewhere must be reserved here too,
+  because slugs compete with it at `@breakside.pro`.
+- **PWA / docs**: the slug-creation preview and pattern hints in
+  `teams/teamMail.js`, the Email Lists paragraph in `docs.html`, README.
+- **Tests**: parse and render tables in `test_mail_rules.py`; an end-to-end
+  envelope case per new shape and one forward case in `test_mail.py`.
+- **Switching the display** is a deploy-time decision once the DNS below is
+  live; both forms resolve forever, so nothing a parent saved stops working.
+
+### Infrastructure (the real work; identifiers and the checklist live in breakside-ops)
+
+1. **Wildcard MX**: `*.<base>  MX 10 inbound-smtp.<region>.amazonaws.com.` —
+   one record for every present and future team. The zone's DNS provider must
+   accept `*` as a host; if it does not, the fallbacks are one MX per team by
+   hand (fine for a few teams, not self-serve) or moving the zone to Route 53.
+   A wildcard means SES accepts mail for any typo subdomain; the relay already
+   drops those as `unknown-address` at a tenth of a cent per thousand.
+2. **SES identity for the base domain**: Easy DKIM (three CNAMEs at
+   `<token>._domainkey.<base>`, which do not clash with a Workspace key at
+   `google._domainkey`) and a MAIL FROM of `bounce.<base>` (its own MX and SPF
+   TXT); the apex SPF record is untouched. SES documents that subdomains
+   inherit the parent identity's verification and settings, so
+   `team@cudo.<base>` is signed `d=<base>` and relaxed DMARC alignment
+   accepts it — confirm with a DMARC checker before switching the display.
+   Bounce and complaint notification topics on the new identity, feedback
+   emails off, exactly as for the list domain. `scripts/setup-mail-aws.sh`
+   grows a second identity.
+3. **Receipt rule**: add the recipient `.<base>` (SES: a leading dot matches
+   every subdomain and not the parent) and `<base>` itself.
+4. **The apex MX moves from Google to SES.** This is what makes
+   `cudo@breakside.pro` native and puts `help@` on the relay. Trade-offs,
+   accepted 2026-11-07: Google's inbound spam filter no longer sits in front
+   of the support address (SES scanning plus the recipient's own filter
+   remain), and `help@` now depends on the API box — mail waits in the queue
+   for up to 14 days during an outage, which is exactly when people write to
+   it. The Workspace alias stays in place so flipping the MX back is the
+   rollback. The alternative considered was a Workspace default-routing rule
+   sending non-recognized apex addresses to SES's inbound endpoint; rejected
+   because it hides a load-bearing setting in a console outside the repos
+   and leaves `help@` as a fact about one Workspace rather than a feature.
+5. Later, with the base domain verified in SES, replies from `help@` can be
+   sent through SES SMTP, closing the known `Return-Path` mismatch noted in
+   the ops runbook.
+
+### Work list
+
+- [ ] Confirm the DNS provider accepts a wildcard MX host; lower the apex MX TTL a day ahead of the cutover
+- [ ] `addresses.py`: multi-domain parse + preferred render; in-team alias/event/`team` uniqueness; zone hostnames reserved; tests
+- [ ] `relay.py` / `policy.py`: three recipient shapes, system forwards, loop guard by resolution
+- [ ] `config.py`: `BREAKSIDE_MAIL_BASE_DOMAIN`, `BREAKSIDE_MAIL_FORWARDS`; `breakside_server/README.md` env table
+- [ ] `directory.py` views, `teams/teamMail.js` previews, `docs.html`, README, ARCHITECTURE.md § Team mailing lists
+- [ ] `scripts/setup-mail-aws.sh`: second identity, receipt-rule recipients, DNS printout
+- [ ] Ops: base identity verified, wildcard MX, DMARC check passes, forwards in the env, apex MX flipped (runbook checklist in breakside-ops)
+- [ ] Field test on the maintainer's team, then switch the display to the new form
 
 ---
 
@@ -484,6 +603,10 @@ Two real options:
 ### Phase 0 — Team mailing lists
 
 See [Phase 0](#phase-0--team-mailing-lists-teambreaksidepro) at the top of this doc. Shipped 2026-09-11 (branch `team-mail`).
+
+### Phase 0.5 — Per-team subdomains and the apex
+
+See [Phase 0.5](#phase-05--per-team-subdomains-and-the-apex-teamcudobreaksidepro-cudobreaksidepro). Designed 2026-11-07; moves the lists to `<slug>.breakside.pro` and the apex MX to SES, with `help@` as a relay forward.
 
 ### v1.0 — Comms MVP
 
