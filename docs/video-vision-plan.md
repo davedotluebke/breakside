@@ -2,7 +2,7 @@
 
 Breakside already knows *what* happened in a game: every event, who, when, and (from the Field tab) where. A Veo Cam 3 now records *how it looked*. This plan joins the two in three moves: play the right second of video for any event; let the video fill in what the coach did not tap; let the video propose events the coach only has to confirm.
 
-**Status (2026-10-18):** plan drafted after the Veo research in [dev-notes/veo-platform-capabilities.md](dev-notes/veo-platform-capabilities.md). Nothing is built. Decisions marked *pending* need Dave; the footage question (§ 2) gates everything past Tier 0. This supersedes the 2026-10 "video linking" design (YouTube / Vimeo embeds), which assumed footage we would never control; what survives from it is in § 3.
+**Status (2026-10-18):** plan drafted after the Veo research in [dev-notes/veo-platform-capabilities.md](dev-notes/veo-platform-capabilities.md). Nothing is built. Decisions marked *pending* need Dave; the footage question (§ 2) gates everything past Tier 0. This supersedes the 2026-10 "video linking" design (YouTube / Vimeo embeds), which assumed footage we would never control; what survives from it is in § 3. **2026-11-08:** § 11 added, a clip-level audio-video-language-model route recorded as a plausible alternative for Tiers 3–4, not as plan of record.
 
 ## 1. What Veo gives us
 
@@ -62,6 +62,8 @@ Both scenarios: archive the footage ourselves. Veo keeps Interactive mode for 90
 
 **Tier 4 — the semantic long tail.** Layout and sky flags, drop vs block, why play stopped: short clips, pre-localized by Tier 3, to a vision-language model on the server, in the shape of the narration slow pass. Cost is bounded by clip count.
 
+Tiers 3 and 4 as written assume the classical route (track, then infer). § 11 records a second route in which a video-language model answers event questions from a whole point clip without any tracking; the two are complementary and should be measured on the same fixture.
+
 ## 6. Architecture
 
 - `breakside_vision/` (Python, sibling of `breakside_server/`, added to `scripts/deploy-excludes.txt`): `ingest` (Veo MP4 or TS → S3, proxy transcodes), `segment` (Tier 1), `track` (Tier 2), `events` (Tier 3), `calib` (field corners → homography; reads Veo's `camera_alignment` when present). Code only in this repo: no footage, no weights, no fixtures with real players (ARCHITECTURE.md § Names in examples).
@@ -97,3 +99,27 @@ Live or in-game video; hosting other teams' footage; server-side video editing b
 - The follow-cam's 4.5 Mbps smears the disc: Tier 3 on B is likely infeasible; step 2 measures it.
 - Veo deletes or re-encodes: our S3 copy is the system of record from day one.
 - Public repo: bucket names, keys and anything deployment-specific stay in `breakside-ops`.
+
+## 11. A plausible alternative route: clip-level audio-video language models (not plan of record)
+
+Added 2026-11-08 after reading NVIDIA's Sports Intelligence Playbooks (Apache-2.0, https://nvidia.github.io/sports-intelligence-playbooks/latest/, site last updated 2026-11-03). Recorded as a path we might follow, not as a decision.
+
+**What the playbooks are.** A recipe for fine-tuning one audio-video-language model, Nemotron 3 Nano Omni (31B-parameter mixture of experts, ~3B active; video, audio, image and text in, text out; NVIDIA Open Model Agreement, commercial use allowed), on sports clips: annotate → template-generate multiple-choice and open-ended Q&A as JSONL → SFT or LoRA (NeMo AutoModel or Megatron-Bridge) → inference → evaluation (per-class MCQ accuracy plus an LLM judge) → FP8/NVFP4 quantization → vLLM serving. Reference checkpoints exist for tennis and basketball (OpenMDW-1.1). There is no detection, tracking, homography or ball tracking in it: strictly clip in, answer out. It therefore touches neither Tier 1–2 nor the Veo footage question; it is an alternative to the classical route for Tiers 3–4, and a better way to evaluate anything that claims to understand a point.
+
+**Why it fits Breakside.** Their basketball annotation (the public BARD dataset) is structurally a Breakside point: an ordered action list per clip, each action naming the actor by jersey colour and number, the action, its result and the assister, plus a one-sentence caption per action. Ours is richer (throw flags, locations, hang time), and `summarize()` already writes the captions. Their onboarding recipe (`avlm/data_prep_example/ONBOARD_NEW_DATASET.md`) maps one-to-one: the sample is the point clip (event-based chunking, which they recommend; rally action is about a quarter of a tennis match, and ultimate is similar); actors are addressed by visible attributes, never names (our Decision 10); split by game, never by clip; report chance, majority and a duration-only baseline, because clip length tracks event count; every template carries an ambiguity filter so exactly one answer is right. Their sixteen basketball templates translate directly: who caught the pull (MCQ over the seven on the line), how the point ended (score / throwaway / drop / block / stall), who threw the assist, whether the huck completed, which action came first, throw count as a range, and an open-ended point caption.
+
+**Reality checks.**
+
+- Scale: a season of one team is roughly 500–1,000 point clips, 6k–12k Q&A rows. That is their small-data regime (1.6k rows from 21 matches), where constrained MCQ stayed in the low-to-mid 90s but open-ended answers were weak and sensitive to a one-second shift in clip boundaries. Throw-by-throw captions are out of reach at our scale; outcomes and attribution are plausible.
+- Perception: their own finding is that jersey numbers and "who touched the ball" need the vision encoder unfrozen and per-frame encoding, and gain from higher effective resolution. Their clips are 720p60 broadcast with a basketball; ours are a 1080p30 follow-cam with a ten-pixel disc and fourteen players, sampled at 1–2 fps per the model card. Fine for outcomes and body language, blind to a disc in flight.
+- Compute: the MoE recipes need expert-parallel 8, so training needs an 8×A100-80GB node even for LoRA (~30 GiB per GPU): roughly $30/h rented, so one LoRA experiment is low hundreds of dollars and a run like theirs (64 GPUs for days) is five figures. Inference is one GPU at 3–4 s per clip: BF16 needs 80 GB, FP8 fits an L40S (48 GB), NVFP4 a 32 GB card or a DGX Spark. The published sports checkpoints are BF16 only.
+
+**What we would take from it, in order.**
+
+1. The evaluation harness, before any model choice: generate MCQ/QA per point from Breakside events, run hosted frontier models (and the base Nemotron, if a GPU is rented for an afternoon) on about fifty point clips, score with a per-class MCQ scorer and a judge rubric like theirs. This is the AVLM half of the Step 2 feasibility spike. For structured event output, the narration harness's event precision / recall / F1 (`breakside_server/tests/narration/`) is the natural scorer.
+2. Breakside as a data factory, as a by-product of Tier 1: point clips cut on our boundaries, a JSONL exporter in their row schema (`id`, `class`, `evaluation_type`, `super_category`, `fine_category`, `conversation`), splits by game. No GPU; the same artefact feeds the hosted-model path and any later fine-tune.
+3. One data-model addition every vision path needs anyway: per-game kit colours for us and the opponent. We store numbers, not colours, and "the player in white #7" is how a model has to be addressed.
+4. Tiers 3–4 as two routes measured on the same fixture: classical tracking (needs the panorama master; yields positions and timing) and clip-level AVLM (needs only follow-cam point clips; yields outcomes and attribution).
+5. Fine-tuning Nemotron Omni or a successor is a 2027 option, gated on a season of clips and on the zero-shot benchmark coming back insufficient.
+
+**Candidate decisions, not yet made:** evaluation harness first; kit colours per game; the point clip as the unit of any VLM call; actors addressed by colour and number in prompts; the follow-cam as the AVLM input (the panorama is for tracking).
