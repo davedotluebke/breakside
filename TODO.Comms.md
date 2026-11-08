@@ -211,11 +211,11 @@ the edges:
 ### Work list
 
 - [ ] Confirm the DNS provider accepts a wildcard MX host; lower the apex MX TTL a day ahead of the cutover
-- [ ] `addresses.py`: multi-domain parse + preferred render; in-team alias/event/`team` uniqueness; zone hostnames reserved; tests
-- [ ] `relay.py` / `policy.py`: three recipient shapes, system forwards, loop guard by resolution
-- [ ] `config.py`: `BREAKSIDE_MAIL_BASE_DOMAIN`, `BREAKSIDE_MAIL_FORWARDS`; `breakside_server/README.md` env table
-- [ ] `directory.py` views, `teams/teamMail.js` previews, `docs.html`, README, ARCHITECTURE.md § Team mailing lists
-- [ ] `scripts/setup-mail-aws.sh`: second identity, receipt-rule recipients, DNS printout
+- [x] `addresses.py`: multi-domain parse + preferred render; in-team alias/event/`team` uniqueness; zone hostnames reserved; tests (branch `mail-subdomains`)
+- [x] `relay.py` / `policy.py`: three recipient shapes, system forwards, loop guard by resolution
+- [x] `config.py`: `BREAKSIDE_MAIL_BASE_DOMAIN`, `BREAKSIDE_MAIL_ADDRESS_STYLE`, `BREAKSIDE_MAIL_FORWARDS`; `breakside_server/README.md` env table
+- [x] `directory.py` views, `teams/teamMail.js` previews, `docs.html`, README, ARCHITECTURE.md § Team mailing lists
+- [x] `scripts/setup-mail-aws.sh`: second identity, receipt-rule recipients, DNS printout (`MAIL_BASE_DOMAIN=…`)
 - [ ] Ops: base identity verified, wildcard MX, DMARC check passes, forwards in the env, apex MX flipped (runbook checklist in breakside-ops)
 - [ ] Field test on the maintainer's team, then switch the display to the new form
 

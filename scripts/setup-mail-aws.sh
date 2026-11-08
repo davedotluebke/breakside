@@ -27,6 +27,12 @@
 #
 # Then YOU publish the DNS records it prints (MX + 3 DKIM CNAMEs + MAIL FROM
 # MX/TXT) and add the env lines to /etc/breakside/env.
+#
+# Per-team subdomains (Comms Phase 0.5): set MAIL_BASE_DOMAIN=example.org and
+# the script also verifies the base domain as a second identity (its own
+# Easy DKIM, MAIL FROM bounce.<base>, notification topics), adds ".<base>"
+# and "<base>" to the receipt rule, lets the box send from the base
+# identity, and prints the wildcard MX plus the apex MX swap for status.
 set -euo pipefail
 
 # Claude Code Desktop and cron strip PATH; the aws CLI may live in a Homebrew
@@ -35,6 +41,8 @@ set -euo pipefail
 
 MAIL_DOMAIN="${MAIL_DOMAIN:-team.breakside.pro}"
 MAIL_FROM_DOMAIN="${MAIL_FROM_DOMAIN:-bounce.$MAIL_DOMAIN}"
+BASE_DOMAIN="${MAIL_BASE_DOMAIN:-}"                               # empty = list domain only
+BASE_MAIL_FROM_DOMAIN="${MAIL_BASE_FROM_DOMAIN:-${BASE_DOMAIN:+bounce.$BASE_DOMAIN}}"
 REGION="${AWS_REGION:-us-east-1}"
 export AWS_PROFILE="${AWS_PROFILE:-admin}"
 export AWS_DEFAULT_REGION="$REGION"
@@ -69,29 +77,41 @@ TOPIC_ARN="arn:aws:sns:$REGION:$ACCOUNT:$NAME"
 QUEUE_ARN="arn:aws:sqs:$REGION:$ACCOUNT:$NAME"
 DLQ_ARN="arn:aws:sqs:$REGION:$ACCOUNT:$NAME-dlq"
 IDENTITY_ARN="arn:aws:ses:$REGION:$ACCOUNT:identity/$MAIL_DOMAIN"
+BASE_IDENTITY_ARN="${BASE_DOMAIN:+arn:aws:ses:$REGION:$ACCOUNT:identity/$BASE_DOMAIN}"
 CONFIGSET_ARN="arn:aws:ses:$REGION:$ACCOUNT:configuration-set/$NAME"
 RULESET_ARN_PREFIX="arn:aws:ses:$REGION:$ACCOUNT:receipt-rule-set/$RULESET"
 
 # ------------------------------------------------------------- 1. identity ----
-ensure_identity() {
-    bold "1. SES identity $MAIL_DOMAIN"
-    if aws sesv2 get-email-identity --email-identity "$MAIL_DOMAIN" >/dev/null 2>&1; then
+ensure_identity_for() {   # <domain> <mail-from-domain> <step label>
+    local domain="$1" mail_from="$2" label="$3"
+    bold "$label SES identity $domain"
+    if aws sesv2 get-email-identity --email-identity "$domain" >/dev/null 2>&1; then
         have "identity exists"
     else
         doing "create identity with Easy DKIM"
-        apply aws sesv2 create-email-identity --email-identity "$MAIL_DOMAIN" \
+        apply aws sesv2 create-email-identity --email-identity "$domain" \
             --dkim-signing-attributes NextSigningKeyLength=RSA_2048_BIT >/dev/null
     fi
     local current
-    current=$(aws sesv2 get-email-identity --email-identity "$MAIL_DOMAIN" --query 'MailFromAttributes.MailFromDomain' --output text 2>/dev/null || echo None)
-    if [[ "$current" == "$MAIL_FROM_DOMAIN" ]]; then
-        have "MAIL FROM domain $MAIL_FROM_DOMAIN"
+    current=$(aws sesv2 get-email-identity --email-identity "$domain" --query 'MailFromAttributes.MailFromDomain' --output text 2>/dev/null || echo None)
+    if [[ "$current" == "$mail_from" ]]; then
+        have "MAIL FROM domain $mail_from"
     else
-        doing "set MAIL FROM domain $MAIL_FROM_DOMAIN"
+        doing "set MAIL FROM domain $mail_from"
         apply aws sesv2 put-email-identity-mail-from-attributes \
-            --email-identity "$MAIL_DOMAIN" --mail-from-domain "$MAIL_FROM_DOMAIN" \
+            --email-identity "$domain" --mail-from-domain "$mail_from" \
             --behavior-on-mx-failure USE_DEFAULT_VALUE >/dev/null
     fi
+    return 0
+}
+
+ensure_identity() {
+    ensure_identity_for "$MAIL_DOMAIN" "$MAIL_FROM_DOMAIN" "1."
+    # The base domain is a second, independent identity: its own DKIM CNAMEs
+    # (they sit beside any other provider's key at <selector>._domainkey) and
+    # its own MAIL FROM subdomain. Subdomains inherit it, so team@cudo.<base>
+    # is signed d=<base>, which DMARC's relaxed alignment accepts.
+    [[ -n "$BASE_DOMAIN" ]] && ensure_identity_for "$BASE_DOMAIN" "$BASE_MAIL_FROM_DOMAIN" "1b."
     return 0
 }
 
@@ -227,9 +247,13 @@ ensure_receipt_rule() {
         doing "activate rule set $RULESET"
         apply aws ses set-active-receipt-rule-set --rule-set-name "$RULESET"
     fi
+    # ".<base>" is every subdomain (the wildcard MX brings them all here) and
+    # "<base>" the apex itself; SES needs both spelled out.
+    local recipients="\"$MAIL_DOMAIN\""
+    [[ -n "$BASE_DOMAIN" ]] && recipients="$recipients,\".$BASE_DOMAIN\",\"$BASE_DOMAIN\""
     local rule
     rule=$(cat <<JSON
-{"Name":"$NAME","Enabled":true,"ScanEnabled":true,"TlsPolicy":"Optional","Recipients":["$MAIL_DOMAIN"],
+{"Name":"$NAME","Enabled":true,"ScanEnabled":true,"TlsPolicy":"Optional","Recipients":[$recipients],
  "Actions":[{"S3Action":{"BucketName":"$BUCKET","ObjectKeyPrefix":"$PREFIX","TopicArn":"$TOPIC_ARN"}}]}
 JSON
 )
@@ -237,7 +261,7 @@ JSON
         doing "update rule $NAME in $RULESET"
         apply aws ses update-receipt-rule --rule-set-name "$RULESET" --rule "$rule"
     else
-        doing "create rule $NAME in $RULESET: $MAIL_DOMAIN → s3://$BUCKET/$PREFIX + topic"
+        doing "create rule $NAME in $RULESET: $MAIL_DOMAIN${BASE_DOMAIN:+ + .$BASE_DOMAIN + $BASE_DOMAIN} → s3://$BUCKET/$PREFIX + topic"
         apply aws ses create-receipt-rule --rule-set-name "$RULESET" --rule "$rule"
     fi
     return 0
@@ -246,7 +270,14 @@ JSON
 # ---------- 5. configuration set --
 # ---------- 5. identity feedback ----
 ensure_identity_feedback() {
-    bold "5. SES identity feedback (bounce/complaint notifications → topic, feedback emails off)"
+    ensure_identity_feedback_for "$MAIL_DOMAIN" "5."
+    [[ -n "$BASE_DOMAIN" ]] && ensure_identity_feedback_for "$BASE_DOMAIN" "5b."
+    return 0
+}
+
+ensure_identity_feedback_for() {   # <domain> <step label>
+    local domain="$1"
+    bold "$2 SES identity feedback for $domain (bounce/complaint notifications → topic, feedback emails off)"
     # By default SES also *emails* a Delivery Status Notification for every
     # bounce to the message's From. For relayed mail that is the list
     # address, so the DSN comes back through the receipt rule looking like a
@@ -257,23 +288,23 @@ ensure_identity_feedback() {
     # BOUNCE/COMPLAINT events (step 6) so each bounce is recorded once.
     local kind current
     for kind in Bounce Complaint; do
-        current=$(aws ses get-identity-notification-attributes --identities "$MAIL_DOMAIN" \
-            --query "NotificationAttributes.\"$MAIL_DOMAIN\".${kind}Topic" --output text 2>/dev/null || echo None)
+        current=$(aws ses get-identity-notification-attributes --identities "$domain" \
+            --query "NotificationAttributes.\"$domain\".${kind}Topic" --output text 2>/dev/null || echo None)
         if [[ "$current" == "$TOPIC_ARN" ]]; then
             have "$kind notifications → topic"
         else
             doing "send $kind notifications to the topic"
-            apply aws ses set-identity-notification-topic --identity "$MAIL_DOMAIN" \
+            apply aws ses set-identity-notification-topic --identity "$domain" \
                 --notification-type "$kind" --sns-topic "$TOPIC_ARN"
         fi
     done
-    current=$(aws ses get-identity-notification-attributes --identities "$MAIL_DOMAIN" \
-        --query "NotificationAttributes.\"$MAIL_DOMAIN\".ForwardingEnabled" --output text 2>/dev/null || echo True)
+    current=$(aws ses get-identity-notification-attributes --identities "$domain" \
+        --query "NotificationAttributes.\"$domain\".ForwardingEnabled" --output text 2>/dev/null || echo True)
     if [[ "$current" == "False" ]]; then
         have "feedback emails off"
     else
         doing "turn feedback emails off"
-        apply aws sesv2 put-email-identity-feedback-attributes --email-identity "$MAIL_DOMAIN" \
+        apply aws sesv2 put-email-identity-feedback-attributes --email-identity "$domain" \
             --no-email-forwarding-enabled
     fi
     return 0
@@ -316,7 +347,7 @@ ensure_iam() {
 {"Version":"2012-10-17","Statement":[
  {"Sid":"Queue","Effect":"Allow","Action":["sqs:ReceiveMessage","sqs:DeleteMessage","sqs:GetQueueAttributes","sqs:ChangeMessageVisibility"],"Resource":"$QUEUE_ARN"},
  {"Sid":"Inbound","Effect":"Allow","Action":["s3:GetObject"],"Resource":"arn:aws:s3:::$BUCKET/$PREFIX*"},
- {"Sid":"Send","Effect":"Allow","Action":["ses:SendEmail","ses:SendRawEmail"],"Resource":["$IDENTITY_ARN","$CONFIGSET_ARN"]}]}
+ {"Sid":"Send","Effect":"Allow","Action":["ses:SendEmail","ses:SendRawEmail"],"Resource":["$IDENTITY_ARN",${BASE_IDENTITY_ARN:+"$BASE_IDENTITY_ARN",}"$CONFIGSET_ARN"]}]}
 JSON
 )
     arn="arn:aws:iam::$ACCOUNT:policy/$POLICY_NAME"
@@ -348,25 +379,44 @@ JSON
 }
 
 # ---------- status -----
-print_status() {
-    bold "Identity"
-    aws sesv2 get-email-identity --email-identity "$MAIL_DOMAIN" \
+print_identity_status() {   # <domain>
+    local domain="$1"
+    bold "Identity $domain"
+    aws sesv2 get-email-identity --email-identity "$domain" \
         --query '{Verified:VerifiedForSendingStatus,DkimStatus:DkimAttributes.Status,MailFrom:MailFromAttributes.MailFromDomain,MailFromStatus:MailFromAttributes.MailFromDomainStatus,FeedbackEmails:FeedbackForwardingStatus}' \
         --output table 2>/dev/null || note "identity not created yet"
-    aws ses get-identity-notification-attributes --identities "$MAIL_DOMAIN" \
-        --query "NotificationAttributes.\"$MAIL_DOMAIN\".{BounceTopic:BounceTopic,ComplaintTopic:ComplaintTopic}" \
+    aws ses get-identity-notification-attributes --identities "$domain" \
+        --query "NotificationAttributes.\"$domain\".{BounceTopic:BounceTopic,ComplaintTopic:ComplaintTopic}" \
         --output table 2>/dev/null || true
-    local tokens
-    tokens=$(aws sesv2 get-email-identity --email-identity "$MAIL_DOMAIN" --query 'DkimAttributes.Tokens' --output text 2>/dev/null || true)
-    bold "DNS records to publish for $MAIL_DOMAIN (at the registrar that hosts the zone)"
-    note "MX   $MAIL_DOMAIN                  10 inbound-smtp.$REGION.amazonaws.com."
+}
+
+print_dkim_records() {   # <domain>
+    local t tokens
+    tokens=$(aws sesv2 get-email-identity --email-identity "$1" --query 'DkimAttributes.Tokens' --output text 2>/dev/null || true)
     for t in $tokens; do
         [[ "$t" == "None" ]] && continue
-        note "CNAME ${t}._domainkey.$MAIL_DOMAIN   ${t}.dkim.amazonses.com."
+        note "CNAME ${t}._domainkey.$1   ${t}.dkim.amazonses.com."
     done
+}
+
+print_status() {
+    print_identity_status "$MAIL_DOMAIN"
+    bold "DNS records to publish for $MAIL_DOMAIN (at the registrar that hosts the zone)"
+    note "MX   $MAIL_DOMAIN                  10 inbound-smtp.$REGION.amazonaws.com."
+    print_dkim_records "$MAIL_DOMAIN"
     note "MX   $MAIL_FROM_DOMAIN           10 feedback-smtp.$REGION.amazonses.com."
     note "TXT  $MAIL_FROM_DOMAIN           \"v=spf1 include:amazonses.com ~all\""
     note "TXT  _dmarc.$MAIL_DOMAIN         \"v=DMARC1; p=quarantine${DMARC_RUA:+; rua=$DMARC_RUA}\"   (optional but recommended)"
+    if [[ -n "$BASE_DOMAIN" ]]; then
+        print_identity_status "$BASE_DOMAIN"
+        bold "DNS records to publish for $BASE_DOMAIN (per-team subdomains; the apex MX swap is the LAST step)"
+        note "MX   *.$BASE_DOMAIN                10 inbound-smtp.$REGION.amazonaws.com.   (wildcard: one record for every team)"
+        note "MX   $BASE_DOMAIN                  10 inbound-smtp.$REGION.amazonaws.com.   (REPLACES the current apex MX; lower its TTL a day ahead)"
+        print_dkim_records "$BASE_DOMAIN"
+        note "MX   $BASE_MAIL_FROM_DOMAIN           10 feedback-smtp.$REGION.amazonses.com."
+        note "TXT  $BASE_MAIL_FROM_DOMAIN           \"v=spf1 include:amazonses.com ~all\""
+        note "(the apex SPF and _dmarc.$BASE_DOMAIN records are not touched; subdomain mail is signed d=$BASE_DOMAIN)"
+    fi
     bold "Receipt rule"
     aws ses describe-active-receipt-rule-set --query 'Metadata.Name' --output text 2>/dev/null | sed 's/^/  active rule set: /'
     bold "Queue"
@@ -377,6 +427,11 @@ print_status() {
     bold "Env lines for /etc/breakside/env (record the values in the private ops repo)"
     note "BREAKSIDE_MAIL_TRANSPORT=ses"
     note "BREAKSIDE_MAIL_DOMAIN=$MAIL_DOMAIN"
+    if [[ -n "$BASE_DOMAIN" ]]; then
+        note "BREAKSIDE_MAIL_BASE_DOMAIN=$BASE_DOMAIN"
+        note "BREAKSIDE_MAIL_ADDRESS_STYLE=list            # switch to 'subdomain' once the base identity is Verified and the wildcard MX resolves"
+        note "BREAKSIDE_MAIL_FORWARDS=help=<you>,postmaster=<you>,abuse=<you>   # takes effect once the apex MX points here"
+    fi
     note "BREAKSIDE_MAIL_REGION=$REGION"
     note "BREAKSIDE_MAIL_INBOUND_BUCKET=${BUCKET:-<bucket>}"
     note "BREAKSIDE_MAIL_QUEUE_URL=${q}"

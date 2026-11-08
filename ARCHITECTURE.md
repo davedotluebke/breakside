@@ -881,6 +881,43 @@ reached from Team Settings.
 | `<alias>-<slug>@` | one player, all of their guardians, every coach |
 | `<slug>-<event>@` | an event list: coaches, managers, the roster players going (with their guardians) and the event's pickup players (with theirs) |
 
+**Two spellings** (Comms Phase 0.5, TODO.Comms.md). With
+`BREAKSIDE_MAIL_BASE_DOMAIN` set (`breakside.pro`), every list is also
+reachable with the team in the domain and only the list in the local part:
+`team@cudo.breakside.pro` (everyone; also `cudo@breakside.pro` and
+`cudo@cudo.breakside.pro`), `parents@cudo.…`, `coaches@cudo.…`,
+`alice@cudo.…` (a player), `states@cudo.…` (an event list). The DNS side is
+a wildcard MX on the base domain plus the base domain verified in SES
+(`scripts/setup-mail-aws.sh` with `MAIL_BASE_DOMAIN`). `addresses.resolve`
+reads any spelling back to `(kind, slug, alias)`; the **list spelling's
+local part (`parents-cudo`) stays the internal key** in every log row,
+quarantine record and `X-Breakside-List`, and `List-Id` is pinned to
+`<parents-cudo.team.breakside.pro>` so parents' filters survive, whichever
+spelling is in use. `BREAKSIDE_MAIL_ADDRESS_STYLE` (`list` | `subdomain`)
+decides which spelling the screen shows and the relay sends From
+(`directory.preferred_address`); the screen shows the other under each
+address as "also …" (`altAddresses`). The subdomain spelling has no
+cross-team ambiguity (no longest-suffix guessing), but inside a team an
+alias, an event name and the word `team` share one namespace: storage
+refuses an alias equal to an event name and the reverse, and a slug change
+onto either; where old data has both, the event wins
+(`parse_subdomain_local`). Hostnames that exist in the zone (`api`,
+`staging`, `app`, `www`, `team`) are reserved as slugs, since a wildcard MX
+never covers a name that already has records; add any new hostname to
+`RESERVED` in the change that creates it. **System forwards**
+(`BREAKSIDE_MAIL_FORWARDS="help=<addr>,postmaster=<addr>,abuse=<addr>"`)
+are open addresses at the base domain relayed to one recipient
+(`relay._forward`): any sender, From rewritten to `"Name via Breakside
+Help" <help@…>`, Reply-To the author, the To header kept (so the
+recipient's "send as" identity still matches), no List-* headers but our
+`X-Breakside-List` loop marker; SES verdicts that would hold a list post
+drop a forward instead (nobody reviews a quarantine for `help@`), the
+`Precedence: bulk` loop check is skipped for forwards (DMARC aggregate
+reports carry it), and the loop guard asks the resolver whether the From
+is a *list* address, so a coach writing to a list from the support
+identity is not a loop. A forward has no team: its only record is the
+journal line, and a bounce of its recipient never suppresses the next one.
+
 **Event lists** (`cudo-states@`) are for the logistics of one tournament or
 trip: a subset of the roster plus pickup players who are not on the team,
 each of whom may have several parent addresses, none of whom should get
@@ -1038,7 +1075,8 @@ scrubs held mail and log lines; team erasure deletes the directory and frees
 the slug. All of it is coach-only over the API.
 
 **Environment.** `BREAKSIDE_MAIL_TRANSPORT` (`ses` | `file` | `none`, default
-`none`), `BREAKSIDE_MAIL_DOMAIN`, `BREAKSIDE_MAIL_REGION`,
+`none`), `BREAKSIDE_MAIL_DOMAIN`, `BREAKSIDE_MAIL_BASE_DOMAIN`,
+`BREAKSIDE_MAIL_ADDRESS_STYLE`, `BREAKSIDE_MAIL_FORWARDS`, `BREAKSIDE_MAIL_REGION`,
 `BREAKSIDE_MAIL_INBOUND_BUCKET`, `BREAKSIDE_MAIL_QUEUE_URL`,
 `BREAKSIDE_MAIL_CONFIGURATION_SET`, `BREAKSIDE_MAIL_OUTBOX_DIR`,
 `BREAKSIDE_MAIL_APP_URL`. The poller only starts when the transport is `ses`

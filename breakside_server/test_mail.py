@@ -1347,3 +1347,272 @@ class TestEventLists:
         _as(COACH)
         assert client.delete(f"{base}/{ev['id']}").status_code == 200
         assert client.delete(f"{base}/{ev['id']}").status_code == 404
+
+
+# =============================================================================
+# Per-team subdomains, the apex and system forwards (Comms Phase 0.5)
+# =============================================================================
+
+BASE = "breakside.pro"
+
+
+@pytest.fixture
+def with_base(configured, monkeypatch):
+    """configured plus a base domain, in the default (list) display style,
+    with a help@ forward to the maintainer's address."""
+    import config
+    monkeypatch.setattr(config, "MAIL_BASE_DOMAIN", BASE)
+    monkeypatch.setattr(config, "MAIL_ADDRESS_STYLE", "list")
+    monkeypatch.setattr(config, "MAIL_FORWARDS", "help=owner@x.test, postmaster=owner@x.test,bad,=x,abuse=nope")
+    return configured
+
+
+def head_of(send):
+    return send["raw"].split(b"\r\n\r\n")[0].decode()
+
+
+def header(send, name):
+    """One header of a sent message, unfolded (long List-* values wrap in the raw bytes)."""
+    import email
+    from email import policy as email_policy
+    msg = email.message_from_bytes(send["raw"], policy=email_policy.default)
+    value = msg[name]
+    return " ".join(str(value).split()) if value is not None else None
+
+
+class TestSubdomainSpelling:
+    @pytest.mark.parametrize("to", [
+        f"parents@cudo.{BASE}", f"Parents@CUDO.{BASE}", f"parents-cudo@{BASE}",
+    ])
+    def test_every_spelling_is_the_parents_list(self, with_base, to):
+        from mail import relay
+        from storage import mail_storage as ms
+        results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", to), envelope_recipients=[to], source="test")
+        assert [(r.action, r.recipients) for r in results] == [("relay", 5)]
+        # the display style is still "list", so From and the result address are the old spelling
+        assert results[0].address == f"parents-cudo@{DOMAIN}"
+        send = with_base["outbox"].sent()[-1]
+        assert send["from"] == f"parents-cudo@{DOMAIN}"
+        head = head_of(send)
+        assert f"From: Mom Smith via Parents CUDO <parents-cudo@{DOMAIN}>" in head
+        assert f"To: {to}" in head                                   # To passes through as written
+        assert f"List-Id: \"Parents CUDO\" <parents-cudo.{DOMAIN}>" in head
+        assert "X-Breakside-List: parents-cudo" in head
+        entry = ms.read_mail_log(with_base["team_id"], 1)[0]
+        assert entry["list"] == "parents-cudo" and entry["kind"] == "parents"   # the canonical key, whatever arrived
+
+    @pytest.mark.parametrize("to", [f"team@cudo.{BASE}", f"cudo@cudo.{BASE}", f"cudo@{BASE}", f"cudo@{DOMAIN}"])
+    def test_everyone_four_ways(self, with_base, to):
+        from mail import relay
+        results = relay.process_inbound(raw_mail("Dad <dad@x.test>", to), envelope_recipients=[to])
+        assert (results[0].action, results[0].recipients) == ("relay", 6)
+        assert f"Reply-To: Coaches CUDO <coaches-cudo@{DOMAIN}>" in head_of(with_base["outbox"].sent()[-1])
+
+    def test_player_alias_and_event_at_the_subdomain(self, with_event, monkeypatch):
+        import config
+        from mail import relay
+        from storage import mail_storage as ms
+        monkeypatch.setattr(config, "MAIL_BASE_DOMAIN", BASE)
+        monkeypatch.setattr(config, "MAIL_ADDRESS_STYLE", "list")
+        tid = with_event["team_id"]
+        results = relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", f"alice@cudo.{BASE}"), envelope_recipients=[f"alice@cudo.{BASE}"])
+        assert results[0].action == "relay" and results[0].address == f"alice-cudo@{DOMAIN}"
+        assert ms.read_mail_log(tid, 1)[0]["list"] == "alice-cudo"
+        results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", f"states@cudo.{BASE}"), envelope_recipients=[f"states@cudo.{BASE}"])
+        assert (results[0].action, results[0].address) == ("relay", f"cudo-states@{DOMAIN}")
+        assert ms.read_mail_log(tid, 1)[0]["list"] == "cudo-states"
+        # an unknown alias at the subdomain is held like the list spelling's would be
+        results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", f"nobody@cudo.{BASE}"), envelope_recipients=[f"nobody@cudo.{BASE}"])
+        assert (results[0].action, results[0].reason) == ("quarantine", "unknown-alias")
+
+    def test_two_spellings_of_one_list_on_one_envelope_relay_once(self, with_base):
+        from mail import relay
+        to = [f"parents-cudo@{DOMAIN}", f"parents@cudo.{BASE}"]
+        results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", ", ".join(to)), envelope_recipients=to)
+        assert [r.action for r in results] == ["relay"]
+        assert len(with_base["outbox"].sent()) == 1
+
+    def test_unregistered_subdomain_is_dropped(self, with_base):
+        from mail import relay
+        to = f"parents@nosuchteam.{BASE}"
+        results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", to), envelope_recipients=[to])
+        assert [(r.action, r.reason, r.address) for r in results] == [("drop", "unknown-address", to)]
+        assert with_base["outbox"].sent() == []
+
+    def test_a_reply_to_the_subdomain_from_is_a_loop_too(self, with_base):
+        from mail import relay
+        to = f"parents-cudo@{DOMAIN}"
+        results = relay.process_inbound(raw_mail(f"List <parents@cudo.{BASE}>", to), envelope_recipients=[to])
+        assert (results[0].action, results[0].reason) == ("drop", "loop-own-address")
+        # ...but a coach writing from the support identity is a person
+        results = relay.process_inbound(raw_mail(f"Dave <help@{BASE}>", f"coaches-cudo@{DOMAIN}"), envelope_recipients=[f"coaches-cudo@{DOMAIN}"])
+        assert (results[0].action, results[0].reason) == ("quarantine", "unknown-sender")   # not in the directory, not a loop
+
+    def test_subdomain_style_changes_from_and_views_but_not_list_id(self, with_base, monkeypatch):
+        import config
+        from mail import relay, directory as dm
+        monkeypatch.setattr(config, "MAIL_ADDRESS_STYLE", "subdomain")
+        tid = with_base["team_id"]
+        results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", f"parents-cudo@{DOMAIN}"), envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+        assert results[0].address == f"parents@cudo.{BASE}"
+        send = with_base["outbox"].sent()[-1]
+        assert send["from"] == f"parents@cudo.{BASE}"
+        head = head_of(send)
+        assert f"From: Mom Smith via Parents CUDO <parents@cudo.{BASE}>" in head
+        assert f"Reply-To: Parents CUDO <parents@cudo.{BASE}>" in head
+        assert header(send, "List-Id") == f'"Parents CUDO" <parents-cudo.{DOMAIN}>'     # pinned
+        assert header(send, "List-Unsubscribe") == f"<mailto:coaches@cudo.{BASE}?subject=unsubscribe%20parents-cudo>"
+        assert header(send, "X-Breakside-List") == "parents-cudo"
+        # a player alias copy: From, Reply-To and the "also" all in the new spelling
+        relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", f"alice-cudo@{DOMAIN}"), envelope_recipients=[f"alice-cudo@{DOMAIN}"])
+        send = with_base["outbox"].sent()[-1]
+        assert send["from"] == f"alice@cudo.{BASE}"
+        assert header(send, "From").endswith(f"<alice@cudo.{BASE}>")
+        assert f"<alice@cudo.{BASE}>" in header(send, "Reply-To")
+        assert header(send, "List-Post") == f"<mailto:alice@cudo.{BASE}>"
+        assert header(send, "List-Id") == f'"Alice Smith (CUDO)" <alice-cudo.{DOMAIN}>'
+        assert header(send, "To") == f"alice-cudo@{DOMAIN}"              # as the sender wrote it
+        # the admin view
+        view = dm.directory_view(tid)
+        assert view["addressStyle"] == "subdomain" and view["baseDomain"] == BASE and view["domain"] == DOMAIN
+        a = view["addresses"]
+        assert a["all"] == f"team@cudo.{BASE}" and a["apex"] == f"cudo@{BASE}" and a["coaches"] == f"coaches@cudo.{BASE}"
+        assert a["playerPattern"] == f"<name>@cudo.{BASE}" and a["eventPattern"] == f"<event>@cudo.{BASE}"
+        assert view["altAddresses"]["parents"] == f"parents-cudo@{DOMAIN}"
+        assert view["altAddresses"]["playerPattern"] == f"<name>-cudo@{DOMAIN}"
+        assert view["lists"]["player"]["address"] == f"<name>@cudo.{BASE}"
+        assert next(p for p in view["roster"] if p["alias"] == "alice")["address"] == f"alice@cudo.{BASE}"
+        # the test message goes out from the new spelling and replies to the new coaches address
+        relay.send_test_message(tid, "coach@x.test", "Coach Dave")
+        head = head_of(with_base["outbox"].sent()[-1])
+        assert f"<team@cudo.{BASE}>" in head and f"Reply-To: coaches@cudo.{BASE}" in head
+
+    def test_list_style_view_still_offers_the_apex_and_the_other_spelling(self, with_base):
+        from mail import directory as dm
+        view = dm.directory_view(with_base["team_id"])
+        assert view["addressStyle"] == "list"
+        assert view["addresses"]["all"] == f"cudo@{DOMAIN}" and view["addresses"]["apex"] == f"cudo@{BASE}"
+        assert view["altAddresses"]["all"] == f"team@cudo.{BASE}"
+        assert view["altAddresses"]["eventPattern"] == f"<event>@cudo.{BASE}"
+
+    def test_no_base_domain_means_no_alt_and_no_apex(self, configured):
+        from mail import directory as dm
+        view = dm.directory_view(configured["team_id"])
+        assert view["baseDomain"] == "" and "altAddresses" not in view and "apex" not in view["addresses"]
+
+    def test_quarantine_release_and_notice_use_the_preferred_spelling(self, with_base, monkeypatch):
+        import config
+        from mail import relay
+        from storage import mail_storage as ms
+        monkeypatch.setattr(config, "MAIL_ADDRESS_STYLE", "subdomain")
+        tid = with_base["team_id"]
+        to = f"parents@cudo.{BASE}"
+        results = relay.process_inbound(raw_mail("Stranger <who@x.test>", to), envelope_recipients=[to])
+        assert results[0].action == "quarantine" and results[0].address == to
+        notice = head_of(with_base["outbox"].sent()[-1]) + with_base["outbox"].sent()[-1]["raw"].decode(errors="replace")
+        assert f"A message to {to} was held" in notice
+        assert f'From: "Breakside (CUDO)" <coaches@cudo.{BASE}>' in notice
+        item = ms.list_mail_quarantine(tid)[0]
+        assert item["list"] == "parents-cudo"                               # stored under the canonical key
+        released = relay.release_quarantine(tid, item["id"])
+        assert released[0].action == "relay" and released[0].address == to
+
+
+class TestSystemForwards:
+    def test_help_is_forwarded_to_the_configured_address(self, with_base):
+        import config
+        from mail import relay
+        assert config.mail_forwards() == {"help": "owner@x.test", "postmaster": "owner@x.test"}   # malformed pairs skipped
+        to = f"help@{BASE}"
+        raw = raw_mail("Stranger <who@x.test>", to, subject="Login trouble", extra=["Cc: someone@else.test"])
+        results = relay.process_inbound(raw, envelope_recipients=[to], verdicts={"spf": "FAIL", "dkim": "PASS", "dmarc": "PASS"})
+        assert [(r.action, r.team_id, r.recipients, r.address) for r in results] == [("relay", None, 1, to)]
+        send = with_base["outbox"].sent()[-1]
+        assert send["recipients"] == ["owner@x.test"] and send["from"] == to
+        head = head_of(send)
+        assert f"From: Stranger via Breakside Help <help@{BASE}>" in head
+        assert "Reply-To: Stranger <who@x.test>" in head
+        assert f"To: help@{BASE}" in head and "Cc: someone@else.test" in head   # headers pass through
+        assert "Subject: Login trouble" in head                               # no tag
+        assert "X-Breakside-List: help" in head
+        assert "List-Id" not in head and "List-Unsubscribe" not in head and "Precedence" not in head
+        assert "X-Original-From: Stranger <who@x.test>" in head
+
+    def test_forward_drops_what_a_list_would_hold(self, with_base):
+        from mail import relay
+        to = f"help@{BASE}"
+        # SES says the sender's domain disowns it: no quarantine to review for help@, so drop
+        results = relay.process_inbound(raw_mail("Spoof <ceo@bank.test>", to), envelope_recipients=[to], verdicts={"dmarc": "FAIL"})
+        assert (results[0].action, results[0].reason) == ("drop", "dmarc-fail")
+        results = relay.process_inbound(raw_mail("Spam <x@y.test>", to), envelope_recipients=[to], verdicts={"spam": "FAIL"})
+        assert (results[0].action, results[0].reason) == ("drop", "spam")
+        # our own forward coming back carries the marker
+        results = relay.process_inbound(raw_mail("Owner <owner@x.test>", to, extra=["X-Breakside-List: help"]), envelope_recipients=[to])
+        assert (results[0].action, results[0].reason) == ("drop", "loop-own-header")
+        # a bulk-precedence report (DMARC aggregate) is NOT a loop for a forward
+        results = relay.process_inbound(raw_mail("DMARC <noreply-dmarc@mail.test>", to, extra=["Precedence: bulk"]), envelope_recipients=[to])
+        assert results[0].action == "relay"
+        # but a vacation responder is
+        results = relay.process_inbound(raw_mail("Owner <owner@x.test>", to, extra=["Auto-Submitted: auto-replied"]), envelope_recipients=[to])
+        assert (results[0].action, results[0].reason) == ("drop", "loop-auto-submitted")
+        assert len(with_base["outbox"].sent()) == 1
+
+    def test_forwards_need_the_base_domain_and_leave_lists_alone(self, configured, monkeypatch):
+        import config
+        from mail import relay
+        monkeypatch.setattr(config, "MAIL_FORWARDS", "help=owner@x.test")
+        # no base domain: help@breakside.pro is not ours at all
+        results = relay.process_inbound(raw_mail("Who <who@x.test>", f"help@{BASE}"), envelope_recipients=[f"help@{BASE}"])
+        assert results == []
+        monkeypatch.setattr(config, "MAIL_BASE_DOMAIN", BASE)
+        # help@ at the list domain or a team subdomain is nobody
+        for to in (f"help@{DOMAIN}", f"help@cudo.{BASE}"):
+            results = relay.process_inbound(raw_mail("Who <who@x.test>", to), envelope_recipients=[to])
+            assert results[0].action != "relay"
+        # a forward and a list on one envelope: two independent results
+        to = [f"help@{BASE}", f"coaches-cudo@{DOMAIN}"]
+        results = relay.process_inbound(raw_mail("Mom Smith <mom@x.test>", ", ".join(to)), envelope_recipients=to)
+        assert [(r.action, r.team_id is None) for r in results] == [("relay", True), ("relay", False)]
+
+
+class TestInTeamNamespace:
+    """alias, event name and slug share one namespace in the subdomain spelling."""
+
+    def test_alias_may_not_equal_an_event_name_either_way(self, with_event):
+        from storage import mail_storage as ms
+        from mail import directory as dm
+        tid = with_event["team_id"]
+        alice = next(c for c in ms.get_mail_directory(tid)["contacts"] if c.get("alias") == "alice")
+        with pytest.raises(ValueError, match="event list"):
+            ms.update_mail_contact(tid, alice["id"], {"alias": "states"})
+        with pytest.raises(ValueError, match="player address name"):
+            ms.add_mail_event(tid, {"slug": "alice", "name": "Alice Cup"})
+        with pytest.raises(ValueError, match="player address name"):
+            ms.update_mail_event(tid, with_event["event"]["id"], {"slug": "bob"})
+        # a new roster player named like an event gets a different alias
+        from storage import player_storage, team_storage
+        pid = player_storage.save_player({"name": "States Jones"})
+        team_storage.update_team(tid, {"playerIds": team_storage.get_team(tid)["playerIds"] + [pid]})
+        added = dm.ensure_player_aliases(tid)
+        assert [c["alias"] for c in added] == ["states-j"]
+
+    def test_slug_may_not_equal_an_alias_or_event_name(self, with_event):
+        from storage import mail_storage as ms
+        tid = with_event["team_id"]
+        with pytest.raises(ValueError, match="player address name"):
+            ms.update_mail_settings(tid, slug="alice")
+        with pytest.raises(ValueError, match="event list"):
+            ms.update_mail_settings(tid, slug="states")
+        with pytest.raises(ValueError, match="team's own"):
+            ms.add_mail_event(tid, {"slug": "cudo", "name": "Cudo Cup"})
+        alice = next(c for c in ms.get_mail_directory(tid)["contacts"] if c.get("alias") == "alice")
+        with pytest.raises(ValueError, match="team's own"):
+            ms.update_mail_contact(tid, alice["id"], {"alias": "cudo"})
+        ms.update_mail_settings(tid, slug="cudo-mixed")   # a free name still works
+        assert ms.get_mail_slug_for_team(tid) == "cudo-mixed"
+
+    def test_old_data_with_both_resolves_to_the_event(self):
+        from mail import addresses as a
+        assert a.parse_subdomain_local("states", "cudo", ["states"]) == ("event", "cudo", "states")
+        assert a.parse_subdomain_local("states", "cudo", []) == ("player", "cudo", "states")
+

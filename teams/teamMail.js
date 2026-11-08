@@ -169,13 +169,14 @@ function render() {
 
 function renderSetup() {
     const suggestion = slugify(currentTeam?.name || '');
+    const p = previewAddresses(suggestion);
     return `
         <div class="settings-section">
             <h3>Set up email lists</h3>
             <p class="section-description">Pick a short name for your team's addresses. It becomes
-                <code>${esc(suggestion || 'team')}@${esc(state.domain)}</code>,
-                <code>parents-${esc(suggestion || 'team')}@${esc(state.domain)}</code> and so on.
-                Every player also gets <code>&lt;name&gt;-${esc(suggestion || 'team')}@${esc(state.domain)}</code>.</p>
+                <code>${esc(p.all)}</code>,
+                <code>${esc(p.parents)}</code> and so on${p.apex && p.apex !== p.all ? `, with <code>${esc(p.apex)}</code> as the short way to reach everyone` : ''}.
+                Every player also gets <code>${esc(p.player)}</code>.</p>
             <form class="identity-form" data-form="setup">
                 <div class="form-group">
                     <label for="mailSlugInput">Address name (letters, digits, hyphens)</label>
@@ -198,24 +199,29 @@ function renderTransportNote() {
 
 function renderAddresses() {
     const a = state.addresses;
-    const row = (label, addr, extra = '') => `
+    // Both spellings of an address work once the server has a base domain;
+    // the preferred one is the row, the other a quiet "also" line beneath,
+    // so a coach can tell a parent that the address they saved still works.
+    const alt = state.altAddresses || {};
+    const row = (label, addr, key = null) => `
         <div class="mail-address-row">
             <span class="mail-address-label">${esc(label)}</span>
             <code class="mail-address">${esc(addr)}</code>
             <button class="icon-button copy-address-btn" data-copy="${escAttr(addr)}" title="Copy address"><i class="fas fa-copy"></i></button>
-            ${extra}
+            ${key && alt[key] ? `<span class="mail-address-alt">also <code>${esc(alt[key])}</code></span>` : ''}
         </div>`;
     return `
         <div class="settings-section">
             <h3>Addresses</h3>
             <p class="section-description">Mail sent to these addresses from anyone in the directory is relayed to the people on that list. Mail from anyone else is held for your review.</p>
-            ${row('Everyone', a.all)}
-            ${row('Parents', a.parents)}
-            ${row('Coaches', a.coaches)}
-            ${row('Staff', a.staff)}
-            ${state.lists.players.enabled ? row('Players', a.players) : ''}
-            ${row('Each player', a.playerPattern)}
-            ${(state.events || []).length ? row('Each event', a.eventPattern) : ''}
+            ${row('Everyone', a.all, 'all')}
+            ${a.apex && a.apex !== a.all ? row('Short form', a.apex) : ''}
+            ${row('Parents', a.parents, 'parents')}
+            ${row('Coaches', a.coaches, 'coaches')}
+            ${row('Staff', a.staff, 'staff')}
+            ${state.lists.players.enabled ? row('Players', a.players, 'players') : ''}
+            ${row('Each player', a.playerPattern, 'playerPattern')}
+            ${(state.events || []).length ? row('Each event', a.eventPattern, 'eventPattern') : ''}
             <form class="mail-inline-form" data-form="settings">
                 <label>Address name <input type="text" name="slug" value="${escAttr(state.slug)}" maxlength="24" autocapitalize="none" class="url-input" required></label>
                 <label>Short name <input type="text" name="displayName" value="${escAttr(state.displayName)}" maxlength="40" class="url-input"></label>
@@ -659,7 +665,7 @@ function renderEvents() {
     return `
         <div class="settings-section" data-section="events">
             <h3>Event lists</h3>
-            <p class="section-description">One address per tournament or trip, <code>${esc(state.slug)}-&lt;event&gt;@${esc(state.domain)}</code>, for the logistics of the people going: the coaches and managers, the players you tick (and their parents from the directory), and any pickup players with their parents. Pickup players and their parents are on the event list only — they never get the team's other mail. Anyone on the list may write to it.</p>
+            <p class="section-description">One address per tournament or trip, <code>${esc(eventPattern())}</code>, for the logistics of the people going: the coaches and managers, the players you tick (and their parents from the directory), and any pickup players with their parents. Pickup players and their parents are on the event list only — they never get the team's other mail. Anyone on the list may write to it.</p>
             <div class="mail-events">
                 ${events.map(renderEventCard).join('')}
             </div>
@@ -831,7 +837,7 @@ function renderAddEvent() {
                     </select>
                 </label>` : ''}
                 <label>Name (for subject tags and "via" lines) <input type="text" name="name" class="url-input" maxlength="60" required placeholder="States 2026"></label>
-                <label><span>Address word: <span class="mail-address-preview"><code>${esc(state.slug)}-<span data-slug-preview>event</span>@${esc(state.domain)}</code></span></span>
+                <label><span>Address word: <span class="mail-address-preview"><code>${esc(eventPattern()).replace('&lt;event&gt;', '<span data-slug-preview>event</span>')}</code></span></span>
                     <input type="text" name="slug" class="url-input" maxlength="24" autocapitalize="none" autocomplete="off" required placeholder="states"></label>
             </div>
             <div class="mail-list-actions">
@@ -1402,7 +1408,7 @@ function applyContactUpdate(contact, form) {
     if (nameEl && nameEl.firstChild && contact.kind !== 'player') nameEl.firstChild.nodeValue = `${contact.name} `;
     if (contact.kind === 'player') {
         const roster = (state?.roster || []).find(p => p.contactId === contact.id);
-        const address = `${contact.alias}-${state.slug}@${state.domain}`;
+        const address = fillPattern(state.addresses?.playerPattern, '<name>', contact.alias);
         if (roster) { roster.alias = contact.alias; roster.address = address; }
         const code = row.querySelector('[data-player-address]');
         if (code) code.textContent = address;
@@ -1486,6 +1492,32 @@ function escAttr(value) {
 function slugify(name) {
     return String(name).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
         .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/g, '');
+}
+
+/** The server's `<name>-cudo@…` / `<event>@cudo.…` pattern with the placeholder filled in. */
+function fillPattern(pattern, placeholder, word) {
+    return String(pattern || '').replace(placeholder, word || '');
+}
+
+function eventPattern() {
+    return state.addresses?.eventPattern || `${state.slug}-<event>@${state.domain}`;
+}
+
+/**
+ * What a slug would become, before the directory exists (the setup form).
+ * Mirrors mail/directory.py address_patterns: the list spelling
+ * (`cudo@team.…`, `parents-cudo@team.…`) or, when the server prefers it,
+ * the subdomain spelling (`team@cudo.<base>`, `parents@cudo.<base>`); the
+ * apex short form `cudo@<base>` exists whenever there is a base domain.
+ */
+function previewAddresses(slug) {
+    const s = slug || 'team';
+    const base = state.baseDomain || '';
+    const apex = base ? `${s}@${base}` : null;
+    if (state.addressStyle === 'subdomain' && base) {
+        return { all: `team@${s}.${base}`, parents: `parents@${s}.${base}`, player: `<name>@${s}.${base}`, apex };
+    }
+    return { all: `${s}@${state.domain}`, parents: `parents-${s}@${state.domain}`, player: `<name>-${s}@${state.domain}`, apex };
 }
 
 function fmtDate(iso) {

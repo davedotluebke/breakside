@@ -48,7 +48,10 @@ Set via environment variables or in `.env` file:
 | `BREAKSIDE_DEBUG` | `false` | Enable debug mode |
 | `BREAKSIDE_ALLOWED_ORIGINS` | `*` | CORS allowed origins |
 | `BREAKSIDE_MAIL_TRANSPORT` | `none` | Team mailing lists: `ses`, `file` (outbox dir, for dev/tests) or `none` |
-| `BREAKSIDE_MAIL_DOMAIN` | `team.breakside.pro` | Domain the list addresses live at |
+| `BREAKSIDE_MAIL_DOMAIN` | `team.breakside.pro` | Domain the list addresses live at (`parents-<slug>@`) |
+| `BREAKSIDE_MAIL_BASE_DOMAIN` | | Also answer at `<list>@<slug>.<base>` and `<slug>@<base>` (needs a wildcard MX and the base verified in SES); empty = list domain only |
+| `BREAKSIDE_MAIL_ADDRESS_STYLE` | `list` | Spelling shown and sent From: `list` (`parents-cudo@team.…`) or `subdomain` (`parents@cudo.<base>`) |
+| `BREAKSIDE_MAIL_FORWARDS` | | Open forwards at the base domain, `help=you@example.org,postmaster=you@example.org` |
 | `BREAKSIDE_MAIL_QUEUE_URL` | | SQS queue fed by SES receiving; the inbound poller runs only when set (with `ses`) |
 | `BREAKSIDE_MAIL_INBOUND_BUCKET` | | S3 bucket SES stores received mail in |
 | `BREAKSIDE_MAIL_CONFIGURATION_SET` | | SES configuration set stamped on every send (reject events; bounces and complaints arrive as identity notifications) |

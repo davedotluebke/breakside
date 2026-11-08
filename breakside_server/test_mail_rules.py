@@ -92,6 +92,93 @@ class TestParse:
             addresses.address("player", "cudo", "team.example")
 
 
+class TestSpellings:
+    """The subdomain spelling (team@cudo.<base>) and the resolver over every
+    domain shape — Comms Phase 0.5."""
+    BASE = "breakside.pro"
+    LIST = "team.breakside.pro"
+    SLUGS = ["cudo", "mixed", "cudo-mixed"]
+    EVENTS = {"cudo-states": ("cudo", "states"), "mixed-states": ("mixed", "states")}
+    FORWARDS = {"help": "owner@x.test", "postmaster": "owner@x.test"}
+
+    def resolve(self, addr, base=BASE, forwards=FORWARDS):
+        local, domain = addresses.split_address(addr)
+        return addresses.resolve(local, domain, list_domain=self.LIST, base_domain=base,
+                                 slugs=self.SLUGS, event_locals=self.EVENTS, forwards=forwards)
+
+    @pytest.mark.parametrize("addr,expected", [
+        # the list spelling, unchanged
+        ("parents-cudo@team.breakside.pro", ("parents", "cudo", None)),
+        ("alice-cudo-mixed@team.breakside.pro", ("player", "cudo-mixed", "alice")),
+        ("cudo-states@team.breakside.pro", ("event", "cudo", "states")),
+        # the subdomain spelling: the team is the domain
+        ("team@cudo.breakside.pro", ("all", "cudo", None)),
+        ("cudo@cudo.breakside.pro", ("all", "cudo", None)),
+        ("Parents@CUDO.breakside.pro", ("parents", "cudo", None)),
+        ("coaches@cudo-mixed.breakside.pro", ("coaches", "cudo-mixed", None)),
+        ("alice@cudo.breakside.pro", ("player", "cudo", "alice")),
+        ("mary-kate@mixed.breakside.pro", ("player", "mixed", "mary-kate")),
+        ("states@cudo.breakside.pro", ("event", "cudo", "states")),
+        ("states@mixed.breakside.pro", ("event", "mixed", "states")),
+        ("states@cudo-mixed.breakside.pro", ("player", "cudo-mixed", "states")),   # no such event there
+        ("parents@cudo.breakside.pro.", ("parents", "cudo", None)),                 # trailing dot folded
+        # the apex: a slug is everyone, and the list spelling works there too
+        ("cudo@breakside.pro", ("all", "cudo", None)),
+        ("parents-cudo@breakside.pro", ("parents", "cudo", None)),
+        ("alice-mixed@breakside.pro", ("player", "mixed", "alice")),
+    ])
+    def test_lists_resolve_in_every_spelling(self, addr, expected):
+        t = self.resolve(addr)
+        assert (t.kind, t.slug, t.alias) == expected
+        # every spelling lands on the same canonical key
+        assert t.local == addresses.local_part(*expected)
+
+    @pytest.mark.parametrize("addr", [
+        "nobody@zzz.breakside.pro",          # unregistered subdomain: the wildcard MX brings it, we drop it
+        "team@breakside.pro",                # 'team' is not a slug
+        "x@team.breakside.pro",              # not a slug at the list domain
+        "parents@cudo.example.org",          # not our domain at all
+        "admin@cudo.breakside.pro",          # reserved word is nobody's alias
+        "@cudo.breakside.pro",
+    ])
+    def test_unknown(self, addr):
+        assert self.resolve(addr) is None
+
+    def test_forwards_only_at_the_apex(self):
+        t = self.resolve("Help@breakside.pro")
+        assert (t.kind, t.alias, t.forward_to, t.local) == ("forward", "help", "owner@x.test", "help")
+        assert self.resolve("help@cudo.breakside.pro") is None            # not a player on cudo either: reserved
+        assert self.resolve("help@team.breakside.pro") is None
+        assert self.resolve("help@breakside.pro", forwards=None) is None   # nothing configured, 'help' is no slug
+
+    def test_without_a_base_domain_only_the_list_domain_counts(self):
+        assert self.resolve("parents-cudo@team.breakside.pro", base="").kind == "parents"
+        assert self.resolve("team@cudo.breakside.pro", base="") is None
+        assert self.resolve("cudo@breakside.pro", base="") is None
+        assert addresses.is_our_domain("cudo.breakside.pro", list_domain=self.LIST, base_domain="") is False
+        assert addresses.is_our_domain("cudo.breakside.pro", list_domain=self.LIST, base_domain=self.BASE) is True
+        assert addresses.is_our_domain("breakside.pro", list_domain=self.LIST, base_domain=self.BASE) is True
+        assert addresses.is_our_domain("notbreakside.pro", list_domain=self.LIST, base_domain=self.BASE) is False
+
+    def test_render_both_spellings(self):
+        kw = dict(base_domain=self.BASE, style="subdomain")
+        assert addresses.address("all", "cudo", self.LIST, **kw) == "team@cudo.breakside.pro"
+        assert addresses.address("parents", "cudo", self.LIST, **kw) == "parents@cudo.breakside.pro"
+        assert addresses.address("player", "cudo", self.LIST, "alice", **kw) == "alice@cudo.breakside.pro"
+        assert addresses.address("event", "cudo", self.LIST, "states", **kw) == "states@cudo.breakside.pro"
+        assert addresses.apex_address("cudo", self.BASE) == "cudo@breakside.pro"
+        # list style, or no base domain, is the old spelling
+        assert addresses.address("parents", "cudo", self.LIST, base_domain=self.BASE, style="list") == "parents-cudo@team.breakside.pro"
+        assert addresses.address("parents", "cudo", self.LIST, base_domain="", style="subdomain") == "parents-cudo@team.breakside.pro"
+        with pytest.raises(ValueError):
+            addresses.subdomain_local("player", "cudo")
+
+    def test_zone_hostnames_are_reserved_slugs(self):
+        for host in ("api", "staging", "www", "team", "app"):
+            with pytest.raises(addresses.AddressError):
+                addresses.validate_slug(host)
+
+
 # =============================================================================
 # policy
 # =============================================================================
@@ -238,6 +325,23 @@ class TestLoopsAndVerdicts:
     ])
     def test_loop_reason(self, headers, expected):
         assert policy.loop_reason(headers, "team.breakside.pro") == expected
+
+    def test_own_address_by_resolution(self):
+        """With a resolver the guard asks "is this From one of our lists", in
+        any spelling; a system forward (help@) is a person's identity, not a
+        loop; without one it falls back to the domain match."""
+        lists = {"parents@cudo.breakside.pro", "parents-cudo@team.breakside.pro", "cudo@breakside.pro"}
+        is_own = lambda addr: addr in lists
+        assert policy.loop_reason({"from": "List <parents@cudo.breakside.pro>"}, "team.breakside.pro", is_own=is_own) == "loop-own-address"
+        assert policy.loop_reason({"from": "List <CUDO@breakside.pro>"}, "team.breakside.pro", is_own=is_own) == "loop-own-address"
+        assert policy.loop_reason({"from": "Dave <help@breakside.pro>"}, "team.breakside.pro", is_own=is_own) is None
+        assert policy.loop_reason({"from": "Dave <help@breakside.pro>"}, "breakside.pro") == "loop-own-address"   # legacy check
+
+    def test_forward_skips_only_the_precedence_check(self):
+        assert policy.loop_reason({"precedence": "bulk", "from": "r@dmarc.example"}, "breakside.pro", forward=True) is None
+        assert policy.loop_reason({"precedence": "list", "from": "r@dmarc.example"}, "breakside.pro", forward=False) == "loop-precedence"
+        assert policy.loop_reason({"x-breakside-list": "help", "from": "r@x.test"}, "breakside.pro", forward=True) == "loop-own-header"
+        assert policy.loop_reason({"auto-submitted": "auto-replied", "from": "r@x.test"}, "breakside.pro", forward=True) == "loop-auto-submitted"
 
     def test_null_envelope_sender(self):
         h = {"from": "Bob <bob@x.test>"}
@@ -392,6 +496,32 @@ class TestRewrite:
         out = parsed(rewrite.rewrite_message(simple(subject="Practice"), list_address=LIST, list_display="X",
                                              subject_tag="[X]", reply_to_mode="list", subject_marker="[Parent copy]"))
         assert out["Subject"] == "[X] [Parent copy] Practice"
+
+    def test_list_key_pins_list_id_and_marker_to_the_canonical_spelling(self):
+        """The subdomain spelling goes out as From, but List-Id, the RFC 2369
+        subjects and X-Breakside-List carry the list key at the list domain,
+        so a parent's filter on List-Id survives the change of spelling."""
+        out = parsed(rewrite.rewrite_message(simple(), list_address="parents@cudo.breakside.pro", list_display="Parents CUDO",
+                                             subject_tag="", reply_to_mode="coaches", coaches_address="coaches@cudo.breakside.pro",
+                                             list_key="parents-cudo", list_id_domain="team.breakside.pro"))
+        assert out["From"].addresses[0].addr_spec == "parents@cudo.breakside.pro"
+        assert out["List-Id"] == '"Parents CUDO" <parents-cudo.team.breakside.pro>'
+        assert out["List-Post"].strip() == "<mailto:parents@cudo.breakside.pro>"
+        assert out["List-Unsubscribe"].strip() == "<mailto:coaches@cudo.breakside.pro?subject=unsubscribe%20parents-cudo>"
+        assert out["X-Breakside-List"] == "parents-cudo"
+
+    def test_forward_has_no_list_headers(self):
+        out = parsed(rewrite.rewrite_message(simple(), list_address="help@breakside.pro",
+                                             list_display="Breakside Help", subject_tag="", reply_to_mode="author",
+                                             list_key="help", list_headers=False))
+        assert str(out["From"]) == "Bob Smith via Breakside Help <help@breakside.pro>"
+        assert out["Reply-To"].addresses[0].addr_spec == "bob@yahoo.com"
+        assert out["To"].addresses[0].addr_spec == LIST       # untouched: the recipient's send-as identity keys on it
+        assert out["X-Breakside-List"] == "help"
+        for h in ("List-Id", "List-Post", "List-Unsubscribe", "List-Help", "List-Owner", "Precedence"):
+            assert out[h] is None, h
+        assert out["Subject"] == "Carpool"
+        assert policy.loop_reason(rewrite.header_map(out), "breakside.pro", forward=True) == "loop-own-header"
 
     def test_message_id_generated_when_missing(self):
         raw = b"From: a@b.test\r\nTo: parents-cudo@team.breakside.pro\r\nSubject: x\r\n\r\nbody\r\n"
