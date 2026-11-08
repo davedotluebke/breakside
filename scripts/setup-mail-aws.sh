@@ -342,12 +342,18 @@ ensure_configuration_set() {
 # ---------- 6. IAM policy ---
 ensure_iam() {
     bold "7. IAM policy $POLICY_NAME on role $ROLE"
-    local doc arn
+    local doc arn send_resources
+    # Built outside the heredoc: quotes inside a ${var:+...} expansion are
+    # stripped there, which once produced an unquoted ARN and a malformed
+    # policy document.
+    send_resources="\"$IDENTITY_ARN\""
+    [[ -n "$BASE_IDENTITY_ARN" ]] && send_resources="$send_resources,\"$BASE_IDENTITY_ARN\""
+    send_resources="$send_resources,\"$CONFIGSET_ARN\""
     doc=$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
  {"Sid":"Queue","Effect":"Allow","Action":["sqs:ReceiveMessage","sqs:DeleteMessage","sqs:GetQueueAttributes","sqs:ChangeMessageVisibility"],"Resource":"$QUEUE_ARN"},
  {"Sid":"Inbound","Effect":"Allow","Action":["s3:GetObject"],"Resource":"arn:aws:s3:::$BUCKET/$PREFIX*"},
- {"Sid":"Send","Effect":"Allow","Action":["ses:SendEmail","ses:SendRawEmail"],"Resource":["$IDENTITY_ARN",${BASE_IDENTITY_ARN:+"$BASE_IDENTITY_ARN",}"$CONFIGSET_ARN"]}]}
+ {"Sid":"Send","Effect":"Allow","Action":["ses:SendEmail","ses:SendRawEmail"],"Resource":[$send_resources]}]}
 JSON
 )
     arn="arn:aws:iam::$ACCOUNT:policy/$POLICY_NAME"
