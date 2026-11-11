@@ -1264,8 +1264,16 @@ def record_mail_delivery(provider_id: Optional[str], email: str, event: str, *,
     return team_id
 
 
+def _delivery_index(records: Iterable[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Delivery records by the send they are about, each list oldest first."""
+    index: Dict[str, List[Dict[str, Any]]] = {}
+    for record in records:
+        index.setdefault(record.get("providerId") or "", []).append(record)
+    return index
+
+
 def mail_delivery_status(team_id: str, entry: Dict[str, Any],
-                         records: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+                         index: Optional[Dict[str, List[Dict[str, Any]]]] = None) -> Optional[Dict[str, Any]]:
     """Per-recipient delivery state for one activity-log row.
 
     None when the row is not a tracked send (it is not a relay, or it
@@ -1278,35 +1286,39 @@ def mail_delivery_status(team_id: str, entry: Dict[str, Any],
     ``status`` is ``pending`` until the provider reports something for that
     address. ``delay`` is the receiving server's last "try again later"
     answer, kept when the message was delivered afterwards so a slow
-    delivery says why. ``records`` lets a caller that already read the
-    delivery files pass them in.
+    delivery says why. ``index`` lets a caller that already read the
+    delivery files pass them in (``_delivery_index``).
     """
     if entry.get("action") not in _TRACKED_ACTIONS:
         return None
     ids = {i for i in (entry.get("providerIds") or [entry.get("providerId")]) if i and i not in _UNTRACKED_IDS}
     if not ids:
         return None
-    if records is None:
-        records = _read_delivery(team_id)
+    if index is None:
+        index = _delivery_index(_read_delivery(team_id))
+    # Only this row's sends are looked at, in the order the relay made them.
+    ordered = [i for i in (entry.get("providerIds") or [entry.get("providerId")]) if i in ids]
     recipients: Dict[str, Dict[str, Any]] = {}
-    mine = set()
+    mine: List[str] = []
     sent_at = None
-    for record in records:
-        if record.get("event") != "sent" or record.get("providerId") not in ids:
-            continue
-        lists = record.get("lists") or []
-        if lists and entry.get("list") and entry["list"] not in lists:
-            continue
-        mine.add(record["providerId"])
-        sent_at = sent_at or record.get("at")
-        for address in record.get("to") or []:
-            recipients.setdefault(address, {"email": address, "status": "pending", "at": None,
-                                            "seconds": None, "detail": "", "delay": ""})
+    for provider_id in dict.fromkeys(ordered):
+        for record in index.get(provider_id, []):
+            if record.get("event") != "sent":
+                continue
+            lists = record.get("lists") or []
+            if lists and entry.get("list") and entry["list"] not in lists:
+                continue
+            if provider_id not in mine:
+                mine.append(provider_id)
+            sent_at = sent_at or record.get("at")
+            for address in record.get("to") or []:
+                recipients.setdefault(address, {"email": address, "status": "pending", "at": None,
+                                                "seconds": None, "detail": "", "delay": ""})
     if not recipients:
         return None
-    for record in records:
+    for record in (r for provider_id in mine for r in index.get(provider_id, [])):
         event = record.get("event")
-        if event not in _DELIVERY_RANK or record.get("providerId") not in mine:
+        if event not in _DELIVERY_RANK:
             continue
         row = recipients.get(record.get("email"))
         if row is None:
@@ -1330,9 +1342,10 @@ def attach_delivery(team_id: str, entries: List[Dict[str, Any]]) -> List[Dict[st
     ``delivery`` (``{"sent", "delivered", "delayed", "bounced", "complaint",
     "rejected", "pending", "slowestSeconds"}``); None on every other row.
     The per-recipient detail is ``mail_delivery_status``."""
-    records = _read_delivery(team_id) if any(e.get("action") in _TRACKED_ACTIONS for e in entries) else []
+    tracked = any(e.get("action") in _TRACKED_ACTIONS for e in entries)
+    index = _delivery_index(_read_delivery(team_id)) if tracked else {}
     for entry in entries:
-        status = mail_delivery_status(team_id, entry, records) if records else None
+        status = mail_delivery_status(team_id, entry, index) if index else None
         entry["delivery"] = {**status["counts"], "slowestSeconds": status["slowestSeconds"]} if status else None
     return entries
 
