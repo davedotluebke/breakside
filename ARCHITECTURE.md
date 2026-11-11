@@ -818,7 +818,11 @@ setup. Pair a frontend by opening it once with `?api=http://localhost:<port>`
 localStorage is keyed per origin **including port**, frontend port 3001↔backend
 8001 and 3002↔8002 stay independent. `--reload` watches the worktree's own
 `breakside_server/`, so each session tests its own server changes. The
-`.dev-data/` copies are gitignored and disposable.
+`.dev-data/` copies are gitignored and disposable. Team mail uses the file
+transport there (`BREAKSIDE_MAIL_TRANSPORT=file` unless set otherwise): every
+relayed message lands as an `.eml` in the data dir's `mail/_outbox/`, and a
+send has an id, so `POST /api/mail/dev/inbound` plus `POST /api/mail/dev/event`
+exercise list mail and its delivery tracking end to end with nothing sent.
 
 This is the durable replacement for adding `localhost` to the prod API's
 `BREAKSIDE_ALLOWED_ORIGINS` — keep prod CORS locked to the real origins.
