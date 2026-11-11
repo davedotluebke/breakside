@@ -1628,3 +1628,225 @@ class TestInTeamNamespace:
         assert a.parse_subdomain_local("states", "cudo", ["states"]) == ("event", "cudo", "states")
         assert a.parse_subdomain_local("states", "cudo", []) == ("player", "cudo", "states")
 
+
+
+# =============================================================================
+# Delivery tracking: who each send went to, and what the provider reported
+# =============================================================================
+
+def ses_delivery(provider_id, recipients, millis=1800, when="2026-11-10T15:12:49.000Z"):
+    return json.dumps({"eventType": "Delivery", "mail": {"messageId": provider_id},
+                       "delivery": {"timestamp": when, "processingTimeMillis": millis, "recipients": recipients,
+                                    "smtpResponse": "250 2.0.0 OK", "reportingMTA": "a.x.test"}})
+
+
+def ses_delay(provider_id, address, code="421 4.7.0 Try again later"):
+    return json.dumps({"eventType": "DeliveryDelay", "mail": {"messageId": provider_id},
+                       "deliveryDelay": {"timestamp": "2026-11-10T15:20:00.000Z", "delayType": "TransientCommunicationFailure",
+                                         "delayedRecipients": [{"emailAddress": address, "status": "4.7.0",
+                                                                "diagnosticCode": code}]}})
+
+
+def _poller():
+    from mail import inbound
+    return inbound.InboundPoller("q", region="us-east-1", bucket="bkt", hold_seconds=0,
+                                 sqs_client=FakeSQS([]), s3_client=FakeS3({}))
+
+
+def _relay_to_parents(configured, subject="Hotel block"):
+    from mail import relay
+    from storage import mail_storage as ms
+    relay.process_inbound(raw_mail("mom@x.test", f"parents-cudo@{DOMAIN}", subject=subject),
+                          envelope_recipients=[f"parents-cudo@{DOMAIN}"])
+    return ms.read_mail_log(configured["team_id"], 1)[0]
+
+
+class TestDeliveryTracking:
+    def test_every_recipient_starts_pending_and_events_fill_in(self, configured):
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        row = _relay_to_parents(configured)
+        pid = row["providerId"]
+        status = ms.mail_delivery_status(tid, row)
+        everyone = ["carol@x.test", "coach2@x.test", "coach@x.test", "dad@x.test", "mom@x.test"]
+        assert sorted(r["email"] for r in status["recipients"]) == everyone
+        assert status["counts"]["sent"] == 5 and status["counts"]["pending"] == 5 and status["slowestSeconds"] is None
+
+        poller = _poller()
+        poller.handle_body(ses_delivery(pid, ["mom@x.test", "Coach@X.test"]))        # one event, two recipients; case folded
+        poller.handle_body(ses_delay(pid, "dad@x.test"))
+        by = {r["email"]: r for r in ms.mail_delivery_status(tid, row)["recipients"]}
+        assert by["mom@x.test"]["status"] == "delivered" and by["mom@x.test"]["seconds"] == 1.8
+        assert by["mom@x.test"]["at"] == "2026-11-10T15:12:49.000Z" and by["mom@x.test"]["detail"] == "250 2.0.0 OK"
+        assert by["coach@x.test"]["status"] == "delivered"
+        assert by["dad@x.test"]["status"] == "delayed" and by["dad@x.test"]["detail"].startswith("421 4.7.0")
+        assert by["carol@x.test"]["status"] == "pending"
+
+        # the deferred copy arrives three hours later: delivered, and it still says why it was slow
+        poller.handle_body(ses_delivery(pid, ["dad@x.test"], millis=11_400_000, when="2026-11-10T18:22:00.000Z"))
+        # a bounce is the last word for that address, also when "delivered" was reported first
+        poller.handle_body(ses_delivery(pid, ["carol@x.test"]))
+        poller.handle_body(json.dumps({"notificationType": "Bounce", "mail": {"messageId": pid},
+                                       "bounce": {"bounceType": "Permanent", "bounceSubType": "General",
+                                                  "timestamp": "2026-11-10T15:13:00.000Z",
+                                                  "bouncedRecipients": [{"emailAddress": "carol@x.test",
+                                                                         "diagnosticCode": "550 5.1.1 no such user"}]}}))
+        status = ms.mail_delivery_status(tid, row)
+        by = {r["email"]: r for r in status["recipients"]}
+        assert by["dad@x.test"]["status"] == "delivered" and by["dad@x.test"]["seconds"] == 11400.0
+        assert by["dad@x.test"]["delay"].startswith("421 4.7.0")
+        assert by["carol@x.test"]["status"] == "bounced" and by["carol@x.test"]["detail"] == "hard: 550 5.1.1 no such user"
+        assert status["counts"] == {"sent": 5, "pending": 1, "delivered": 3, "delayed": 0, "bounced": 1,
+                                    "complaint": 0, "rejected": 0}
+        assert status["slowestSeconds"] == 11400.0
+        # the contact is still flagged exactly as before tracking existed
+        assert ms.get_mail_contact(tid, configured["mgr"]["id"])["bounces"]["carol@x.test"]["kind"] == "hard"
+
+        (shown,) = [e for e in ms.attach_delivery(tid, ms.read_mail_log(tid, 10)) if e["id"] == row["id"]]
+        assert shown["delivery"] == {**status["counts"], "slowestSeconds": 11400.0}
+        assert all(e["delivery"] is None for e in ms.attach_delivery(tid, ms.read_mail_log(tid, 10)) if e["action"] == "bounce")
+
+    def test_a_list_over_fifty_logs_every_send_id(self, configured):
+        """SES takes 50 recipients per call. Only the first call's id used to
+        reach the log row, so nothing reported about recipients 51 and up
+        could be tied to the message."""
+        from mail import relay, transport
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        for i in range(50):
+            ms.add_mail_contact(tid, {"kind": "guardian", "name": f"Parent {i}", "email": f"p{i}@x.test",
+                                      "playerIds": [configured["bob"]]})
+        client = FakeSesClient()
+        transport.set_transport(transport.SesTransport("us-east-1", "team-mail", client=client))
+        row = _relay_to_parents(configured)
+        assert [len(c["Destination"]["ToAddresses"]) for c in client.calls] == [50, 5]
+        assert row["providerIds"] == ["ses-1", "ses-2"] and row["providerId"] == "ses-1" and row["recipients"] == 55
+        second = client.calls[1]["Destination"]["ToAddresses"]
+        _poller().handle_body(ses_delivery("ses-2", second[:1]))
+        status = ms.mail_delivery_status(tid, row)
+        assert status["counts"]["sent"] == 55 and status["counts"]["delivered"] == 1 and status["counts"]["pending"] == 54
+        # a bounce from the second call is tied to the message now
+        ms.record_mail_bounce(second[1], "hard", "550", provider_id="ses-2")
+        assert ms.read_mail_log(tid, 1)[0]["relayedId"] == row["id"]
+
+    def test_send_batches_wraps_a_transport_that_only_sends(self):
+        from mail import transport
+
+        class Plain:
+            def send(self, *, from_addr, recipients, raw):
+                return "id-1"
+
+        assert transport.send_batches(Plain(), from_addr="a@x.test", recipients=["b@x.test"], raw=b"") == \
+            [{"id": "id-1", "recipients": ["b@x.test"]}]
+        ses = transport.SesTransport("us-east-1", client=FakeSesClient())
+        batches = ses.send_batches(from_addr="a@x.test", recipients=[f"r{i}@x.test" for i in range(53)], raw=b"x")
+        assert [(b["id"], len(b["recipients"])) for b in batches] == [("ses-1", 50), ("ses-2", 3)]
+
+    def test_each_alias_row_shows_its_own_recipients(self, configured):
+        """One message to two player aliases is several sends (one per
+        audience), and every send id is on both rows; a row's delivery view
+        is still only the people behind that alias."""
+        from mail import relay
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        both = [f"alice-cudo@{DOMAIN}", f"bob-cudo@{DOMAIN}"]
+        relay.process_inbound(raw_mail("Coach Dave <coach@x.test>", ", ".join(both)), envelope_recipients=both)
+        rows = {r["list"]: r for r in ms.read_mail_log(tid, 2)}
+        alice = {r["email"] for r in ms.mail_delivery_status(tid, rows["alice-cudo"])["recipients"]}
+        bob = {r["email"] for r in ms.mail_delivery_status(tid, rows["bob-cudo"])["recipients"]}
+        assert "mom@x.test" in alice and "mom@x.test" not in bob        # mom is only Alice's
+        assert "bob@x.test" in bob and "bob@x.test" not in alice
+        assert "dad@x.test" in alice and "dad@x.test" in bob            # dad is behind both
+        assert len(alice) == rows["alice-cudo"]["recipients"] and len(bob) == rows["bob-cudo"]["recipients"]
+
+    def test_what_is_not_tracked(self, configured):
+        from mail import transport
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        # an event for a send nobody recorded (a system forward, a coach notice): nothing written
+        assert ms.record_mail_delivery("ses-unknown", "mom@x.test", "delivered") is None
+        _poller().handle_body(ses_delivery("ses-unknown", ["mom@x.test"]))
+        assert not (configured["tmp"] / "mail" / tid / "delivery").exists()
+        with pytest.raises(ValueError):
+            ms.record_mail_delivery("x", "mom@x.test", "opened")
+        # a row from before tracking: an id, but no record of who it went to
+        old = ms.append_mail_log(tid, {"action": "relayed", "list": "parents-cudo", "recipients": 5,
+                                       "providerId": "ses-old", "providerIds": ["ses-old"]})
+        assert ms.mail_delivery_status(tid, old) is None
+        assert ms.attach_delivery(tid, [dict(old)])[0]["delivery"] is None
+        # the null transport's id names no send
+        transport.set_transport(transport.NullTransport())
+        row = _relay_to_parents(configured)
+        assert row["providerId"] == "none" and ms.mail_delivery_status(tid, row) is None
+        # a held message is not a send
+        assert ms.mail_delivery_status(tid, {"action": "quarantined", "providerId": "ses-old"}) is None
+
+    def test_events_find_their_team_after_a_restart(self, configured):
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        row = _relay_to_parents(configured)
+        ms._send_teams.clear()                                         # a new process remembers nothing
+        assert ms.find_mail_send_team(row["providerId"]) == tid
+        _poller().handle_body(ses_delivery(row["providerId"], ["mom@x.test"]))
+        assert ms.mail_delivery_status(tid, row)["counts"]["delivered"] == 1
+
+    def test_retention(self, configured):
+        from datetime import datetime, timezone
+        from storage import mail_storage as ms
+        tid = configured["team_id"]
+        _relay_to_parents(configured)
+        folder = configured["tmp"] / "mail" / tid / "delivery"
+        (folder / "2026-07.jsonl").write_text("{}\n")
+        (folder / "2026-08.jsonl").write_text("{}\n")
+        current = sorted(p.name for p in folder.glob("*.jsonl"))[-1]
+        assert ms.purge_mail_delivery(tid, today=datetime(2026, 11, 10, tzinfo=timezone.utc)) == 1
+        assert sorted(p.name for p in folder.glob("*.jsonl")) == ["2026-08.jsonl", current]   # three whole months back are kept
+        assert ms.purge_mail_delivery(tid, today=datetime(2027, 1, 2, tzinfo=timezone.utc)) == 1   # across a year end
+
+    def test_erasure_scrubs_delivery_records(self, configured):
+        from storage import erasure, mail_storage as ms
+        tid = configured["team_id"]
+        row = _relay_to_parents(configured)
+        _poller().handle_body(ses_delivery(row["providerId"], ["mom@x.test", "dad@x.test"]))
+        folder = configured["tmp"] / "mail" / tid / "delivery"
+        assert "mom@x.test" in "".join(p.read_text() for p in folder.glob("*.jsonl"))
+        erasure.erase_player(configured["alice"], dry_run=True)
+        assert "mom@x.test" in "".join(p.read_text() for p in folder.glob("*.jsonl"))   # a preview changes nothing
+        erasure.erase_player(configured["alice"])                      # mom is only Alice's: her contact goes
+        text = "".join(p.read_text() for p in folder.glob("*.jsonl"))
+        assert "mom@x.test" not in text and "dad@x.test" in text       # dad is also Bob's: he stays
+        status = ms.mail_delivery_status(tid, row)
+        assert status["counts"]["sent"] == 4 and status["counts"]["delivered"] == 1
+
+    def test_api(self, client, configured, monkeypatch):
+        tid = configured["team_id"]
+        row = _relay_to_parents(configured)
+        _poller().handle_body(ses_delivery(row["providerId"], ["mom@x.test"], millis=900_000))
+        _poller().handle_body(ses_delay(row["providerId"], "dad@x.test"))
+        _as(VIEWER)
+        assert client.get(f"/api/teams/{tid}/mail/log/{row['id']}/delivery").status_code == 403
+        _as(COACH)
+        entry = next(e for e in client.get(f"/api/teams/{tid}/mail/log").json()["entries"] if e["id"] == row["id"])
+        assert entry["delivery"]["sent"] == 5 and entry["delivery"]["delivered"] == 1 and entry["delivery"]["delayed"] == 1
+        assert entry["delivery"]["slowestSeconds"] == 900.0
+        view = client.get(f"/api/teams/{tid}/mail/log/{row['id']}/delivery").json()
+        assert view["tracked"] is True and view["subject"] == "Hotel block" and view["list"] == "parents-cudo"
+        assert [r["status"] for r in view["recipients"]] == ["delayed", "pending", "pending", "pending", "delivered"]
+        dad, mom = view["recipients"][0], view["recipients"][-1]
+        assert dad["contacts"] == [{"name": "Dad Smith", "kind": "guardian", "playerNames": ["Alice Smith", "Bob Jones"]}]
+        assert mom["contacts"][0]["name"] == "Mom Smith" and mom["seconds"] == 900.0
+        coach = next(r for r in view["recipients"] if r["email"] == "coach@x.test")
+        assert coach["contacts"] == [{"name": "Coach Dave", "kind": "coach", "playerNames": []}]
+        assert client.get(f"/api/teams/{tid}/mail/log/ml_nope/delivery").status_code == 404
+        held = client.get(f"/api/teams/{tid}/mail/log").json()["entries"]
+        assert all(e["delivery"] is None for e in held if e["action"] != "relayed")
+        # the dev event endpoint is closed unless the backend runs without auth
+        body = ses_delivery(row["providerId"], ["dad@x.test"])
+        assert client.post("/api/mail/dev/event", content=body).status_code == 404
+        monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "false")
+        assert client.post("/api/mail/dev/event", content=body).json() == {"handled": "Delivery"}
+        assert client.post("/api/mail/dev/event", content="not json").status_code == 400
+        assert client.post("/api/mail/dev/event", content=ses_received(["x@x.test"], "k")).status_code == 400
+        monkeypatch.setenv("BREAKSIDE_AUTH_REQUIRED", "true")
+        view = client.get(f"/api/teams/{tid}/mail/log/{row['id']}/delivery").json()
+        assert next(r for r in view["recipients"] if r["email"] == "dad@x.test")["status"] == "delivered"
