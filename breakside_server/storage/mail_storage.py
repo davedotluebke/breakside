@@ -6,6 +6,7 @@ Layout under ``data/mail/``:
     _slugs.json                     slug ↔ teamId, plus every event address (global; routes inbound mail)
     {teamId}/directory.json         slug, display name, per-list settings, contacts, event lists
     {teamId}/log/{YYYY-MM}.jsonl    one line per relayed / quarantined / bounced message
+    {teamId}/delivery/{YYYY-MM}.jsonl  per-recipient delivery facts for each send (kept ~3 months)
     {teamId}/quarantine/{id}.json   held message metadata …
     {teamId}/quarantine/{id}.eml    … and its raw MIME
 
@@ -1121,6 +1122,282 @@ def _rewrite_log(team_id: str, keep) -> int:
 
 
 # ==========================================================================
+# Delivery tracking
+# ==========================================================================
+#
+# {teamId}/delivery/{YYYY-MM}.jsonl holds one line per fact about one
+# outbound send: who it went to (``sent``), and what the provider reported
+# for one recipient afterwards (``delivered``, ``delayed``, ``bounced``,
+# ``complaint``, ``rejected``). It is kept apart from the activity log
+# because it is per recipient (a list of 53 is 54 lines or more per message,
+# and the log view reads the newest N lines) and because it is the one place
+# that holds every recipient's address for every message: it has a shorter
+# retention than the log and its own erasure pass.
+#
+# "Delivered" is the receiving mail server accepting the message. What that
+# server does next (inbox, spam folder, a quarantine digest) is invisible
+# from here.
+
+DELIVERY_RETENTION_MONTHS = 3
+DELIVERY_EVENTS = ("delivered", "delayed", "bounced", "complaint", "rejected")
+# One recipient, several facts on record: the worst news wins, and
+# "delivered" replaces an earlier "delayed".
+_DELIVERY_RANK = {"complaint": 5, "bounced": 4, "rejected": 3, "delivered": 2, "delayed": 1}
+# Ids that name no particular send (the null transport, an SES call that
+# returned no id): nothing can ever be reported against them.
+_UNTRACKED_IDS = frozenset({"", "none", "ses"})
+_TRACKED_ACTIONS = ("relayed", "released", "test")
+_send_teams: Dict[str, str] = {}      # provider id → team, for sends this process recorded
+
+
+def _delivery_dir(team_id: str) -> Path:
+    return _team_dir(team_id) / "delivery"
+
+
+def _remember_send(provider_id: str, team_id: str) -> None:
+    if len(_send_teams) > 5000:
+        _send_teams.clear()
+    _send_teams[provider_id] = team_id
+
+
+def _append_delivery(team_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    record = {"at": _now(), **record}
+    directory = _delivery_dir(team_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{record['at'][:7]}.jsonl"
+    with entity_lock(f"mail-delivery:{team_id}"):
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    return record
+
+
+def _read_delivery(team_id: str) -> List[Dict[str, Any]]:
+    """Every retained delivery record, oldest first."""
+    directory = _delivery_dir(team_id)
+    if not directory.exists():
+        return []
+    records: List[Dict[str, Any]] = []
+    for path in sorted(directory.glob("*.jsonl")):
+        with open(path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return records
+
+
+def record_mail_sends(team_id: str, batches: Iterable[Dict[str, Any]], *,
+                      lists: Optional[Iterable[str]] = None) -> int:
+    """Remember who each provider call went to, so delivery events (which
+    name a call's message id) can be laid against the recipients expected.
+
+    ``batches`` is what ``transport.send_batches`` returns. ``lists`` is the
+    list keys the send belongs to: a grouped player-alias relay makes one
+    send per audience, and each alias's log row shows only its own.
+    Returns how many sends were recorded.
+    """
+    lists = list(lists or [])
+    recorded = 0
+    for batch in batches:
+        provider_id = str(batch.get("id") or "")
+        to = [_addresses.normalize_email(a) for a in (batch.get("recipients") or []) if a]
+        if provider_id in _UNTRACKED_IDS or not to:
+            continue
+        _append_delivery(team_id, {"event": "sent", "providerId": provider_id, "to": to, "lists": lists})
+        _remember_send(provider_id, team_id)
+        recorded += 1
+    if recorded:
+        purge_mail_delivery(team_id)
+    return recorded
+
+
+def find_mail_send_team(provider_id: Optional[str]) -> Optional[str]:
+    """The team whose relay made this send, or None when it is not one we
+    recorded (a system forward, a coach notice, a send older than the
+    retention). Sends made by this process are remembered; after a restart
+    the delivery files are searched once per id."""
+    provider_id = str(provider_id or "")
+    if provider_id in _UNTRACKED_IDS:
+        return None
+    team_id = _send_teams.get(provider_id)
+    if team_id:
+        return team_id
+    base = Path(MAIL_DIR)
+    if not base.exists():
+        return None
+    for team_dir in sorted(p for p in base.iterdir() if p.is_dir()):
+        for record in _read_delivery(team_dir.name):
+            if record.get("event") == "sent" and record.get("providerId") == provider_id:
+                _remember_send(provider_id, team_dir.name)
+                return team_dir.name
+    return None
+
+
+def record_mail_delivery(provider_id: Optional[str], email: str, event: str, *,
+                         when: Optional[str] = None, detail: str = "",
+                         seconds: Optional[float] = None) -> Optional[str]:
+    """Record what the provider reported for one recipient of one send.
+
+    ``event`` is one of ``DELIVERY_EVENTS``; ``when`` is the provider's own
+    timestamp, ``seconds`` how long the delivery took from the send. Returns
+    the team it was recorded under, or None when the send is not a tracked
+    one (nothing is written then).
+    """
+    if event not in DELIVERY_EVENTS:
+        raise ValueError(f"Unknown delivery event: {event}")
+    email = _addresses.normalize_email(email or "")
+    team_id = find_mail_send_team(provider_id)
+    if not team_id or not email:
+        return None
+    record: Dict[str, Any] = {"event": event, "providerId": str(provider_id), "email": email}
+    if when:
+        record["when"] = str(when)
+    if detail:
+        record["detail"] = str(detail)[:300]
+    if seconds is not None:
+        record["seconds"] = round(float(seconds), 1)
+    _append_delivery(team_id, record)
+    return team_id
+
+
+def mail_delivery_status(team_id: str, entry: Dict[str, Any],
+                         records: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+    """Per-recipient delivery state for one activity-log row.
+
+    None when the row is not a tracked send (it is not a relay, or it
+    predates tracking or the retention). Otherwise::
+
+        {"sentAt": iso, "recipients": [{"email", "status", "at", "seconds",
+         "detail", "delay"}, …], "counts": {"sent": n, "delivered": n, …,
+         "pending": n}, "slowestSeconds": n | None}
+
+    ``status`` is ``pending`` until the provider reports something for that
+    address. ``delay`` is the receiving server's last "try again later"
+    answer, kept when the message was delivered afterwards so a slow
+    delivery says why. ``records`` lets a caller that already read the
+    delivery files pass them in.
+    """
+    if entry.get("action") not in _TRACKED_ACTIONS:
+        return None
+    ids = {i for i in (entry.get("providerIds") or [entry.get("providerId")]) if i and i not in _UNTRACKED_IDS}
+    if not ids:
+        return None
+    if records is None:
+        records = _read_delivery(team_id)
+    recipients: Dict[str, Dict[str, Any]] = {}
+    mine = set()
+    sent_at = None
+    for record in records:
+        if record.get("event") != "sent" or record.get("providerId") not in ids:
+            continue
+        lists = record.get("lists") or []
+        if lists and entry.get("list") and entry["list"] not in lists:
+            continue
+        mine.add(record["providerId"])
+        sent_at = sent_at or record.get("at")
+        for address in record.get("to") or []:
+            recipients.setdefault(address, {"email": address, "status": "pending", "at": None,
+                                            "seconds": None, "detail": "", "delay": ""})
+    if not recipients:
+        return None
+    for record in records:
+        event = record.get("event")
+        if event not in _DELIVERY_RANK or record.get("providerId") not in mine:
+            continue
+        row = recipients.get(record.get("email"))
+        if row is None:
+            continue
+        if event == "delayed":
+            row["delay"] = record.get("detail") or ""
+        if _DELIVERY_RANK[event] >= _DELIVERY_RANK.get(row["status"], 0):
+            row.update(status=event, at=record.get("when") or record.get("at"),
+                       seconds=record.get("seconds"), detail=record.get("detail") or "")
+    counts = {"sent": len(recipients), "pending": 0}
+    counts.update({event: 0 for event in DELIVERY_EVENTS})
+    for row in recipients.values():
+        counts[row["status"]] += 1
+    times = [row["seconds"] for row in recipients.values() if row["status"] == "delivered" and row["seconds"] is not None]
+    return {"sentAt": sent_at, "recipients": list(recipients.values()), "counts": counts,
+            "slowestSeconds": max(times) if times else None}
+
+
+def attach_delivery(team_id: str, entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Give every tracked send in ``entries`` its delivery counts as
+    ``delivery`` (``{"sent", "delivered", "delayed", "bounced", "complaint",
+    "rejected", "pending", "slowestSeconds"}``); None on every other row.
+    The per-recipient detail is ``mail_delivery_status``."""
+    records = _read_delivery(team_id) if any(e.get("action") in _TRACKED_ACTIONS for e in entries) else []
+    for entry in entries:
+        status = mail_delivery_status(team_id, entry, records) if records else None
+        entry["delivery"] = {**status["counts"], "slowestSeconds": status["slowestSeconds"]} if status else None
+    return entries
+
+
+def purge_mail_delivery(team_id: str, months: int = DELIVERY_RETENTION_MONTHS,
+                        today: Optional[datetime] = None) -> int:
+    """Delete delivery files older than ``months`` whole months before this
+    one. Called on every recorded send, so the store bounds itself."""
+    directory = _delivery_dir(team_id)
+    if not directory.exists():
+        return 0
+    today = today or datetime.now(timezone.utc)
+    index = today.year * 12 + (today.month - 1) - months
+    cutoff = f"{index // 12:04d}-{index % 12 + 1:02d}"
+    removed = 0
+    with entity_lock(f"mail-delivery:{team_id}"):
+        for path in directory.glob("*.jsonl"):
+            if path.stem < cutoff:
+                path.unlink()
+                removed += 1
+    return removed
+
+
+def scrub_mail_delivery(team_id: str, emails: Iterable[str], *, dry_run: bool = False) -> int:
+    """Erase addresses from the delivery records: their own event lines go,
+    and they are taken out of every send's recipient list. Returns the
+    number of lines removed or changed."""
+    emails = {_addresses.normalize_email(e) for e in emails if e}
+    directory = _delivery_dir(team_id)
+    if not emails or not directory.exists():
+        return 0
+    touched = 0
+    with entity_lock(f"mail-delivery:{team_id}"):
+        for path in directory.glob("*.jsonl"):
+            kept = []
+            changed = 0
+            with open(path, "r") as f:
+                lines = f.readlines()
+            for line in lines:
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    kept.append(line)
+                    continue
+                if record.get("email") in emails:
+                    changed += 1
+                    continue
+                to = record.get("to")
+                if isinstance(to, list) and emails & set(to):
+                    record["to"] = [a for a in to if a not in emails]
+                    changed += 1
+                    if record["to"]:
+                        kept.append(json.dumps(record) + "\n")
+                    continue
+                kept.append(line)
+            touched += changed
+            if changed and not dry_run:
+                tmp = path.with_suffix(".jsonl.tmp")
+                with open(tmp, "w") as f:
+                    f.writelines(kept)
+                tmp.replace(path)
+    return touched
+
+
+# ==========================================================================
 # Quarantine
 # ==========================================================================
 
@@ -1261,4 +1538,5 @@ def scrub_player_from_mail(player_id: str, *, dry_run: bool = False) -> Dict[str
                         counts["logLines"] += 1
             else:
                 counts["logLines"] += _rewrite_log(team_id, keep)
+            counts["logLines"] += scrub_mail_delivery(team_id, removed_emails, dry_run=dry_run)
     return counts

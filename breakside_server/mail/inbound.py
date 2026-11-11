@@ -7,8 +7,11 @@ to the queue's retention, days) instead of being retried a handful of times
 by SNS and dropped. A dead-letter queue catches anything that fails
 repeatedly so one poison message cannot block the rest.
 
-The same queue also receives bounce and complaint events from the SES
-configuration set, so the poller records those against contacts.
+The same queue also receives bounce and complaint notifications from the
+SES identity, which the poller records against contacts, and delivery,
+delivery-delay and reject events from the configuration set, which it
+records per recipient against the send they belong to (delivery tracking:
+storage/mail_storage.py § Delivery tracking).
 
 One message, several notifications: a sender's mail server may deliver a
 message addressed to two of our addresses as two SMTP transactions (Gmail
@@ -132,6 +135,9 @@ class InboundPoller:
         if kind in ("Bounce", "Complaint"):
             self._handle_bounce(kind, note)
             return None
+        if kind in ("Delivery", "DeliveryDelay", "Reject"):
+            self._handle_delivery(kind, note)
+            return None
         if kind == "Text":
             logger.info("mail: ignoring non-JSON queue message: %s", note.get("text"))
             return None
@@ -139,7 +145,7 @@ class InboundPoller:
             logger.warning("mail: SNS subscription is unconfirmed (SubscribeURL in message); "
                            "confirm it with the setup script")
             return None
-        # Delivery / Send / Open / Click / Reject etc. — nothing to record.
+        # Send / Open / Click etc. — nothing to record.
         logger.debug("mail: ignoring notification type %s", kind)
         return None
 
@@ -237,13 +243,49 @@ class InboundPoller:
             for r in recipients:
                 diag = r.get("diagnosticCode") or detail
                 n = storage.record_mail_bounce(r.get("emailAddress", ""), bounce_kind, diag, provider_id=provider_id)
+                storage.record_mail_delivery(provider_id, r.get("emailAddress", ""), "bounced",
+                                             when=bounce.get("timestamp"), detail=f"{bounce_kind}: {diag}".strip(": "))
                 logger.info("mail: %s bounce for %s recorded on %d contact(s)", bounce_kind, addresses.mask_address(r.get("emailAddress")), n)
         else:
             complaint = note.get("complaint") or {}
             detail = complaint.get("complaintFeedbackType") or "complaint"
             for r in complaint.get("complainedRecipients") or []:
                 n = storage.record_mail_bounce(r.get("emailAddress", ""), "complaint", detail, provider_id=provider_id)
+                storage.record_mail_delivery(provider_id, r.get("emailAddress", ""), "complaint",
+                                             when=complaint.get("timestamp"), detail=detail)
                 logger.warning("mail: complaint from %s recorded on %d contact(s)", addresses.mask_address(r.get("emailAddress")), n)
+
+    def _handle_delivery(self, kind: str, note: Dict[str, Any]) -> None:
+        """What became of one of OUR sends, per recipient: accepted by the
+        receiving server, deferred by it (SES keeps retrying), or refused by
+        SES before sending. Recorded against the send; an event for a send
+        we did not record (a system forward, a coach notice) is nobody's and
+        is skipped."""
+        mail = note.get("mail") or {}
+        provider_id = str(mail.get("messageId") or "") or None
+        if kind == "Delivery":
+            delivery = note.get("delivery") or {}
+            millis = delivery.get("processingTimeMillis")
+            seconds = millis / 1000 if isinstance(millis, (int, float)) else None
+            for address in delivery.get("recipients") or []:
+                storage.record_mail_delivery(provider_id, address, "delivered", when=delivery.get("timestamp"),
+                                             seconds=seconds, detail=delivery.get("smtpResponse") or "")
+        elif kind == "DeliveryDelay":
+            delay = note.get("deliveryDelay") or {}
+            for r in delay.get("delayedRecipients") or []:
+                detail = r.get("diagnosticCode") or delay.get("delayType") or ""
+                team_id = storage.record_mail_delivery(provider_id, r.get("emailAddress", ""), "delayed",
+                                                       when=delay.get("timestamp"), detail=detail)
+                if team_id:
+                    logger.warning("mail: delivery to %s delayed (%s)",
+                                   addresses.mask_address(r.get("emailAddress")), delay.get("delayType") or "unknown")
+        else:
+            reason = (note.get("reject") or {}).get("reason") or "rejected"
+            for address in mail.get("destination") or []:
+                team_id = storage.record_mail_delivery(provider_id, address, "rejected", detail=str(reason))
+                if team_id:
+                    logger.warning("mail: send to %s rejected by the provider (%s)",
+                                   addresses.mask_address(address), reason)
 
     # ---------------------------------------------------------------- the loop
 

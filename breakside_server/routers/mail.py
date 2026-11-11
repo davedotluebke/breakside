@@ -23,7 +23,7 @@ from ._shared import (
     get_user,
     list_mail_quarantine,
     purge_expired_quarantine,
-    read_mail_log, attach_bounces,
+    read_mail_log, attach_bounces, attach_delivery,
     remove_mail_contact,
     remove_mail_event,
     remove_mail_event_contact,
@@ -41,6 +41,7 @@ from ._shared import (
 
 addresses = import_server_module("mail.addresses")
 directory_mod = import_server_module("mail.directory")
+inbound_mod = import_server_module("mail.inbound")
 relay = import_server_module("mail.relay")
 rewrite = import_server_module("mail.rewrite")
 transport_mod = import_server_module("mail.transport")
@@ -406,8 +407,21 @@ async def get_mail_log(
     user: dict = Depends(require_team_coach("team_id")),
 ):
     _require_team(team_id)
-    entries = attach_bounces(read_mail_log(team_id, limit=limit))
+    entries = attach_delivery(team_id, attach_bounces(read_mail_log(team_id, limit=limit)))
     return {"entries": entries, "count": len(entries)}
+
+
+@router.get("/api/teams/{team_id}/mail/log/{log_id}/delivery")
+async def get_mail_delivery(team_id: str, log_id: str, user: dict = Depends(require_team_coach("team_id"))):
+    """What became of one relayed message, recipient by recipient: accepted
+    by the receiving mail server (and how long that took), deferred,
+    bounced, or nothing reported yet. ``tracked`` is false for a message
+    older than delivery tracking or its retention."""
+    _require_team(team_id)
+    view = directory_mod.delivery_view(team_id, log_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="No such message in the activity log")
+    return view
 
 
 @router.post("/api/teams/{team_id}/mail/test")
@@ -449,3 +463,21 @@ async def dev_inbound(request: Request, to: Optional[str] = Query(default=None))
     recipients = [r.strip() for r in to.split(",")] if to else None
     results = await run_in_threadpool(relay.process_inbound, raw, envelope_recipients=recipients, source="dev")
     return {"results": [r.as_dict() for r in results]}
+
+
+@router.post("/api/mail/dev/event")
+async def dev_event(request: Request):
+    """Process a provider notification (an SES Delivery, DeliveryDelay,
+    Bounce, Complaint or Reject event as JSON) exactly like a queue
+    delivery. Same gate as ``/api/mail/dev/inbound``: dev backends only.
+    Received notifications are refused here; they need the stored message."""
+    if auth_required() and not config.DEBUG:
+        raise HTTPException(status_code=404, detail="Not found")
+    body = (await request.body()).decode("utf-8", "replace")
+    note = inbound_mod.parse_notification(body)
+    kind = inbound_mod.InboundPoller._kind(note) if isinstance(note, dict) else None
+    if kind in (None, "Received", "Text"):
+        raise HTTPException(status_code=400, detail="Expected a JSON delivery, bounce, complaint or reject event")
+    poller = inbound_mod.InboundPoller("", region="")
+    await run_in_threadpool(poller.handle_body, body)
+    return {"handled": kind}

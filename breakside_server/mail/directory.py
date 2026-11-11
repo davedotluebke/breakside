@@ -312,6 +312,52 @@ def directory_view(team_id: str) -> Dict[str, Any]:
     }
 
 
+# How the per-recipient list is ordered: what needs a look comes first.
+_DELIVERY_ORDER = {"bounced": 0, "complaint": 0, "rejected": 0, "delayed": 1, "pending": 2, "delivered": 3}
+
+
+def delivery_view(team_id: str, log_id: str) -> Optional[Dict[str, Any]]:
+    """Per-recipient delivery for one activity-log row, for the admin screen.
+
+    None when the row does not exist. ``tracked`` is False for a row that is
+    not a tracked send (older than tracking or its retention, or not a relay
+    at all); otherwise the row's recipients as
+    ``storage.mail_delivery_status`` reports them, each with the contacts
+    that carry the address today (``contacts``: name, kind, player names),
+    problems first and the slowest deliveries ahead of the quick ones.
+    """
+    from . import policy
+    entry = next((e for e in storage.read_mail_log(team_id, limit=5000) if e.get("id") == log_id), None)
+    if entry is None:
+        return None
+    out: Dict[str, Any] = {"logId": log_id, "list": entry.get("list"), "subject": entry.get("subject") or "",
+                           "at": entry.get("at"), "tracked": False}
+    status = storage.mail_delivery_status(team_id, entry)
+    if status is None:
+        return out
+    directory = storage.get_mail_directory(team_id) or {}
+    event_contacts = [c for ev in directory.get("events") or [] for c in ev.get("contacts") or []]
+    names = {p["id"]: p["name"] for p in roster_players(team_id)}
+    names.update({c["playerIds"][0]: c["name"] for c in event_contacts
+                  if c.get("kind") == "player" and c.get("playerIds")})
+    carriers: Dict[str, List[Dict[str, Any]]] = {}
+    for c in effective_contacts(team_id, directory) + event_contacts:
+        for address in policy.contact_addresses(c):
+            carriers.setdefault(address, []).append({
+                "name": c["name"],
+                "kind": c["kind"],
+                "playerNames": [] if c.get("kind") == "player"
+                else [names.get(pid, pid) for pid in (c.get("playerIds") or [])],
+            })
+    for row in status["recipients"]:
+        row["contacts"] = carriers.get(row["email"], [])
+    status["recipients"].sort(key=lambda r: (
+        _DELIVERY_ORDER.get(r["status"], 9), -(r["seconds"] or 0),
+        (r["contacts"][0]["name"] if r["contacts"] else r["email"]).lower()))
+    out.update(status, tracked=True)
+    return out
+
+
 def lookup_address(team_id: str, email: str) -> Dict[str, Any]:
     """Why one address can (or cannot) post to and receive from each list.
 

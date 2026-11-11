@@ -18,7 +18,7 @@ from typing import Any, Deque, Dict, List, Optional, Sequence, Tuple
 
 from ._shared import config, storage
 from . import addresses, directory as directory_mod, policy, rewrite
-from .transport import TransportError, get_transport
+from .transport import TransportError, get_transport, send_batches
 
 logger = logging.getLogger(__name__)
 
@@ -306,16 +306,22 @@ def _relay(raw, team_id, directory, decision, local, domain, author_name, author
     )
     emails = [c["email"] for c in decision.recipients]
     try:
-        provider_id = get_transport().send(from_addr=address, recipients=emails, raw=out)
+        batches = send_batches(get_transport(), from_addr=address, recipients=emails, raw=out)
     except TransportError as exc:
         logger.error("mail: relay to %s failed: %s", address, exc)
         _log(team_id, {**base_entry, "action": "failed", "recipients": total, "reason": str(exc)[:200]})
         raise
-    # providerIds: every SES message id this relay produced, so a bounce
-    # notification (which names the id of the send that bounced) can be tied
-    # back to this row; providerId stays the first for older readers.
+    # Who each provider call went to, written before anything else: a
+    # delivery event can be in the queue within a second of the send.
+    storage.record_mail_sends(team_id, batches, lists=[local])
+    # providerIds: every SES message id this relay produced (one per 50
+    # recipients), so a bounce or delivery notification, which names the id
+    # of the send it is about, can be tied back to this row; providerId
+    # stays the first for older readers.
+    provider_ids = [b["id"] for b in batches]
+    provider_id = provider_ids[0] if provider_ids else None
     log_id = _log(team_id, {**base_entry, "action": _log_action(base_entry), "recipients": total,
-                            "reason": None, "providerId": provider_id, "providerIds": [provider_id],
+                            "reason": None, "providerId": provider_id, "providerIds": provider_ids,
                             "senderKinds": decision.sender_kinds, "copies": None})
     logger.info("mail: relayed %s from %s to %d recipient(s)", address, addresses.mask_address(author_email), total)
     return RelayResult(address, team_id, "relay", None, total, provider_id, log_id=log_id)
@@ -418,7 +424,7 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
             list_id_domain=domain,
         )
         try:
-            sent_id = get_transport().send(from_addr=address, recipients=emails, raw=out)
+            batches = send_batches(get_transport(), from_addr=address, recipients=emails, raw=out)
         except TransportError as exc:
             logger.error("mail: relay to %s (%s copy) failed: %s", address, kind, exc)
             for target in targets:
@@ -426,8 +432,10 @@ def _relay_player_group(raw, team_id, targets: List[_PlayerTarget], domain,
                                "recipients": len(target.decision.recipients),
                                "reason": str(exc)[:200], "copies": copies[target.local]})
             raise
-        if sent_id:
-            provider_ids.append(sent_id)
+        # This copy belongs to the aliases it covers and to no other: each
+        # alias's log row shows the delivery of its own recipients.
+        storage.record_mail_sends(team_id, batches, lists=list(locals_))
+        provider_ids.extend(b["id"] for b in batches if b.get("id"))
         for local in locals_:
             copies[local][kind] = copies[local].get(kind, 0) + len(emails)
 
@@ -577,7 +585,9 @@ def send_test_message(team_id: str, to_email: str, requester: str) -> str:
     raw = re.sub(rb"(?im)^Auto-Submitted:.*\r?\n", b"", raw, count=1)
     raw = raw.replace(b"\r\n\r\n", f"\r\nReply-To: {coaches_address}\r\n\r\n".encode(), 1) \
         if b"\r\n\r\n" in raw else raw.replace(b"\n\n", f"\nReply-To: {coaches_address}\n\n".encode(), 1)
-    provider_id = get_transport().send(from_addr=from_address, recipients=[to_email], raw=raw)
+    batches = send_batches(get_transport(), from_addr=from_address, recipients=[to_email], raw=raw)
+    storage.record_mail_sends(team_id, batches)
+    provider_id = batches[0]["id"] if batches else None
     storage.append_mail_log(team_id, {
         "action": "test", "list": directory["slug"], "from": from_address, "fromName": requester,
         "subject": "Test message", "recipients": 1, "reason": None, "providerId": provider_id,

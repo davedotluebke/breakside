@@ -26,6 +26,21 @@ class TransportError(RuntimeError):
     SQS path, leaves the message in the queue to retry."""
 
 
+def send_batches(transport, *, from_addr: str, recipients: Sequence[str], raw: bytes) -> List[Dict[str, Any]]:
+    """Send, and say which provider message id covers which recipients:
+    ``[{"id": …, "recipients": […]}, …]``, one entry per provider call.
+
+    That mapping is what delivery tracking needs: a delivery or bounce
+    event names the id of the call it belongs to, and SES takes at most 50
+    recipients per call, so a list of 53 is two ids. A transport that only
+    implements ``send`` (a test double) is one batch under the id it returns.
+    """
+    if hasattr(transport, "send_batches"):
+        return transport.send_batches(from_addr=from_addr, recipients=recipients, raw=raw)
+    sent_id = transport.send(from_addr=from_addr, recipients=recipients, raw=raw)
+    return [{"id": sent_id, "recipients": list(recipients)}]
+
+
 class NullTransport:
     name = "none"
 
@@ -87,6 +102,11 @@ class SesTransport:
         return self._client
 
     def send(self, *, from_addr: str, recipients: Sequence[str], raw: bytes) -> str:
+        """The first call's message id (every id: ``send_batches``)."""
+        batches = self.send_batches(from_addr=from_addr, recipients=recipients, raw=raw)
+        return batches[0]["id"] if batches else "ses"
+
+    def send_batches(self, *, from_addr: str, recipients: Sequence[str], raw: bytes) -> List[Dict[str, Any]]:
         # Deliberately no FromEmailAddress. When that parameter is set, SES
         # applies it over the raw message's From header, so the rewritten
         # '"Name via Coaches CUDO" <coaches-cudo@…>' reached inboxes as the bare
@@ -94,7 +114,7 @@ class SesTransport:
         # through 2.1.7). With it omitted, SES takes the From from the raw
         # message, whose domain is the verified identity. ``from_addr`` is
         # only for the log line here.
-        first_id: Optional[str] = None
+        batches: List[Dict[str, Any]] = []
         recipients = list(recipients)
         for start in range(0, len(recipients), SES_BATCH):
             batch = recipients[start:start + SES_BATCH]
@@ -108,8 +128,8 @@ class SesTransport:
                 response = self.client.send_email(**kwargs)
             except Exception as exc:  # noqa: BLE001 — botocore raises many types
                 raise TransportError(f"SES send failed from {from_addr}: {exc}") from exc
-            first_id = first_id or response.get("MessageId")
-        return first_id or "ses"
+            batches.append({"id": response.get("MessageId") or "ses", "recipients": batch})
+        return batches
 
 
 _transport = None
