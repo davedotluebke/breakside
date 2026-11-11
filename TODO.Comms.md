@@ -53,6 +53,7 @@ The apex `breakside.pro` MX points at Google Workspace, which is how `help@break
 data/mail/_slugs.json                      # slug → teamId (global, for inbound routing)
 data/mail/{teamId}/directory.json          # slug, contacts, lists, settings
 data/mail/{teamId}/log/{YYYY-MM}.jsonl     # one line per relayed/quarantined message
+data/mail/{teamId}/delivery/{YYYY-MM}.jsonl  # per-recipient delivery facts per send, kept ~3 months
 data/mail/{teamId}/quarantine/{id}.json    # pending items (raw stays in S3, 30-day lifecycle)
 ```
 
@@ -73,7 +74,7 @@ data/mail/{teamId}/quarantine/{id}.json    # pending items (raw stays in S3, 30-
 
 ### Erasure and privacy
 
-- `erase_player` gains a hook: remove the player's contact and alias, remove guardians linked **only** to that player, scrub alias/address from the log lines.
+- `erase_player` gains a hook: remove the player's contact and alias, remove guardians linked **only** to that player, scrub alias/address from the log lines and the delivery records.
 - `privacy.html` gains a line: coaches may enter player and guardian email addresses; only coaches see them; player erasure deletes them.
 - Directory endpoints are coach-only (`require_team_coach`); nothing mail-related is ever returned to viewers.
 
@@ -95,6 +96,7 @@ SES identity + DKIM + MAIL FROM, S3 bucket, SNS topic, SQS queue, receipt rule s
 - [x] Directory search on the admin screen + `GET …/mail/lookup?email=` (2026-10-27, branch `mail-search`): finds a person by any address, linked player or note, and says what the relay would do with mail from an address, event lists included; log senders click through to it. The text filter does not reach inside event cards
 - [x] Publish the DNS records and set the box environment (ops runbook checklist, 2026-09-12); field-tested through the fall season. The apex cutover is Phase 0.5 below
 - [x] Event lists (`<slug>-<event>@`, 2026-11-02, branch `event-mail`): a roster subset plus pickup players with any number of parent addresses, linked to a tournament event to copy its roster; see ARCHITECTURE.md § Team mailing lists "Event lists"
+- [x] Delivery tracking (2026-11-10, branch `mail-delivery`): each message's delivery per recipient (delivered and how long it took, delayed, bounced, no report) from SES delivery and delay events, on the activity rows; every send id of a list over 50 is logged; see ARCHITECTURE.md § Team mailing lists "Delivery tracking". Needs the configuration set's event types widened (`setup-mail-aws.sh apply`)
 
 ### Later (not Phase 0)
 

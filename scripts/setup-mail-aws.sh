@@ -312,7 +312,7 @@ ensure_identity_feedback_for() {   # <domain> <step label>
 
 # ---------- 6. configuration set ----
 ensure_configuration_set() {
-    bold "6. SES configuration set $NAME (rejects → topic)"
+    bold "6. SES configuration set $NAME (rejects, deliveries, delivery delays → topic)"
     if aws sesv2 get-configuration-set --configuration-set-name "$NAME" >/dev/null 2>&1; then
         have "configuration set exists"
     else
@@ -320,8 +320,10 @@ ensure_configuration_set() {
         apply aws sesv2 create-configuration-set --configuration-set-name "$NAME" >/dev/null
     fi
     # Bounces and complaints arrive as identity notifications (step 5);
-    # listing them here too would record every bounce twice.
-    local dest="{\"Enabled\":true,\"MatchingEventTypes\":[\"REJECT\"],\"SnsDestination\":{\"TopicArn\":\"$TOPIC_ARN\"}}"
+    # listing them here too would record every bounce twice. DELIVERY and
+    # DELIVERY_DELAY are what delivery tracking records per recipient: one
+    # event for each address a receiving server accepts or defers.
+    local dest="{\"Enabled\":true,\"MatchingEventTypes\":[\"REJECT\",\"DELIVERY\",\"DELIVERY_DELAY\"],\"SnsDestination\":{\"TopicArn\":\"$TOPIC_ARN\"}}"
     # A set with no destinations omits the key; the CLI then prints "None",
     # which is why this compares the name rather than grepping for any output.
     local existing

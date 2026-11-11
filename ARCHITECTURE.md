@@ -1063,8 +1063,8 @@ post too, like any mailing list (Gmail merges it with the Sent copy).
 Directories written with the single-address shape
 are normalized on read, so no migration is needed.
 **Bounces.** SES publishes bounce and complaint events to the same queue
-the inbound poller reads (nothing else: there is no per-recipient delivery
-event, so "delivered" only ever means "accepted by SES and not bounced").
+the inbound poller reads (delivery and delay events arrive there too; see
+Delivery tracking below).
 `record_mail_bounce` stamps `bounces[address] = {at, kind, detail}` on every
 contact carrying the address, in every team, keeping only the latest event
 per address, and appends a `bounce` / `complaint` log row. A hard bounce or
@@ -1078,17 +1078,53 @@ bounce row is tied to its message (`relayedId`, plus the message's list and
 subject; the contact's bounce record gets the subject too). The log
 endpoint joins them (`attach_bounces`): a relayed row carries `bounces:
 [{at, email, kind, detail}]`, which the activity table renders as ⚠️
-"8 recipients, 1 bounced" instead of the plain check. One gap: a send to
-more than 50 addresses goes out in several SES calls and only the first id
-is kept, so a bounce from a later batch stays unlinked (recorded on the
-contact, shown as its own row).
+"8 recipients, 1 bounced" instead of the plain check. A send to more than
+50 addresses goes out in several SES calls, and every call's id is on the
+row (`transport.send_batches`; before 2.23.0 only the first was kept, so a
+bounce from a later batch stayed unlinked).
+
+**Delivery tracking.** The question "did this parent get that message" has
+a per-address answer. Every relay records who each provider call went to
+(`record_mail_sends`), and the poller records what SES reports for each
+recipient afterwards: `Delivery` (the receiving server accepted it, with
+the time it took), `DeliveryDelay` (the server said try later and SES is
+retrying, with the server's answer), `Reject`, and the bounces and
+complaints above. These live in `delivery/{YYYY-MM}.jsonl`, apart from the
+activity log: they are per recipient (a list of 53 is 54 lines or more per
+message, and the log view reads the newest N lines), and they are the one
+place that holds every recipient's address for every message, so they are
+kept about three months (`DELIVERY_RETENTION_MONTHS`, purged on each
+recorded send) and scrubbed by player erasure. An event names the SES id of
+the send it is about; the team is found from the recorded sends (remembered
+in memory, searched in the files after a restart), and an event for a send
+that was never recorded (a system forward, a coach notice) is skipped. The
+log endpoint lays the counts on each tracked row (`attach_delivery`:
+`delivery: {sent, delivered, delayed, bounced, complaint, rejected,
+pending, slowestSeconds}`), and `GET …/mail/log/{logId}/delivery` returns
+the recipients with their state and the contacts carrying each address,
+problems first. One recipient with several facts on record shows the worst
+(a bounce after "delivered" is a bounce) and a delivery after a delay keeps
+the server's deferral text, which is what explains a message that arrived
+three hours late. On the screen the row's note ("all delivered", "52
+delivered, 1 delayed", "slowest took 3 h 10 min") opens the list; the
+wording is `teams/mailDelivery.js`, pure and unit-tested. A grouped
+player-alias relay makes one send per audience and puts every id on every
+alias's row, so each recorded send carries the aliases it belongs to and a
+row shows only its own recipients. **"Delivered" is the receiving server's
+acceptance and nothing more**: inbox, spam folder or an organization's
+quarantine all look the same from here, and the screen says so. The events
+come from the SES configuration set (`scripts/setup-mail-aws.sh` step 6:
+`REJECT`, `DELIVERY`, `DELIVERY_DELAY`); a deployment that does not publish
+them shows "waiting for delivery reports" for fifteen minutes and then a
+muted "no delivery reports". `POST /api/mail/dev/event` feeds one event to
+a dev backend.
 **Coaches are never stored** — they are derived from team memberships on
 every use, so the coaches list cannot go stale. `log/{YYYY-MM}.jsonl` records
 every relayed, held, dropped and bounced message; `quarantine/` holds
 metadata and raw MIME for held mail. Player erasure removes the player's
 alias and contact, unlinks guardians (dropping any left with no player), and
-scrubs held mail and log lines; team erasure deletes the directory and frees
-the slug. All of it is coach-only over the API.
+scrubs held mail, log lines and delivery records; team erasure deletes the
+directory and frees the slug. All of it is coach-only over the API.
 
 **Environment.** `BREAKSIDE_MAIL_TRANSPORT` (`ses` | `file` | `none`, default
 `none`), `BREAKSIDE_MAIL_DOMAIN`, `BREAKSIDE_MAIL_BASE_DOMAIN`,
@@ -1193,6 +1229,7 @@ breakside_server/
 │   └── {team_id}/
 │       ├── directory.json    # slug, per-list settings, contacts (coach-only)
 │       ├── log/{YYYY-MM}.jsonl
+│       ├── delivery/{YYYY-MM}.jsonl   # per-recipient delivery facts, kept ~3 months
 │       └── quarantine/{id}.json + {id}.eml
 ├── memberships.json          # Team membership index
 └── index.json                # Cross-entity index
@@ -1266,9 +1303,11 @@ below).
 - `POST/PATCH/DELETE /api/teams/{team_id}/mail/contacts[/{id}]` - Directory contacts (guardian / player / manager / other)
 - `POST /api/teams/{team_id}/mail/aliases/sync` - Give roster players without an address one
 - `GET /api/teams/{team_id}/mail/quarantine[/{id}]`, `POST …/{id}/release`, `DELETE …/{id}` - Held mail
-- `GET /api/teams/{team_id}/mail/log?limit=` - Delivery log
+- `GET /api/teams/{team_id}/mail/log?limit=` - Activity log; each tracked send carries its delivery counts
+- `GET /api/teams/{team_id}/mail/log/{log_id}/delivery` - One message, recipient by recipient: delivered (and how long it took), delayed, bounced, or no report yet
 - `POST /api/teams/{team_id}/mail/test` - Email the requesting coach from the team address
 - `POST /api/mail/dev/inbound` - Dev backends only: process a raw message as if received
+- `POST /api/mail/dev/event` - Dev backends only: process a provider delivery / delay / bounce event
 
 #### Game Control (writes: Coach or Stat Keeper of the game's team)
 - `GET /api/games/{game_id}/controller` - Get controller state (roles, pending handoffs)
