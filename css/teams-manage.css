@@ -2138,6 +2138,73 @@
     background: var(--color-warning-surface-soft);
 }
 
+/* Delivery tracking: the per-recipient list that opens under an activity row. */
+.mail-log tr.mail-log-detail td {
+    padding: 8px 10px 10px;
+    background: var(--surface-inset);
+}
+
+.mail-delivery-quiet,
+.mail-delivery-note {
+    color: var(--text-muted);
+}
+
+.mail-delivery-note {
+    margin: 0 0 6px 0;
+    font-size: 0.85em;
+}
+
+.mail-delivery-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.mail-delivery-row {
+    display: grid;
+    grid-template-columns: 12.5em minmax(0, 1fr);
+    gap: 0 10px;
+    padding: 4px 0;
+    border-top: 1px solid var(--border-lighter);
+}
+
+.mail-delivery-status {
+    font-weight: 600;
+}
+
+.mail-delivery-ok .mail-delivery-status {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.mail-delivery-slow .mail-delivery-status,
+.mail-delivery-wait .mail-delivery-status {
+    color: var(--color-warning-text);
+}
+
+.mail-delivery-bad .mail-delivery-status {
+    color: var(--color-danger);
+}
+
+.mail-delivery-detail {
+    grid-column: 2;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+    .mail-delivery-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .mail-delivery-detail {
+        grid-column: 1;
+    }
+}
+
 .mail-badge {
     display: inline-block;
     min-width: 1.5em;

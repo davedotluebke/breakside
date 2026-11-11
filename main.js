@@ -146,6 +146,7 @@ import './teams/activeGamePolling.js';
 import { showTeamSettingsScreen } from './teams/teamSettings.js';
 import './teams/mailAddressInput.js';
 import './teams/mailSearch.js';
+import './teams/mailDelivery.js';
 import { showTeamMailScreen } from './teams/teamMail.js';
 import './teams/eventRoster.js';
 import { getGameSummaryBackTarget } from './teams/gameSummary.js';

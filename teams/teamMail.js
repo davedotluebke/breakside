@@ -15,6 +15,7 @@ import { showScreen } from '../screens/navigation.js';
 import { showTeamSettingsScreen, getTeamSettingsReturnScreen } from './teamSettings.js';
 import { parseEmailList } from './mailAddressInput.js';
 import { matches, contactFields, playerFields, highlight, looksLikeAddress, joinLabels, tokens } from './mailSearch.js';
+import { deliverySummary, recipientStatus, recipientWho } from './mailDelivery.js';
 
 const KIND_LABELS = {
     coach: 'Coach', guardian: 'Parent / guardian', player: 'Player', manager: 'Team manager', other: 'Other',
@@ -920,7 +921,7 @@ function renderLog() {
     return `
         <div class="settings-section">
             <h3>Recent activity</h3>
-            <p class="section-description">✅ means the mail service accepted the message for every recipient and nothing has bounced back since; it is not a receipt from each inbox. When one recipient's mail bounces, the message shows ⚠️ with who bounced, and the contact gets a bounce note.</p>
+            <p class="section-description">Each message shows what became of it for every recipient: tap the delivery note to see who it was delivered to, how long that took, and anyone it was delayed or bounced for. "Delivered" means the recipient's mail server accepted the message; it cannot show whether the message then reached the inbox or a spam folder. ⏳ marks a message still being retried or delivered late, ⚠️ one that bounced for someone (the contact gets a bounce note).</p>
             <div id="mailLogList"><p class="loading-message">Loading…</p></div>
         </div>`;
 }
@@ -975,11 +976,20 @@ function renderLogRow(e) {
     let icon = { relayed: '✅', released: '✅', quarantined: '⏸', dropped: '🚫', failed: '❌', bounce: '↩️', complaint: '⚠️', test: '🧪' }[e.action] || '•';
     let what;
     let title = '';
+    // Delivery tracking: the counts the server laid on a tracked send.
+    const summary = deliverySummary(e.delivery, Date.now() - Date.parse(e.at));
+    let delivery = '';
+    if (summary) {
+        if (summary.icon) icon = summary.icon;
+        delivery = summary.quiet ? ` · <span class="mail-delivery-quiet">${esc(summary.text)}</span>`
+            : ` · <button type="button" class="mail-link" data-action="toggle-delivery" data-id="${escAttr(e.id)}" aria-expanded="false" title="Show delivery for each recipient">${esc(summary.text)}</button>`;
+    }
     if (e.action === 'relayed' || e.action === 'released') {
         what = `to ${e.recipients} recipient${e.recipients === 1 ? '' : 's'}`;
         if (bounced.length) {
             icon = '⚠️';
-            what += `, ${bounced.length} bounced`;
+            // The delivery summary already counts the bounces of a tracked send.
+            if (!summary || summary.quiet || !(e.delivery.bounced || e.delivery.complaint)) what += `, ${bounced.length} bounced`;
             title = bounced.map(b => `${b.email}: ${b.kind === 'complaint' ? 'complaint' : (b.kind || '') + ' bounce'}${b.detail ? ' — ' + b.detail : ''}`).join('\n');
         }
     } else if (e.action === 'bounce' || e.action === 'complaint') {
@@ -989,7 +999,48 @@ function renderLogRow(e) {
     } else {
         what = REASON_LABELS[e.reason] || e.reason || e.action;
     }
-    return `<tr${bounced.length ? ' class="mail-log-warn"' : ''}><td>${icon}</td><td>${esc(fmtDate(e.at))}</td><td><code>${esc(e.list || '')}</code></td><td>${senderLink(e.fromName, e.from)}</td><td>${esc(e.subject || '')}</td><td title="${escAttr(title)}">${esc(what)}</td></tr>`;
+    return `<tr${bounced.length ? ' class="mail-log-warn"' : ''}><td>${icon}</td><td>${esc(fmtDate(e.at))}</td><td><code>${esc(e.list || '')}</code></td><td>${senderLink(e.fromName, e.from)}</td><td>${esc(e.subject || '')}</td><td title="${escAttr(title)}">${esc(what)}${delivery}</td></tr>`;
+}
+
+/** Open or close the per-recipient delivery list under an activity row. */
+async function toggleDelivery(button) {
+    const row = button.closest('tr');
+    const open = row.nextElementSibling;
+    if (open?.classList.contains('mail-log-detail')) {
+        open.remove();
+        button.setAttribute('aria-expanded', 'false');
+        return;
+    }
+    const detail = document.createElement('tr');
+    detail.className = 'mail-log-detail';
+    detail.innerHTML = '<td colspan="6"><p class="loading-message">Loading…</p></td>';
+    row.after(detail);
+    button.setAttribute('aria-expanded', 'true');
+    const cell = detail.firstElementChild;
+    try {
+        cell.innerHTML = renderDelivery(await api(`/log/${encodeURIComponent(button.dataset.id)}/delivery`));
+    } catch (error) {
+        cell.innerHTML = `<p class="error-message">${esc(error.message)}</p>`;
+    }
+}
+
+function renderDelivery(view) {
+    if (!view.tracked) return '<p class="info-message">Delivery was not tracked for this message.</p>';
+    const rows = view.recipients.map(r => {
+        const s = recipientStatus(r);
+        const who = recipientWho(r.contacts);
+        return `
+            <li class="mail-delivery-row mail-delivery-${s.tone}">
+                <span class="mail-delivery-status"${r.at ? ` title="${escAttr(fmtDate(r.at))}"` : ''}>${esc(s.label)}</span>
+                <span class="mail-delivery-who">${senderLink(who, r.email)}${who ? '' : ' <span class="mail-link-addr">(not in the directory now)</span>'}</span>
+                ${s.detail ? `<span class="mail-delivery-detail">${esc(s.detail)}</span>` : ''}
+            </li>`;
+    }).join('');
+    return `
+        <div class="mail-delivery">
+            <p class="mail-delivery-note">Delivered means the recipient's mail server accepted the message. If someone says it never arrived, their spam folder or their organization's quarantine is the place to look.</p>
+            <ul class="mail-delivery-list">${rows}</ul>
+        </div>`;
 }
 
 // =============================================================================
@@ -1019,6 +1070,8 @@ async function onContentClick(event) {
             input?.focus();
         } else if (action === 'find-sender') {
             findAddress(button.dataset.email || '');
+        } else if (action === 'toggle-delivery') {
+            await toggleDelivery(button);
         } else if (action === 'send-test') {
             const r = await api('/test', { method: 'POST' });
             setStatus('mailSettingsStatus', `Sent to ${r.to} via ${r.transport}.`, 'success');
