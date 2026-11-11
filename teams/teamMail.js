@@ -921,7 +921,7 @@ function renderLog() {
     return `
         <div class="settings-section">
             <h3>Recent activity</h3>
-            <p class="section-description">Each message shows what became of it for every recipient: tap the delivery note to see who it was delivered to, how long that took, and anyone it was delayed or bounced for. "Delivered" means the recipient's mail server accepted the message; it cannot show whether the message then reached the inbox or a spam folder. ⏳ marks a message still being retried or delivered late, ⚠️ one that bounced for someone (the contact gets a bounce note).</p>
+            <p class="section-description">Tap a message's delivery note to see, recipient by recipient, whether it was delivered and how long that took. ⏳ marks a message still being retried or delivered late, ⚠️ one that bounced for someone (the contact gets a bounce note).</p>
             <div id="mailLogList"><p class="loading-message">Loading…</p></div>
         </div>`;
 }

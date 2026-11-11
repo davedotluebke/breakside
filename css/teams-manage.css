@@ -2164,13 +2164,15 @@
 
 .mail-delivery-row {
     display: grid;
-    grid-template-columns: 12.5em minmax(0, 1fr);
+    grid-template-columns: 15em minmax(0, 1fr);
     gap: 0 10px;
     padding: 4px 0;
     border-top: 1px solid var(--border-lighter);
 }
 
+/* The label spans both lines so a wrapped one never pushes the detail down. */
 .mail-delivery-status {
+    grid-row: 1 / span 2;
     font-weight: 600;
 }
 
@@ -2198,6 +2200,16 @@
 @media (max-width: 520px) {
     .mail-delivery-row {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .mail-delivery-status {
+        grid-row: auto;
+    }
+
+    /* No scroll inside a scroll on a phone: the list runs its full length. */
+    .mail-delivery-list {
+        max-height: none;
+        overflow-y: visible;
     }
 
     .mail-delivery-detail {

@@ -104,6 +104,7 @@ echo "────────────────────────�
 echo "  Local backend:  http://localhost:$PORT   (label: $LABEL)"
 echo "  Data dir:       $DATADIR"
 echo "  Auth:           disabled (BREAKSIDE_AUTH_REQUIRED=false)"
+echo "  Mail:           ${BREAKSIDE_MAIL_TRANSPORT:-file} transport (file = .eml outbox under the data dir's mail/_outbox)"
 echo
 echo "  Pair a frontend with it (open once; saved to that origin's localStorage):"
 echo "    http://localhost:<frontend-port>/index.html?api=http://localhost:$PORT"
@@ -117,4 +118,5 @@ cd "$REPO/breakside_server"
 exec env BREAKSIDE_DATA_DIR="$DATADIR" \
          BREAKSIDE_AUTH_REQUIRED=false \
          BREAKSIDE_PORT="$PORT" \
+         BREAKSIDE_MAIL_TRANSPORT="${BREAKSIDE_MAIL_TRANSPORT:-file}" \
          uvicorn main:app --reload --port "$PORT"
