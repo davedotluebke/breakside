@@ -289,10 +289,17 @@ Deliberately left out of editing v1 / the share-viewer port:
   `previousEvent`, nothing consumes it yet.
 - **Sliding-panel split** for the Log tab (like the All tab), with the
   field auto-rotating as its panel shrinks (plan Decision 10).
-- **Commentator** (AI text-to-speech): `replayController` already emits
-  `entry` with `saidSoFar`; a subscriber returning a promise makes Speedy
-  wait for the audio (plan § 9). The live-game version of this for
-  spectators is [#33](https://github.com/davedotluebke/breakside/issues/33).
+- **Commentator**: v1 shipped as the browser-voice narrator (branch
+  `replay-narrator`, `playByPlay/replayNarrator.js`; ARCHITECTURE.md §
+  Replay viewer); it is the live-game narration spectators asked for in
+  [#33](https://github.com/davedotluebke/breakside/issues/33). Follow-ups:
+  a voice picker in Advanced Settings
+  (`replay.voice` is read, nothing writes it yet); a server voice (Polly
+  generative, compared in `mockups/commentator/`) behind a share-hash-keyed
+  endpoint with clip caching, swapping only `speak()`; an LLM rewrite using
+  `saidSoFar` if the rule-based phrasing proves too flat; verify on an iPhone
+  that a stored-on toggle resumes speaking after the first tap (the parked
+  utterance path) and what happens to speech when the screen locks.
 - **Share viewer**: the sticky stage + card highlighting were preview-tested
   only, not on a phone; the card headers are deliberately not seekable (a
   tap toggles the card). A "jump to now" nudge when a parent scrolls up
