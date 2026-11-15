@@ -508,6 +508,23 @@ The multi-user push is mostly done. A few items linger:
       dialog~~ (shipped in 2.2.0, `qr-codes`); central share-link
       management outside the dialog (Team Settings list of all team shares);
       viewer polish (fade transition on score change).
+- [ ] **Live weather on a game** (parent request from the first live-viewer
+      use, CUDO tournament 2026-11-14): show current conditions (temperature,
+      wind, precipitation) to spectators while a game is live, and save them
+      with the game so Review and the share link show what it was played in.
+      Not a tweak: a game has no location today, so this needs (1) a location
+      on the game or its event (coach's device geolocation at game start, or
+      a field/venue on the event), (2) a weather provider fetched by the
+      backend, not by each spectator, (3) a new field on the game plus an
+      entry in the public share allowlist (`routers/shares.py`), and (4)
+      display in the guest view and Review. Decide first whether one
+      snapshot at game start is enough or conditions are sampled through
+      the game (wind is the one that changes how a game plays). Location is
+      personal data on a public link; store conditions, not coordinates.
+- [ ] Other requests from the same feedback, deliberately not built with the
+      sticky score bar / log-follow tweaks (branch `viewer-tweaks`): a
+      newest-first order for the Game Log, and a pin/unpin option for the
+      sticky bar. Wait for a second request.
 
 ### Multi-user rollout — completed (historical)
 
