@@ -113,6 +113,8 @@ const advancedSettings = (function() {
         'replay.capWithinMs': 4000,                       // dead time clipped between plays within a point (0 = Off)
         'replay.capBetweenMs': 8000,                      // dead time clipped between points (0 = Off)
         'replay.orientation': 'landscape',                // default orientation the replay field opens in: landscape (wide) | portrait (tall); the ⟳ button writes here too
+        'replay.narrate': false,                          // speak plays with the browser voice; the replay's 🔊 button writes here (playByPlay/replayNarrator.js)
+        'replay.voice': null,                             // a speechSynthesis voice name to prefer, or null for the narrator's own pick
         // --- Undo ---
         'undo.confirmUndoToHere': true,                   // ask before "undo to here" from a Log line (the dialog's "Don't ask again" turns this off)
         // --- Hints ---

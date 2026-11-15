@@ -76,7 +76,7 @@
 /* ---- transport ---- */
 .rv-transport {
     display: grid;
-    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto auto;
     gap: 6px 10px;
     align-items: center;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
@@ -177,6 +177,8 @@
    modifier-chip look. */
 .rv-tbtn.rv-editbtn[hidden] { display: none; }
 .rv-tbtn.rv-editbtn.on { background: var(--brand-orange); color: #fff; border-color: transparent; }
+/* Narration toggle (playByPlay/replayNarrator.js): lit while the voice is on. */
+.rv-tbtn.rv-narrate.on { background: var(--brand-orange); color: #fff; border-color: transparent; }
 .rv-edit {
     display: flex; flex-direction: column; gap: 6px;
     padding: 8px 10px;

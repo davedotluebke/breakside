@@ -24,6 +24,7 @@ import { createReplayEngine } from './replayEngine.js';
 import { createReplayController } from './replayController.js';
 import * as fieldRender from './fieldRender.js';
 import { createReplayEditor } from './replayEdit.js';
+import { mountReplayNarrator } from './replayNarrator.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 
 // Slider stops. 'pap' (the engine's play-after-play) is surfaced as "Speedy":
@@ -390,6 +391,12 @@ function mountReplayView(cfg) {
         refreshView: () => onLogUpdated(),
     }) : null;
     controller.on('transport', renderTransport);
+    // The 🔊 toggle and the voice behind it (playByPlay/replayNarrator.js);
+    // null where the browser has no speech synthesis.
+    const narrator = mountReplayNarrator({
+        controller, engine, transportEl: q('.rv-transport'), beforeEl: q('.rv-rotate'),
+        getEntryOptions, settings: advancedSettings,
+    });
 
     // ---- wiring ----
     playBtn.addEventListener('click', () => controller.toggle());
@@ -465,8 +472,10 @@ function mountReplayView(cfg) {
         // (no timers run while waiting) so the tail is current on return.
         if (controller.state.playing && !controller.state.follow) controller.pause();
         if (editor) editor.close();
+        if (narrator) narrator.cancel();
     }
     function destroy() {
+        if (narrator) narrator.destroy();
         if (editor) editor.destroy();
         controller.destroy();
         fade.dispose();
