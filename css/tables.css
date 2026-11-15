@@ -1097,6 +1097,60 @@ body.share-guest .share-guest-footer {
     display: block;
 }
 
+/* The title bar's compact score (index.html .summary-title-stack). Title and
+   score share one grid cell and swap by visibility, so the bar keeps the
+   taller of the two heights and nothing below it moves when they swap. */
+.summary-title-stack {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+}
+
+.summary-title-stack > * {
+    grid-area: 1 / 1;
+}
+
+.summary-bar-score {
+    display: none;
+}
+
+body.share-guest .summary-bar-score {
+    display: grid;
+    row-gap: 1px;
+    visibility: hidden;
+    font-size: 0.85rem;
+    line-height: 1.25;
+}
+
+.summary-bar-score-row {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+}
+
+.summary-bar-score-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.summary-bar-score-num {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+body.share-guest .score-pinned .summary-bar-score { visibility: visible; }
+body.share-guest .score-pinned .summary-title-text { visibility: hidden; }
+
+/* A spectator scrolls a long page (stats, flow, log) on a phone: keep the
+   bar — score once it has scrolled away, Live badge, connection — in view. */
+body.share-guest #gameSummaryScreen > .screen-title-bar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
 .share-status-badge {
     margin-left: auto;
     padding: 0.2rem 0.6rem;

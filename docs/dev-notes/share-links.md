@@ -27,6 +27,11 @@ Things that are easy to get wrong next time this area is touched:
 - The guest footer is a single DOM node moved between `#shareEventScreen` and `#gameSummaryScreen` (`placeGuestFooter`); don't duplicate its ids.
 - Verification recipe: `scripts/dev-backend.sh --fresh --label <x> --port <p>`, seed a team/event/games with the storage modules under `BREAKSIDE_DATA_DIR=.dev-data/<x>`, mint with `share_storage.create_event_share_link`, open `http://localhost:<fe>/?share=<hash>&api=http://localhost:<p>`. Bump a game's `current.json` (or re-save it) to watch the poll pick it up.
 
+## What a spectator's phone needs (2026-11-14, first parent feedback)
+
+- The Game Summary title bar is sticky for a guest (`body.share-guest`, css/tables.css). Once the Score block scrolls under it, the "Game Summary" title swaps for a compact two-line score (`watchScorePinned` in teams/gameSummary.js, an IntersectionObserver on `#finalScore`). Title and score share one grid cell and swap by `visibility`, so the bar's height never changes; a swap that resized the bar would move the observed block and could flicker at the boundary.
+- A poll redraw keeps the log's scroll (`renderSummaryLogLines({ keepScroll })`): parked at the bottom → stays at the bottom as plays arrive; anywhere else → stays put. A live game with no replay mounted (no field positions) opens at its latest play. The replay's `onLogUpdated` only pulls the log to the current line while live-following, so a paused reader is not yanked back on every update.
+
 ## Deploy note
 
 The feature has a backend half (share endpoints, the `/view` redirect). Staging cannot exercise new endpoints until the backend is deployed, because staging talks to the production API. The share dialog shows a friendly error until then; do not debug that as a bug.
