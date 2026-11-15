@@ -264,7 +264,7 @@ function mountReplayView(cfg) {
 
     // ---- log + hud ----
     function lineEls() { return logEl.querySelectorAll('[data-entry]'); }
-    function markLog(index) {
+    function markLog(index, { scroll = true } = {}) {
         let cur = null;
         lineEls().forEach(el => {
             const i = +el.dataset.entry;
@@ -272,7 +272,7 @@ function mountReplayView(cfg) {
             el.classList.toggle('rv-future', i > index);
             if (i === index) cur = el;
         });
-        if (cur && shown) {
+        if (cur && shown && scroll) {
             const top = cur.offsetTop - logEl.offsetTop, bot = top + cur.offsetHeight;
             if (top < logEl.scrollTop) logEl.scrollTop = top - 4;
             else if (bot > logEl.scrollTop + logEl.clientHeight) logEl.scrollTop = bot - logEl.clientHeight + 4;
@@ -439,10 +439,10 @@ function mountReplayView(cfg) {
     };
     logEl.addEventListener('click', onLogClick);
 
-    function redraw() {
+    function redraw({ scroll = true } = {}) {
         const i = controller.index;
         drawField(i, engine.fieldStateAt(i), false);
-        markLog(i);
+        markLog(i, { scroll });
         renderTransport(controller.snapshot());
     }
 
@@ -451,8 +451,12 @@ function mountReplayView(cfg) {
     function onLogUpdated() {
         controller.refresh(getGame());
         renderTimeline();
-        markLog(controller.index);
-        if (!controller.state.playing) redraw();
+        // Re-mark the redrawn lines. Only live-follow pulls the log to the
+        // current line here: a reader who paused or scrolled away keeps their
+        // place when new plays arrive (the caller preserved the scroll).
+        const scroll = !!controller.state.follow;
+        markLog(controller.index, { scroll });
+        if (!controller.state.playing) redraw({ scroll });
     }
     function onShown() { shown = true; redraw(); }
     function onHidden() {

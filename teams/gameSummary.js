@@ -73,6 +73,30 @@ function showGameSummaryPostGame() {
 function showGameSummaryForShare(game, { live = false } = {}) {
     gameSummaryOrigin = 'selectTeamScreen';
     renderGameSummary(game, { guest: true, live });
+    watchScorePinned();
+}
+
+/**
+ * Share guest only: the title bar is sticky (css/tables.css), and while the
+ * Score block is scrolled out from under it the bar shows the compact score
+ * in place of the "Game Summary" title, so a spectator reading the log still
+ * sees the score and the Live badge.
+ */
+let _scorePinObserver = null;
+function watchScorePinned() {
+    const bar = document.querySelector('#gameSummaryScreen .screen-title-bar');
+    const score = document.getElementById('finalScore');
+    if (!bar || !score || typeof IntersectionObserver !== 'function') return;
+    if (_scorePinObserver) _scorePinObserver.disconnect();
+    // The bar covers the top of the viewport, so the score counts as gone
+    // once it is under the bar, not only once it leaves the window.
+    _scorePinObserver = new IntersectionObserver(entries => {
+        const e = entries[entries.length - 1];
+        // A hidden screen reports "not intersecting" with an empty rect.
+        const laidOut = e.boundingClientRect.height > 0;
+        bar.classList.toggle('score-pinned', laidOut && !e.isIntersecting);
+    }, { rootMargin: `-${bar.offsetHeight || 0}px 0px 0px 0px` });
+    _scorePinObserver.observe(score);
 }
 
 /**
@@ -90,12 +114,12 @@ function refreshGameSummaryForShare(game) {
     if (summaryReplayView) {
         _summaryLookup = buildPointPlayerLookup(game);
         _entryOptions = buildSummaryEntryOptions(game, _summaryLookup);
-        renderSummaryLogLines();
+        renderSummaryLogLines({ keepScroll: true });
         summaryReplayView.onLogUpdated();
     } else {
         // Nothing mounted yet (no located events so far) — a full render
         // tries again, mounting once the first located play arrives.
-        renderGameSummaryEventLog(game, { live: true, editable: false });
+        renderGameSummaryEventLog(game, { live: true, editable: false, keepScroll: true });
     }
 }
 
@@ -111,6 +135,12 @@ function renderSummaryScore(game) {
     if (oppNameEl) oppNameEl.textContent = game.opponent || 'Opponent';
     if (teamScoreEl) teamScoreEl.textContent = game.scores?.[Role.TEAM] || game.scores?.team || 0;
     if (oppScoreEl) oppScoreEl.textContent = game.scores?.[Role.OPPONENT] || game.scores?.opponent || 0;
+    // The compact copy in the title bar (share guest, once scrolled).
+    const mirror = (id, src) => { const el = document.getElementById(id); if (el && src) el.textContent = src.textContent; };
+    mirror('summaryBarTeam', teamNameEl);
+    mirror('summaryBarOpponent', oppNameEl);
+    mirror('summaryBarTeamScore', teamScoreEl);
+    mirror('summaryBarOpponentScore', oppScoreEl);
 }
 
 /**
@@ -395,7 +425,7 @@ function pointClassificationLabel(kind) {
  * (utils/gameLogRenderer.js, G6 merge); this surface adds per-point
  * classification badges and omits the version/roster header lines.
  */
-function renderGameSummaryEventLog(game, { live = false, editable = true } = {}) {
+function renderGameSummaryEventLog(game, { live = false, editable = true, keepScroll = false } = {}) {
     const logEl = document.getElementById('gameSummaryEventLog');
     if (!logEl) return;
 
@@ -403,7 +433,10 @@ function renderGameSummaryEventLog(game, { live = false, editable = true } = {})
     // display names; event lines already carry resolved {name, id} refs.
     _summaryLookup = buildPointPlayerLookup(game);
     _entryOptions = buildSummaryEntryOptions(game, _summaryLookup);
-    renderSummaryLogLines();
+    renderSummaryLogLines({ keepScroll });
+    // A game in progress opens on its latest play. (With a replay mounted
+    // below, live-follow does the same by scrolling to the current line.)
+    if (live && !keepScroll) logEl.scrollTop = logEl.scrollHeight;
 
     // Replay view (docs/replay-viewer-plan.md step 7): the field playback
     // above the log, for games with field positions. Live only for a share
@@ -429,7 +462,7 @@ function renderGameSummaryEventLog(game, { live = false, editable = true } = {})
                 canEdit: () => !isViewer(),
                 editDeniedMessage: 'Viewers can’t edit plays',
                 onEdited: () => {
-                    renderSummaryLogLines();
+                    renderSummaryLogLines({ keepScroll: true });
                     renderGameSummaryStatsTable(_lastRenderedGame);
                     renderGameSummaryTeamStats(_lastRenderedGame);
                     renderGameSummaryFlow(_lastRenderedGame);
@@ -462,11 +495,25 @@ function buildSummaryEntryOptions(game, lookup) {
     };
 }
 
-function renderSummaryLogLines() {
+/**
+ * Draw the log lines. `keepScroll` is for a redraw of the game already on
+ * screen (a guest's poll, an edit): a reader parked at the bottom of the log
+ * stays at the bottom as new plays arrive, and a reader anywhere else stays
+ * exactly where they were.
+ */
+function renderSummaryLogLines({ keepScroll = false } = {}) {
     const logEl = document.getElementById('gameSummaryEventLog');
     if (!logEl || !_lastRenderedGame || !_entryOptions) return;
+    const prevTop = logEl.scrollTop;
+    const atBottom = logScrolledToBottom(logEl);
     logEl.innerHTML = renderGameLogEntriesHTML(
         buildGameLogEntries(_lastRenderedGame, _entryOptions), _entryOptions.teamName);
+    if (keepScroll) logEl.scrollTop = atBottom ? logEl.scrollHeight : prevTop;
+}
+
+/** Within a line or so of the end (or nothing to scroll yet). */
+function logScrolledToBottom(el, slack = 32) {
+    return el.scrollHeight - el.clientHeight - el.scrollTop <= slack;
 }
 
 /**

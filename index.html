@@ -1237,7 +1237,17 @@
             <button class="title-bar-back-btn" id="shareEventBackBtn" style="display:none;">
                 <i class="fas fa-arrow-left"></i><span class="title-bar-back-label">Event</span>
             </button>
-            <span class="panel-title">Game Summary</span>
+            <!-- For a share guest the bar is sticky, and once the Score block
+                 has scrolled under it the title swaps for the compact score
+                 (teams/gameSummary.js watchScorePinned). Both share one grid
+                 cell so the swap never changes the bar's height. -->
+            <span class="panel-title summary-title-stack">
+                <span class="summary-title-text">Game Summary</span>
+                <span id="summaryBarScore" class="summary-bar-score" aria-hidden="true">
+                    <span class="summary-bar-score-row"><span id="summaryBarTeam" class="summary-bar-score-name"></span><span id="summaryBarTeamScore" class="summary-bar-score-num"></span></span>
+                    <span class="summary-bar-score-row"><span id="summaryBarOpponent" class="summary-bar-score-name"></span><span id="summaryBarOpponentScore" class="summary-bar-score-num"></span></span>
+                </span>
+            </span>
             <!-- Share-guest chrome (teams/shareGuest.js): live/final badge and
                  the poll connection state. Only shown under body.share-guest. -->
             <span id="shareStatusBadge" class="share-status-badge" style="display:none;"></span>
