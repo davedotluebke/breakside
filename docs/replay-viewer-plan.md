@@ -288,13 +288,22 @@ undo/stats later.
 - Distant TODO: insert/delete events (undo-stack and possession-boundary
   implications), editing the opponent's events.
 
-### 9. Commentator hook (future, designed now)
+### 9. Commentator hook (designed here; v1 shipped 2026-11 as the browser-voice narrator)
 
 `replayController` emits `entry` with `{ text, saidSoFar, entry }`. The
 commentator module subscribes, prompts the model with the event text plus
 `saidSoFar`, plays the audio, and returns a promise; in play-after-play mode
 the controller waits for it (capped, so a stuck TTS never freezes replay).
 Nothing else in the replay needs to know audio exists.
+
+What shipped (`playByPlay/replayNarrator.js`, ARCHITECTURE.md § Replay
+viewer): the subscriber exists, but v1 uses no model and no server. A
+rule-based phrasing layer rewrites each entry from the event's flags and the
+browser's own speech synthesis speaks it; `saidSoFar` is still unused. The
+pacing contract above held unchanged — Speedy waits on the returned promise.
+The one lesson from the TTS mockups (`mockups/commentator/`) was that the
+rewrite, not the voice engine, carried almost all of the perceived quality,
+which is why the phrasing layer came first and the voice is swappable.
 
 ## Sequencing and estimates
 

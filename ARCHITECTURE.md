@@ -709,6 +709,23 @@ Layers, bottom-up (all under `playByPlay/`):
   renders; live games start in Live) and `teams/gameSummary.js` (stored
   games, Live disabled). Late-bound from `ui/panelSystem.js` via
   `window.replayView` for tab shown/hidden and screen exit.
+- **`replayNarrator.js`** — the 🔊 toggle on the transport and the voice behind
+  it (plan § 9's commentator hook, first subscriber to `entry`). Browser
+  speech synthesis, no backend: `phraseEntry()` is a pure layer that turns a
+  log entry into a commentator's sentence from the event's own flags ("Block
+  by Bob!", "Bob dumps it to Cara", "Us lead, 3 to 2", "Point 4. On the
+  line: …") and silences headers and possession delimiters; the mount keeps
+  its own queue — Speedy returns a hold so the next play waits for the
+  sentence, 2×/4× keep only the newest line, 1×/Live hold a few lines and
+  drop intermediate plays (never scores) when a sync lands several entries at
+  once; seek, step back, pause and tab-hide cancel. Safari refuses speech
+  before the page's first tap, so an utterance that never starts is parked
+  and retried on the next pointerdown. Settings: `replay.narrate` (the
+  toggle), `replay.voice` (a preferred voice name; otherwise a local English
+  voice is picked). Pure leaf — the mount site passes `advancedSettings` in —
+  so `tests/unit/replayNarrator.test.mjs` runs it under node with a fake
+  `speechSynthesis`. A server voice (Polly / OpenAI TTS, compared in
+  `mockups/commentator/`) would replace only `speak()`.
 - **`replayEdit.js`** — editing v1 (plan step 8, Decision 11). The ✎ button
   on the transport opens a sheet (paused only; Play / Go live close it) for
   the line under the playhead: roster chips per role (thrower / receiver /
