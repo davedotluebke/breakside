@@ -1,16 +1,19 @@
 """
 Stop-latency probe: does the browser's stop() capture the whole transcript?
 
-narration/realtimeSession.js stop() sends input_audio_buffer.commit, then
-waits for the FIRST conversation.item.input_audio_transcription.completed
-event, capped at 4 s, and returns whatever has accumulated. This probe
+Until the stop-path fix (branch stop-path, November 2026)
+narration/realtimeSession.js stop() sent input_audio_buffer.commit, then
+waited for the FIRST conversation.item.input_audio_transcription.completed
+event, capped at 4 s, and returned whatever had accumulated. This probe
 streams a clip at real-time pace with the production session config, sends
 the commit at t0 (the tap on stop), records every server event against t0,
 drains until the stream has been quiet for a long time, and then replays
-the event log through a model of stop() to compare what production would
-have returned with the fully drained transcript. It also reports what an
-item-tracking stop() would wait for: the manual commit acknowledged and
-every committed item completed or failed.
+the event log through a model of that old stop() ("production stop()" in
+the output) to compare what it would have returned with the fully drained
+transcript. Next to it, it reports what an item-tracking stop() waits for
+(the manual commit acknowledged and every committed item completed or
+failed), which is what the fix does. browser_stop_check.js is the
+companion that runs the real client instead of modelling it.
 
 Clip sets (--which):
   plain     lineup and event scenarios as they are
@@ -18,6 +21,9 @@ Clip sets (--which):
             plus the same call followed by 1 / 3 / 6 s of silence
   racefine  the add-on case swept through the pauses where the first
             phrase's transcript lands right at the tap
+  long      20 and 30 s of near-continuous narration: how long the longest
+            items take (the server caps an item at about 15 s of speech;
+            those completed within 2.3 s)
   all       plain + race
 
 Findings, 2026-11-25, gpt-4o-mini-transcribe and gpt-4o-transcribe
@@ -271,6 +277,14 @@ def build_clips(base: Path, which: str):
                   "018_long_form_multi_possession", "026_delayed_correction"]:
             d = E / n
             clips.append((n, load_pcm(d / "audio.flac"), roster_of(d)))
+    if which == "long":
+        # Half a minute of near-continuous narration: how long does the last
+        # (possibly very long) item take to complete after the commit?
+        parts = []
+        for n in ["015_coach_commentary", "008_yoyo_possession", "018_long_form_multi_possession"]:
+            parts += [E / n / "audio.flac", 0.12]
+        clips.append(("long 31s continuous", composite(parts[:-1]), roster_of(E / "015_coach_commentary")))
+        clips.append(("long 21s continuous", composite(parts[:3]), roster_of(E / "015_coach_commentary")))
     if which == "racefine":
         # Fine sweep around the gap where the first phrase's transcript lands
         # near the tap on stop.
