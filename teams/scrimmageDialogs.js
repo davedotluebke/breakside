@@ -20,7 +20,7 @@
  * § Intrasquad Scrimmages.
  */
 import { Game, Gender } from '../store/models.js';
-import { teams, currentTeam, setCurrentEvent, saveAllTeamsData } from '../store/storage.js';
+import { teams, currentTeam, setCurrentEvent, saveAllTeamsData, canManageCurrentTeam } from '../store/storage.js';
 import {
     syncGameToCloud, syncTeamToCloud, generateGameId, authFetch, API_BASE_URL, listServerGames,
     patchScrimmageGame,
@@ -843,7 +843,9 @@ function startScrimmage(trackSquad) {
         // The names a coach uses become the team's default for next time
         // (Team Settings → Scrimmage Squads shows and edits the same field).
         // Set before the games are built so saveAllTeamsData persists both.
-        if (squadNamesChanged(currentTeam, names)) {
+        // A team setting, so a coach's to change: a stat keeper's names go
+        // on the two games only (the server would refuse the team write).
+        if (canManageCurrentTeam() && squadNamesChanged(currentTeam, names)) {
             currentTeam.squadNames = { ...names };
             currentTeam.updatedAt = new Date().toISOString();
             syncTeamToCloud(currentTeam);

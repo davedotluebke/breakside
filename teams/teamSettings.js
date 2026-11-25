@@ -882,16 +882,19 @@ function loadSquadNames() {
     yInput.value = names.Y || '';
     xInput.placeholder = DEFAULT_SQUAD_NAMES.X;
     yInput.placeholder = DEFAULT_SQUAD_NAMES.Y;
-    xInput.disabled = yInput.disabled = isViewer();
+    // A team setting: coaches only (the server refuses a stat keeper's
+    // team write, as it does a viewer's).
+    const readOnly = !canManageCurrentTeam();
+    xInput.disabled = yInput.disabled = readOnly;
     const saveBtn = document.getElementById('saveSquadNamesBtn');
-    if (saveBtn) saveBtn.disabled = isViewer();
+    if (saveBtn) saveBtn.disabled = readOnly;
 }
 
 function saveSquadNames() {
     const xInput = document.getElementById('squadNameXInput');
     const yInput = document.getElementById('squadNameYInput');
     const saveBtn = document.getElementById('saveSquadNamesBtn');
-    if (!xInput || !yInput || !currentTeam || isViewer()) return;
+    if (!xInput || !yInput || !currentTeam || !canManageCurrentTeam()) return;
 
     const typed = { X: xInput.value, Y: yInput.value };
     const names = normalizeSquadNames(typed);
