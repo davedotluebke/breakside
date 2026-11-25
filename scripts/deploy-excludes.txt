@@ -41,6 +41,18 @@ tests/*
 # directory, so exclude them here too)
 scratchpad/*
 
+# Local environments and tool caches that sit in a checkout but not in git
+# (.gitignore has `.venv*/`). Staging deploys the working directory, so a
+# checkout holding a virtualenv would publish it. The nested .pytest_cache
+# form covers a cache left under any directory, which the root-only pattern
+# above does not.
+.venv*/*
+venv/*
+node_modules/*
+*/node_modules/*
+*/.pytest_cache/*
+package-lock.json
+
 # Docs and license
 *.md
 LICENSE
