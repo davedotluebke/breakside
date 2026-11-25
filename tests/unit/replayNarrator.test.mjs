@@ -10,7 +10,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { phraseEntry, mountReplayNarrator } from '../../playByPlay/replayNarrator.js';
+import { phraseEntry, wantsEntry, resolveVoice, mountReplayNarrator } from '../../playByPlay/replayNarrator.js';
 import { buildGameLogEntries } from '../../utils/gameLogRenderer.js';
 import { createReplayEngine } from '../../playByPlay/replayEngine.js';
 import { createReplayController } from '../../playByPlay/replayController.js';
@@ -112,10 +112,11 @@ function fakeDom() {
         createElement: () => {
             const classes = new Set(['rv-tbtn']), attrs = {}, handlers = {};
             return {
-                className: '', innerHTML: '', type: '', title: '', parentNode: null,
-                classList: { toggle: (c, on) => { on ? classes.add(c) : classes.delete(c); }, contains: c => classes.has(c) },
+                className: '', innerHTML: '', type: '', title: '', parentNode: null, hidden: false, dataset: {},
+                classList: { toggle: (c, on) => { on ? classes.add(c) : classes.delete(c); }, contains: c => classes.has(c), add: c => classes.add(c), remove: c => classes.delete(c) },
                 setAttribute: (k, v) => { attrs[k] = v; }, getAttribute: k => attrs[k],
                 addEventListener: (t, fn) => { handlers[t] = fn; }, click: () => handlers.click && handlers.click(),
+                querySelectorAll: () => [], contains: () => false,
                 remove() { this.removed = true; },
             };
         },
@@ -124,12 +125,18 @@ function fakeDom() {
     return { doc, transport, fire: (t, ev) => (listeners[t] || []).slice().forEach(fn => fn(ev)) };
 }
 
-function fakeSynth({ autoStart = true } = {}) {
+const APPLE_VOICES = [
+    { name: 'Samantha', lang: 'en-US', localService: true, default: true },
+    { name: 'Daniel', lang: 'en-GB', localService: true },
+    { name: 'Zarvox', lang: 'en-US', localService: true },
+    { name: 'Karen', lang: 'en-AU', localService: true },
+];
+function fakeSynth({ autoStart = true, voices = APPLE_VOICES } = {}) {
     const spoken = [], live = new Set();
     const synth = {
         spoken, cancelled: 0,
         get speaking() { return live.size > 0; },
-        getVoices: () => [{ name: 'Samantha', lang: 'en-US', localService: true, default: true }, { name: 'Zarvox', lang: 'en-US', localService: true }],
+        getVoices: () => voices,
         resume() {},
         speak(u) { spoken.push(u); live.add(u); if (autoStart && u.onstart) u.onstart(); },
         cancel() { synth.cancelled++; [...live].forEach(u => { live.delete(u); u.onerror && u.onerror({ error: 'canceled' }); }); },
@@ -159,13 +166,69 @@ test('mount: nothing mounts without speech synthesis; the toggle persists and li
 
     const { n, synth, transport: t2, store } = mountOn(sampleGame());
     assert.equal(n.enabled, false);
-    assert.equal(t2.children.length, 1);
+    assert.equal(t2.children.length, 2);                    // 🔊 and ⚙
+    assert.equal(n.settingsButton.hidden, true);            // ⚙ only while narration is on
     n.button.click();
     assert.equal(n.enabled, true);
     assert.equal(store.get('replay.narrate'), true);
     assert.ok(n.button.classList.contains('on'));
+    assert.equal(n.settingsButton.hidden, false);
     assert.deepEqual(texts(synth), ['Narration on.']);
     assert.equal(synth.spoken[0].voice.name, 'Samantha');   // the cue goes through the same queue and voice pick
+    assert.equal(synth.spoken[0].pitch, 1);
+});
+
+test('voices: the three profiles resolve to the Apple voices, fall back by name then language, and keep the robot distinct', () => {
+    const { synth } = fakeSynth();
+    assert.equal(resolveVoice(synth, 'male').voice.name, 'Daniel');
+    assert.equal(resolveVoice(synth, 'female').voice.name, 'Samantha');
+    assert.equal(resolveVoice(synth, 'robot').voice.name, 'Zarvox');
+    assert.equal(resolveVoice(synth, undefined).voice.name, 'Samantha');   // default profile
+    assert.equal(resolveVoice(synth, 'Karen').voice.name, 'Karen');        // an exact name still works
+    assert.ok(resolveVoice(synth, 'male').exact && resolveVoice(synth, 'robot').exact);
+
+    // An Android-style device: Google voices, no gendered names.
+    const android = fakeSynth({ voices: [
+        { name: 'English United States', lang: 'en-US', localService: true, default: true },
+        { name: 'English United Kingdom', lang: 'en-GB', localService: true },
+    ] }).synth;
+    const m = resolveVoice(android, 'male'), f = resolveVoice(android, 'female'), r = resolveVoice(android, 'robot');
+    assert.equal(m.voice.lang, 'en-GB'); assert.equal(m.exact, false); assert.equal(m.pitch, 0.85);
+    assert.equal(f.voice.lang, 'en-US'); assert.equal(f.pitch, 1);
+    assert.equal(r.pitch, 0.5); assert.ok(r.rate < 1);
+    // A Windows/Edge-style device with named neural voices.
+    const edge = fakeSynth({ voices: [
+        { name: 'Microsoft Aria Online (Natural) - English (United States)', lang: 'en-US' },
+        { name: 'Microsoft Guy Online (Natural) - English (United States)', lang: 'en-US' },
+    ] }).synth;
+    assert.match(resolveVoice(edge, 'male').voice.name, /Guy/);
+    assert.match(resolveVoice(edge, 'female').voice.name, /Aria/);
+    // No voices at all: nothing explodes, and the utterance keeps the browser default.
+    assert.equal(resolveVoice(fakeSynth({ voices: [] }).synth, 'male').voice, null);
+});
+
+test('levels: play-by-play says everything, game events keeps lineups / scores / Other events, score only keeps the score lines', () => {
+    const entries = buildGameLogEntries(sampleGame(), CTX);
+    const spokenAt = lvl => entries.filter(e => wantsEntry(e, lvl) && phraseEntry(e, CTX)).map(e => e.kind);
+    assert.deepEqual(spokenAt('score'), ['score', 'currentscore', 'score', 'currentscore']);
+    assert.deepEqual(spokenAt('events'), ['roster', 'score', 'currentscore', 'roster', 'score', 'currentscore']);
+    assert.ok(spokenAt('pbp').includes('event') && spokenAt('pbp').includes('pullnote'));
+    const timeout = { kind: 'event', text: '', event: new Other({ timeout: true, calledBy: 'us' }) };
+    const throwE = { kind: 'event', text: '', event: new Throw({ thrower: P.Alice, receiver: P.Bob }) };
+    assert.equal(wantsEntry(timeout, 'events'), true);
+    assert.equal(wantsEntry(throwE, 'events'), false);
+    assert.equal(wantsEntry(timeout, 'score'), false);
+    assert.equal(wantsEntry({ kind: 'periodnote', text: 'x' }, 'events'), true);
+    assert.equal(wantsEntry(throwE, 'nonsense'), true);   // unknown level reads as the default (pbp)
+});
+
+test('mount: the stored level and voice drive what is spoken and how', () => {
+    const store = { m: { 'replay.narrate': true, 'replay.narrateLevel': 'score', 'replay.voice': 'robot' }, get(k) { return this.m[k]; }, set(k, v) { this.m[k] = v; } };
+    const { controller, synth } = mountOn(sampleGame(), { settings: store });
+    controller.seek(1);
+    for (let i = 0; i < 40; i++) { controller.stepForward(); synth.end(); }   // past the end is a no-op
+    assert.deepEqual(texts(synth), ['Us scores!', 'Us lead, 1 to 0.', 'Them scores!', 'Tied at 1.']);
+    assert.ok(synth.spoken.every(u => u.voice.name === 'Zarvox'));
 });
 
 test('mount: disabled → silent; enabled → each played entry is spoken with the picked voice', () => {
@@ -261,7 +324,7 @@ test('mount: an utterance that never starts is parked and retried on the next ta
     assert.equal(synth.spoken.length, 2);
     assert.equal(synth.spoken[1].text, synth.spoken[0].text);
     n.destroy();
-    assert.ok(transport.children[0].removed);
+    assert.ok(transport.children[0].removed && transport.children[1].removed);
     controller.stepForward();
     assert.equal(synth.spoken.length, 2);
 });

@@ -292,9 +292,9 @@ Deliberately left out of editing v1 / the share-viewer port:
 - **Commentator**: v1 shipped as the browser-voice narrator (branch
   `replay-narrator`, `playByPlay/replayNarrator.js`; ARCHITECTURE.md §
   Replay viewer); it is the live-game narration spectators asked for in
-  [#33](https://github.com/davedotluebke/breakside/issues/33). Follow-ups:
-  a voice picker in Advanced Settings
-  (`replay.voice` is read, nothing writes it yet); a server voice (Polly
+  [#33](https://github.com/davedotluebke/breakside/issues/33). The ⚙ beside
+  the 🔊 picks the voice (male / female / robot) and the detail level
+  (play-by-play / game events / score only). Follow-ups: a server voice (Polly
   generative, compared in `mockups/commentator/`) behind a share-hash-keyed
   endpoint with clip caching, swapping only `speak()`; an LLM rewrite using
   `saidSoFar` if the rule-based phrasing proves too flat; verify on an iPhone

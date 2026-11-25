@@ -78,8 +78,10 @@
 
 /* ---- transport ---- */
 .rv-transport {
-    display: grid;
-    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto auto;
+    /* A flex row rather than a fixed grid: hidden buttons (✎ for viewers, ⚙
+       while narration is off, ⟳ on a game with no positions) then cost no
+       track and no gap, and the slider takes whatever is left. */
+    display: flex;
     gap: 6px 10px;
     align-items: center;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
@@ -102,7 +104,8 @@
 }
 .rv-tbtn svg { display: block; }
 .rv-tbtn.rv-play svg { margin-left: 2px; }
-.rv-speed { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rv-speed { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rv-transport > .rv-tbtn { flex: 0 0 auto; }
 /* touch-action: none — a drag on the thumb must move the thumb, not scroll
    the page; the taller box gives a thumb-sized touch target. */
 .rv-speed-input { width: 100%; margin: 0; height: 28px; accent-color: var(--brand-orange); touch-action: none; cursor: pointer; }
@@ -180,8 +183,38 @@
    modifier-chip look. */
 .rv-tbtn.rv-editbtn[hidden] { display: none; }
 .rv-tbtn.rv-editbtn.on { background: var(--brand-orange); color: #fff; border-color: transparent; }
-/* Narration toggle (playByPlay/replayNarrator.js): lit while the voice is on. */
+/* Narration toggle (playByPlay/replayNarrator.js): lit while the voice is on.
+   The ⚙ beside it exists only while narration is on and opens the menu below
+   the transport: voice (male / female / robot) and detail level. */
 .rv-tbtn.rv-narrate.on { background: var(--brand-orange); color: #fff; border-color: transparent; }
+.rv-tbtn.rv-narrate-cfg[hidden] { display: none; }
+/* With the ⚙ showing (.rv-narrating, set by the narrator), a phone's
+   transport has eight controls on one row and the speed slider gives up the
+   width; tighten the buttons and gaps a little so its Live/1×/2×/4×/Speedy
+   labels keep room. */
+@media (max-width: 480px) {
+    .rv-transport.rv-narrating { gap: 6px 6px; }
+    .rv-transport.rv-narrating .rv-tbtn { width: 32px; height: 32px; }
+    .rv-transport.rv-narrating .rv-tbtn.rv-play { width: 38px; height: 38px; }
+}
+.rv-tbtn.rv-narrate-cfg.on { background: var(--text-primary); color: var(--surface-card); border-color: transparent; }
+.rv-nmenu {
+    display: grid; gap: 6px;
+    margin-top: 8px; padding: 8px 10px;
+    border: 1px solid var(--border-light); border-radius: 10px;
+    background: var(--surface-raised);
+}
+.rv-nmenu[hidden] { display: none; }
+.rv-nmenu-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
+.rv-nmenu-lbl { flex: 0 0 58px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.rv-nmenu-note { padding-left: 63px; font-size: 11px; color: var(--text-muted); min-height: 1.2em; }
+.rv-nchip {
+    margin: 0; padding: 5px 12px; font-size: 12px; font-weight: 600; line-height: 1.3;
+    border-radius: 999px; border: 1px solid var(--border-default);
+    background: var(--surface-card); color: var(--text-primary); cursor: pointer;
+    touch-action: manipulation; white-space: nowrap;
+}
+.rv-nchip.on { background: var(--brand-orange); border-color: transparent; color: #fff; }
 .rv-edit {
     display: flex; flex-direction: column; gap: 6px;
     padding: 8px 10px;

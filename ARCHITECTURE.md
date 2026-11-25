@@ -726,9 +726,18 @@ Layers, bottom-up (all under `playByPlay/`):
   drop intermediate plays (never scores) when a sync lands several entries at
   once; seek, step back, pause and tab-hide cancel. Safari refuses speech
   before the page's first tap, so an utterance that never starts is parked
-  and retried on the next pointerdown. Settings: `replay.narrate` (the
-  toggle), `replay.voice` (a preferred voice name; otherwise a local English
-  voice is picked). Pure leaf — the mount site passes `advancedSettings` in —
+  and retried on the next pointerdown. A ⚙ beside the toggle (shown while
+  narration is on) opens a menu under the transport with two settings:
+  **voice** — `replay.voice` = `male` (Daniel, en-GB), `female` (Samantha,
+  en-US, the default) or `robot` (Zarvox), Apple's names, resolved by
+  `resolveVoice()` with fallbacks by comparable name (Guy / Aria on Edge),
+  then by language (en-GB / en-US on Android's unnamed Google voices), the
+  robot dropping to a low pitch when no novelty voice exists; an exact voice
+  name is accepted too — and **detail** — `replay.narrateLevel` = `pbp`
+  (every play), `events` (lineups, scores, period notes and the game's own
+  events: timeouts, injury subs, halftime, side switches) or `score` (score
+  lines only), applied by `wantsEntry()` before phrasing. Picking a voice
+  speaks a one-line sample. Pure leaf — the mount site passes `advancedSettings` in —
   so `tests/unit/replayNarrator.test.mjs` runs it under node with a fake
   `speechSynthesis`. A server voice (Polly / OpenAI TTS, compared in
   `mockups/commentator/`) would replace only `speak()`.
