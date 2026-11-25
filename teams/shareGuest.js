@@ -31,6 +31,7 @@
  */
 import { API_BASE_URL } from '../store/sync.js';
 import { hydrateGame } from '../store/models.js';
+import { gameStatus } from '../store/gameInfo.js';
 import { applyTheme, isDark } from '../utils/theme.js';
 import { setGuestStatsLevel } from '../utils/statsAudience.js';
 import { showScreen } from '../screens/navigation.js';
@@ -53,6 +54,7 @@ let shareRendered = false;
 // through refreshGameSummaryForShare and keeps the replay's playhead).
 let shareGameRendered = false;
 let pollingInterval = null;
+let gameOnBadge = null;    // the game the status badge describes (caps move with the clock)
 // Player id → display name (nickname preferred), from the roster snapshot
 // of the game on screen.
 let playerIdToName = {};
@@ -251,6 +253,8 @@ async function pollShare() {
             else await loadShare();
         } else {
             setConnection('connected');
+            // Nothing new, but a cap may have fallen since the last look.
+            if (gameOnBadge) renderStatusBadge(gameOnBadge);
         }
     } catch (error) {
         console.error('Share poll failed:', error);
@@ -275,6 +279,7 @@ function handleShareDead(status) {
             const banner = $(id);
             if (banner) banner.style.display = '';
         });
+        gameOnBadge = null;
         setStatusBadge(null);
         setConnection('disconnected');
         return;
@@ -425,6 +430,7 @@ function backToEvent() {
 function showEventFromHistory() {
     currentGameId = null;
     shareGameRendered = false;
+    gameOnBadge = null;
     setStatusBadge(null);
     renderEventScreen();
     // Catch up on whatever moved while a game was on screen.
@@ -518,18 +524,26 @@ function renderGameOnSummary(game) {
 }
 
 /**
- * LIVE / IN PROGRESS / FINAL badge next to the score.
- * LIVE requires recent activity, not just a missing end timestamp —
- * a game abandoned without "End Game" months ago is not live.
+ * The status badge next to the score: Final for a finished game; otherwise
+ * what the game is doing (store/gameInfo.js gameStatus: Timeout, Injury,
+ * Halftime, 2nd half, Soft cap, Hard cap, Universe, or plain Live).
+ * A live status requires recent activity, not just a missing end timestamp:
+ * a game abandoned without "End Game" months ago is "In progress".
  */
 function renderStatusBadge(game) {
-    if (game.gameEndTimestamp) {
-        setStatusBadge('final', 'Final');
+    gameOnBadge = game;
+    const status = gameStatus(game);
+    if (status.tone === 'final') {
+        setStatusBadge('final', status.label);
         return;
     }
     const stampMs = lastShareStamp ? Number(lastShareStamp) / 1e6 : NaN;
     const isRecent = Number.isFinite(stampMs) && (Date.now() - stampMs) < LIVE_RECENCY_MS;
-    setStatusBadge(isRecent ? 'live' : 'stale', isRecent ? 'Live' : 'In progress');
+    if (!isRecent) {
+        setStatusBadge('stale', 'In progress');
+        return;
+    }
+    setStatusBadge(status.tone === 'stopped' ? 'stopped' : 'live', status.label);
 }
 
 function setStatusBadge(kind, label) {
@@ -544,12 +558,86 @@ function setStatusBadge(kind, label) {
     badge.style.display = '';
 }
 
-/** The connection pill on both guest screens. */
+// -----------------------------------------------------------------------------
+// Connection dot
+// -----------------------------------------------------------------------------
+
+// The dot on both guest screens: green while polls succeed, red when they
+// fail. A tap (or hover) says what the colour means, and the offline
+// message opens by itself when the connection drops, since that is when a
+// spectator needs to know the score may be old.
+const CONNECTION_TEXT = {
+    connecting: 'Connecting…',
+    connected: 'Receiving live updates.',
+    disconnected: 'Offline. Showing the last update received.',
+};
+let connectionState = 'connecting';
+let connectionNote = null;       // the open explanation bubble, if any
+let connectionNoteAuto = false;  // it opened by itself, so it closes by itself
+
 function setConnection(state) {
+    const was = connectionState;
+    connectionState = state;
     document.querySelectorAll('.share-connection').forEach(el => {
         el.className = `share-connection ${state}`;
-        el.textContent = state === 'connected' ? 'Connected' : 'Disconnected';
+        el.title = CONNECTION_TEXT[state];
+        el.setAttribute('aria-label', CONNECTION_TEXT[state]);
     });
+    wireConnectionDots();
+    if (state === was) return;
+    if (state === 'disconnected') {
+        openConnectionNote({ auto: true });
+    } else if (connectionNote) {
+        // Back online: an unprompted warning goes away; one the guest
+        // opened just changes its wording.
+        if (connectionNoteAuto) closeConnectionNote();
+        else connectionNote.textContent = CONNECTION_TEXT[state];
+    }
+}
+
+let connectionDotsWired = false;
+function wireConnectionDots() {
+    if (connectionDotsWired) return;
+    connectionDotsWired = true;
+    document.querySelectorAll('.share-connection').forEach(dot => {
+        dot.addEventListener('click', event => {
+            event.stopPropagation();
+            if (connectionNote) closeConnectionNote();
+            else openConnectionNote({ auto: false });
+        });
+    });
+    document.addEventListener('click', () => closeConnectionNote());
+    window.addEventListener('resize', () => closeConnectionNote());
+}
+
+/** The dot on the screen the guest is looking at. */
+function visibleConnectionDot() {
+    return [...document.querySelectorAll('.share-connection')].find(el => el.offsetParent !== null) || null;
+}
+
+function openConnectionNote({ auto }) {
+    const dot = visibleConnectionDot();
+    if (!dot) return;
+    closeConnectionNote();
+    const note = document.createElement('div');
+    note.className = 'share-connection-note';
+    note.setAttribute('role', 'status');
+    note.textContent = CONNECTION_TEXT[connectionState];
+    document.body.appendChild(note);
+    const rect = dot.getBoundingClientRect();
+    note.style.top = `${Math.round(rect.bottom + 8)}px`;
+    note.style.right = `${Math.max(8, Math.round(window.innerWidth - rect.right - 4))}px`;
+    connectionNote = note;
+    connectionNoteAuto = auto;
+    dot.setAttribute('aria-expanded', 'true');
+}
+
+function closeConnectionNote() {
+    if (!connectionNote) return;
+    connectionNote.remove();
+    connectionNote = null;
+    connectionNoteAuto = false;
+    document.querySelectorAll('.share-connection').forEach(el => el.setAttribute('aria-expanded', 'false'));
 }
 
 // --- ES-module exports ---

@@ -412,6 +412,35 @@
                         <label for="pointTimerInput">Seconds between points:</label>
                         <input type="number" id="pointTimerInput" value="90" min="0" max="300">
                     </div>
+                    <!-- Game info (store/gameInfo.js): all optional; a blank one is
+                         shown nowhere. Spectators on a share link see what is filled in. -->
+                    <details id="gameInfoSettings" class="game-info-settings">
+                        <summary>Game details <span class="text-hint">(optional, shown to spectators)</span></summary>
+                        <div class="start-game-field-row">
+                            <label for="gameToInput">Game to:</label>
+                            <input type="number" id="gameToInput" inputmode="numeric" min="1" max="99" placeholder="13">
+                        </div>
+                        <div class="start-game-field-row">
+                            <label for="scheduledStartInput">Scheduled start:</label>
+                            <input type="time" id="scheduledStartInput">
+                        </div>
+                        <div class="start-game-field-row">
+                            <label for="softCapInput">Soft cap:</label>
+                            <input type="number" id="softCapInput" inputmode="numeric" min="1" max="600" placeholder="75">
+                            <span>min</span>
+                            <span class="game-info-clock" id="softCapClock"></span>
+                        </div>
+                        <div class="start-game-field-row">
+                            <label for="hardCapInput">Hard cap:</label>
+                            <input type="number" id="hardCapInput" inputmode="numeric" min="1" max="600" placeholder="90">
+                            <span>min</span>
+                            <span class="game-info-clock" id="hardCapClock"></span>
+                        </div>
+                        <div class="start-game-field-row">
+                            <label for="fieldNameInput">Field:</label>
+                            <input type="text" id="fieldNameInput" maxlength="40" placeholder="4">
+                        </div>
+                    </details>
                     <!-- Scrimmage variation (store/scrimmageRules.js): a squad-game's
                          Game Settings only; filled by game/gameLogic.js. -->
                     <div id="scrimmageRulesSettings" class="scrimmage-rules-settings" style="display: none;">
@@ -1251,7 +1280,7 @@
             <!-- Share-guest chrome (teams/shareGuest.js): live/final badge and
                  the poll connection state. Only shown under body.share-guest. -->
             <span id="shareStatusBadge" class="share-status-badge" style="display:none;"></span>
-            <span id="shareConnection" class="share-connection connecting">Connecting…</span>
+            <button id="shareConnection" type="button" class="share-connection connecting" aria-label="Connecting" aria-expanded="false"></button>
             <button id="shareGameSummaryBtn" class="back-button" title="Share game (public live link)" style="display:none;">
                 <i class="fas fa-share-alt"></i> Share
             </button>
@@ -1273,6 +1302,9 @@
             <div>
                 <span id="opponentName">Opponent</span>: <span id="opponentFinalScore">0</span>
             </div>
+            <!-- Game info (store/gameInfo.js): game-to, caps, scheduled time,
+                 field. Empty, and hidden, unless the coach filled some in. -->
+            <p id="summaryGameInfo" class="summary-game-info" hidden></p>
         </div>
 
         <!-- Player Statistics -->
@@ -1355,7 +1387,7 @@
     <section id="shareEventScreen" style="display: none;">
         <div class="panel-title-bar not-draggable screen-title-bar">
             <span class="panel-title" id="shareEventTitle">Event</span>
-            <span class="share-connection connecting">Connecting…</span>
+            <button type="button" class="share-connection connecting" aria-label="Connecting" aria-expanded="false"></button>
             <button id="exportShareEventBtn" class="back-button" title="Export the event's stats to Excel or Google Sheets" style="display:none;">
                 <i class="fas fa-file-export"></i> Export
             </button>

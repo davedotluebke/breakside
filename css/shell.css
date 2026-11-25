@@ -204,6 +204,45 @@ body.staging .header-staging-pill {
     margin-top: 8px;
 }
 
+/* Game details (index.html #gameInfoSettings): optional, folded away. */
+.game-info-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.game-info-settings > summary {
+    cursor: pointer;
+    padding: 4px 0;
+    text-align: left;
+}
+
+/* A time input has no app styling of its own; match the number inputs. */
+.game-info-settings input[type="time"] {
+    padding: 8px;
+    font: inherit;
+    color: var(--text-primary);
+    background-color: var(--surface-inset);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+}
+
+.game-info-settings[open] > summary { margin-bottom: 8px; }
+
+.game-info-settings .start-game-field-row { margin-bottom: 8px; }
+
+.game-info-settings input[type="number"] { width: 4.5em; }
+
+.game-info-settings input[type="text"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.game-info-clock {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
 /* Add back specific button styles */
 .special-action-btn {
     background-color: var(--orange-vivid);

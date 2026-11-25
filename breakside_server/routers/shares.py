@@ -257,6 +257,17 @@ async def revoke_share_endpoint(
 _PUBLIC_GAME_FIELDS = (
     "team", "opponent", "scores", "gameStartTimestamp", "gameEndTimestamp",
 )
+# Game info (store/gameInfo.js): game-to score, caps, scheduled start, field.
+# A coach fills these in *for* spectators, and none names a person. Each is
+# published only when set and of the expected type, so a blank one is absent
+# and a malformed one cannot carry anything else out.
+_PUBLIC_GAME_INFO_INT_FIELDS = ("gameTo", "softCapMinutes", "hardCapMinutes")
+_PUBLIC_GAME_INFO_STR_FIELDS = {"scheduledStart": 40, "fieldName": 40}
+# The point clock's stop reason ("timeout" / "injury" / "manual", else null):
+# what lets the viewer's badge say Timeout or Injury and clear it when play
+# restarts. Always emitted, null included, so the viewer can tell "running"
+# from "this backend does not publish it".
+_PUBLIC_CLOCK_STOP_REASONS = ("timeout", "injury", "manual")
 # startingPosition / the timestamps / startedAt feed the viewer's replay
 # (docs/replay-viewer-plan.md): who pulled, when each play happened, how
 # long a point took. None of it names a person.
@@ -305,6 +316,8 @@ def _public_possession(possession: dict) -> dict:
 
 def _public_point(point: dict) -> dict:
     out = {k: point[k] for k in _PUBLIC_POINT_FIELDS if k in point}
+    reason = point.get("clockStopped")
+    out["clockStopped"] = reason if reason in _PUBLIC_CLOCK_STOP_REASONS else None
     out["possessions"] = [
         _public_possession(p) for p in (point.get("possessions") or [])
     ]
@@ -338,6 +351,14 @@ def _public_game_view(game: dict) -> dict:
     points = game.get("points") or []
 
     view = {k: game[k] for k in _PUBLIC_GAME_FIELDS if k in game}
+    for k in _PUBLIC_GAME_INFO_INT_FIELDS:
+        v = game.get(k)
+        if isinstance(v, int) and not isinstance(v, bool) and 0 < v < 1000:
+            view[k] = v
+    for k, max_len in _PUBLIC_GAME_INFO_STR_FIELDS.items():
+        v = game.get(k)
+        if isinstance(v, str) and v.strip():
+            view[k] = v.strip()[:max_len]
     view["points"] = [_public_point(p) for p in points]
 
     # Only emit rosterSnapshot when the stored game has one, so a legacy game

@@ -81,6 +81,7 @@ import './store/models.js';
 import './store/pendingLineLogic.js';
 import './store/authFetchLogic.js';
 import './store/pointTimerNormalizer.js';
+import './store/gameInfo.js';
 import './store/localTeamView.js';
 import './store/teamListPrefs.js';
 import './store/roles.js';

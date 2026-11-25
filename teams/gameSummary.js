@@ -37,6 +37,7 @@ import { summaryRosterPlayers } from '../utils/gameRoster.js';
 import { openExportDialog } from '../ui/exportDialog.js';
 import { showScreen } from '../screens/navigation.js';
 import { showShareGameDialog } from '../game/shareGame.js';
+import { gameInfoParts } from '../store/gameInfo.js';
 
 // Track where we came from so back button navigates correctly
 let gameSummaryOrigin = 'teamRosterScreen'; // default for post-game flow
@@ -141,6 +142,26 @@ function renderSummaryScore(game) {
     mirror('summaryBarOpponent', oppNameEl);
     mirror('summaryBarTeamScore', teamScoreEl);
     mirror('summaryBarOpponentScore', oppScoreEl);
+    renderSummaryGameInfo(game);
+}
+
+/** Game-to, caps, scheduled time and field under the score; hidden when none is set. */
+function renderSummaryGameInfo(game) {
+    const el = document.getElementById('summaryGameInfo');
+    if (!el) return;
+    const parts = gameInfoParts(game);
+    el.hidden = parts.length === 0;
+    el.replaceChildren(...parts.map(part => {
+        const span = document.createElement('span');
+        span.className = 'summary-game-info-item';
+        span.textContent = part.text;
+        if (part.small) {
+            const small = document.createElement('small');
+            small.textContent = part.small;
+            span.append(' ', small);
+        }
+        return span;
+    }));
 }
 
 /**

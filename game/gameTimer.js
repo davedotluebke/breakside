@@ -13,6 +13,7 @@ import { logEvent } from '../ui/eventLogDisplay.js';
 import { updateSelectLineTimeCells } from './selectLine.js';
 import { refreshClockStoppedToast } from './clockStoppedToast.js';
 import { log } from '../utils/logger.js';
+import { capTimes } from '../store/gameInfo.js';
 
 let timerMode = 'point'; // 'point' or 'game'
 // The clock state the chip last rendered (clockState below). The clock is
@@ -238,7 +239,12 @@ function updateTimerDisplay() {
                 let capTime = null;
 
                 if (elapsedMs < ACTIVE_GAME_WINDOW_MS) {
-                    if (game.roundEndTime) {
+                    // A hard cap the coach entered (store/gameInfo.js) is the
+                    // cap; the 50-minute default only stands in without one.
+                    const hardAt = capTimes(game).hardAt;
+                    if (hardAt) {
+                        capTime = hardAt;
+                    } else if (game.roundEndTime) {
                         capTime = new Date(game.roundEndTime).getTime();
                     } else if (game.gameDurationMinutes) {
                         capTime = startTime + (game.gameDurationMinutes * 60 * 1000);

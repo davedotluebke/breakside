@@ -1168,6 +1168,12 @@ body.share-guest #gameSummaryScreen > .screen-title-bar {
     animation: share-live-pulse 2s infinite;
 }
 
+/* Play is halted: timeout, injury, pause, halftime. No pulse. */
+.share-status-badge.status-stopped {
+    background: var(--color-warning);
+    color: var(--black);
+}
+
 .share-status-badge.status-stale {
     background: var(--text-muted);
     color: var(--surface-card);
@@ -1178,24 +1184,68 @@ body.share-guest #gameSummaryScreen > .screen-title-bar {
     color: var(--white);
 }
 
+/* Game info under the score (teams/gameSummary.js renderSummaryGameInfo) */
+.summary-game-info {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px 14px;
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.summary-game-info[hidden] { display: none; }
+
+.summary-game-info small {
+    font-size: 0.75rem;
+    opacity: 0.85;
+}
+
 @keyframes share-live-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
 }
 
+/* The connection dot (teams/shareGuest.js setConnection): a button, so the
+   global `button { margin: 10px }` and its padding are zeroed here. The
+   padding box is the tap target; the dot itself is the ::before. */
 .share-connection {
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    white-space: nowrap;
+    margin: 0;
+    padding: 10px;
+    border: 0;
+    background: none;
+    line-height: 0;
+    cursor: pointer;
+    flex: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.share-connection.connecting { background: var(--color-warning); color: var(--black); }
-.share-connection.connected { background: var(--color-success); color: var(--white); }
-.share-connection.disconnected { background: var(--color-danger); color: var(--white); }
+.share-connection::before {
+    content: "";
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-warning);
+}
+
+.share-connection.connected::before { background: var(--color-success); }
+.share-connection.disconnected::before { background: var(--color-danger); }
+
+/* What the dot means, under it: on a tap, and unasked when offline. */
+.share-connection-note {
+    position: fixed;
+    z-index: 60;
+    max-width: min(16rem, calc(100vw - 16px));
+    padding: 0.5rem 0.7rem;
+    border-radius: 8px;
+    background: var(--btn-dark);
+    color: var(--white);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
 
 .share-expired-banner {
     background: var(--color-warning-surface);

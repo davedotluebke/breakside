@@ -168,6 +168,15 @@ function Game(teamName, opponentName, startOn, teamId = null) {
     // Phase 6b: Timer/cap settings
     this.gameDurationMinutes = 50;  // Default game length in minutes
     this.roundEndTime = null;       // ISO timestamp override for cap (e.g., from tournament schedule)
+
+    // Game info (store/gameInfo.js): optional facts a coach may fill in on
+    // the Game Settings screen. All null until then; a blank one is shown
+    // nowhere. Published to share viewers (breakside_server/routers/shares.py).
+    this.gameTo = null;             // target score
+    this.softCapMinutes = null;     // minutes after the start
+    this.hardCapMinutes = null;     // minutes after the start
+    this.scheduledStart = null;     // ISO timestamp of the round's scheduled start
+    this.fieldName = null;          // free text
     
     // Phase 6b: Pending next line selections (for multi-coach sync)
     // Tracks three separate lines: O (offense), D (defense), O/D (unified/must-win)

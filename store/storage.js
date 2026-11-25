@@ -21,6 +21,7 @@ import { log } from '../utils/logger.js';
 import { normalizePointTimers } from './pointTimerNormalizer.js';
 import { isScrimmageGame, squadRoster } from './scrimmage.js';
 import { normalizeRules, recountScores } from './scrimmageRules.js';
+import { normalizeGameInfo, applyGameInfo } from './gameInfo.js';
 
 /**
  * Serialize an event to JSON
@@ -151,6 +152,8 @@ function serializeGame(game) {
         // Phase 6b: Timer/cap settings
         gameDurationMinutes: game.gameDurationMinutes ?? 50,
         roundEndTime: game.roundEndTime || null,
+        // Game info (store/gameInfo.js): each null unless the coach set it
+        ...normalizeGameInfo(game),
         // Phase 6b: Pending next line selections for multi-device sync
         // Note: activeType is local-only (not synced) - each user views/edits independently
         // lineupReadyAt / lineupReadyBy are the LC→AC ping (fire-and-forget,
@@ -586,6 +589,7 @@ function deserializeGame(gameData) {
     // Phase 6b: Timer/cap settings
     game.gameDurationMinutes = gameData.gameDurationMinutes ?? 50;
     game.roundEndTime = gameData.roundEndTime || null;
+    applyGameInfo(game, gameData);
     
     // Phase 6b: Pending next line selections (migrate from existing games)
     // Note: activeType is local-only - each user manages their own view state

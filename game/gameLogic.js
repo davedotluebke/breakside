@@ -41,6 +41,7 @@ import {
     rearmPointClockIfUntouched, resumePointClockFromStop, stopReasonOf, stopPointClock,
 } from '../store/pointClock.js';
 import { log } from '../utils/logger.js';
+import { applyGameInfo, capTimes, formatClockTime, normalizeGameInfo } from '../store/gameInfo.js';
 
 let appVersion = null;
 
@@ -77,6 +78,7 @@ function startNewGame(startingPosition, seconds) {
     const alternateGenderPullsCheckbox = document.getElementById('alternateGenderPullsCheckbox');
     newGame.alternateGenderRatio = enforceGenderRatioSelect ? enforceGenderRatioSelect.value : 'No';
     newGame.alternateGenderPulls = alternateGenderPullsCheckbox ? alternateGenderPullsCheckbox.checked : false;
+    applyGameInfo(newGame, readGameInfoSettings(newGame.gameStartTimestamp));
     
     currentTeam.games.push(newGame);
     
@@ -167,13 +169,81 @@ function configureStartGameMode(midGame) {
         if (applyBtn) applyBtn.style.display = '';
         if (continueBtn) continueBtn.classList.remove('inactive');
         fillScrimmageRulesSettings(game);
+        fillGameInfoSettings(game);
     } else {
         if (titleEl) titleEl.textContent = 'Start Game';
         if (startButtons) startButtons.style.display = '';
         if (applyBtn) applyBtn.style.display = 'none';
         fillScrimmageRulesSettings(null);
+        fillGameInfoSettings(null);
     }
 }
+
+// ── Game info controls on the Start Game / Game Settings screen ───────────
+// Game-to, caps, scheduled start and field (store/gameInfo.js). All optional.
+
+const GAME_INFO_INPUTS = {
+    gameTo: 'gameToInput', softCapMinutes: 'softCapInput', hardCapMinutes: 'hardCapInput',
+    fieldName: 'fieldNameInput',
+};
+
+/** "13:05" for a time input, in local time. */
+function toTimeInputValue(iso) {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d)) return '';
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Prefill from the live game, or blank the block for a new one. */
+function fillGameInfoSettings(game) {
+    const info = normalizeGameInfo(game);
+    Object.entries(GAME_INFO_INPUTS).forEach(([field, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = info[field] ?? '';
+    });
+    const start = document.getElementById('scheduledStartInput');
+    if (start) start.value = toTimeInputValue(info.scheduledStart);
+    // Open when there is something in it, so a set value is never hidden.
+    const block = document.getElementById('gameInfoSettings');
+    if (block) block.open = Object.values(info).some(v => v !== null);
+    renderGameInfoClockTimes();
+}
+
+/**
+ * Read the block. The scheduled start is a time of day; it lands on the
+ * day the game is (or was) played.
+ */
+function readGameInfoSettings(gameDay) {
+    const raw = {};
+    Object.entries(GAME_INFO_INPUTS).forEach(([field, id]) => {
+        const el = document.getElementById(id);
+        raw[field] = el ? el.value : null;
+    });
+    const start = document.getElementById('scheduledStartInput');
+    const match = start && /^(\d{1,2}):(\d{2})/.exec(start.value || '');
+    if (match) {
+        const day = gameDay ? new Date(gameDay) : new Date();
+        day.setHours(Number(match[1]), Number(match[2]), 0, 0);
+        raw.scheduledStart = day.toISOString();
+    }
+    return normalizeGameInfo(raw);
+}
+
+/** The caps as clock times beside their minutes, once a start is entered. */
+function renderGameInfoClockTimes() {
+    const info = readGameInfoSettings();
+    const caps = info.scheduledStart ? capTimes(info) : { softAt: null, hardAt: null };
+    const show = (id, at) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = at ? formatClockTime(at) : '';
+    };
+    show('softCapClock', caps.softAt);
+    show('hardCapClock', caps.hardAt);
+}
+
+['scheduledStartInput', 'softCapInput', 'hardCapInput'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', renderGameInfoClockTimes);
+});
 
 // ── Scrimmage variation controls on the Game Settings screen ──────────────
 // Shown for a squad-game only (store/scrimmageRules.js). Apply writes the
@@ -262,6 +332,7 @@ function applyGameSettingsToCurrentGame() {
     }
 
     readScrimmageRulesSettings(game);
+    applyGameInfo(game, readGameInfoSettings(game.gameStartTimestamp));
 
     if (typeof saveAllTeamsData === 'function') saveAllTeamsData();
     if (typeof syncGameToCloud === 'function' && game.id) syncGameToCloud(game);

@@ -432,6 +432,12 @@ def _seed_rich_game(seeded):
         "gameStartTimestamp": "2026-07-03T18:00:00Z",
         "gameEndTimestamp": None,
         "startingPosition": "offense",
+        # Game info: published when set and well-typed, absent otherwise.
+        "gameTo": 13,
+        "hardCapMinutes": 60,
+        "softCapMinutes": "soon",
+        "scheduledStart": None,
+        "fieldName": "  4 ",
         "alternateGenderRatio": True,
         "startingGenderRatio": "4-3",
         "lastLineUsed": ["Played-1111"],
@@ -500,7 +506,16 @@ class TestPublicGameProjection:
             "team", "opponent", "scores",
             "gameStartTimestamp", "gameEndTimestamp",
             "points", "rosterSnapshot",
+            "gameTo", "hardCapMinutes", "fieldName",
         }
+
+    def test_game_info_is_published_only_when_set_and_well_typed(self, client, seeded):
+        game = _shared_game(client, seeded)
+        assert game["gameTo"] == 13
+        assert game["hardCapMinutes"] == 60
+        assert game["fieldName"] == "4"
+        assert "softCapMinutes" not in game      # a string where a number belongs
+        assert "scheduledStart" not in game      # blank
 
     def test_internal_and_coaching_fields_are_gone(self, client, seeded):
         game = _shared_game(client, seeded)
@@ -553,7 +568,9 @@ class TestPublicGameProjection:
         game = _shared_game(client, seeded)
         point = game["points"][0]
         assert set(point) == {"players", "winner", "totalPointTime", "possessions",
-                              "startingPosition", "startTimestamp", "endTimestamp"}
+                              "startingPosition", "startTimestamp", "endTimestamp",
+                              "clockStopped"}
+        assert point["clockStopped"] is None
         assert "substitutedOutPlayers" not in point
         assert "lastPauseTime" not in point
 

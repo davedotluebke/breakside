@@ -2347,6 +2347,60 @@ Coaches poll the ping endpoint to maintain role claims and detect other coaches.
 | `/view/{game-hash}` | Game share link → the PWA in a read-only guest session (no auth); the head shim boots it as `/?share={hash}` |
 | `/join/{code}` | Invite short link → redirects to `/landing/join.html?code={code}` |
 
+### Game info and status (`store/gameInfo.js`)
+
+**Game info** is five optional facts on a `Game`, all `null` until a coach
+fills them in under "Game details" on the Start Game / Game Settings screen
+(`game/gameLogic.js`): `gameTo` (target score), `softCapMinutes`,
+`hardCapMinutes`, `scheduledStart` (ISO; entered as a time of day and placed
+on the game's own date) and `fieldName`. A blank field is shown nowhere. Cap
+minutes count from `scheduledStart` when it is set, otherwise from
+`gameStartTimestamp`; only with a scheduled start do the caps get clock
+times, shown in small type beside the minutes (settings screen and the
+Review score block alike). A game may have a hard cap and no soft cap. When
+`hardCapMinutes` is set it is what the coach's game-timer cap countdown
+counts to (`game/gameTimer.js`), ahead of `roundEndTime` and the 50-minute
+`gameDurationMinutes` default.
+
+The filled-in facts render under the score on the Review screen
+(`renderSummaryGameInfo`), for coaches and share guests both. They reach a
+share guest only through the public allowlist in
+`breakside_server/routers/shares.py`, which type-checks each one.
+
+**Game status** is derived, never stored: `gameStatus(game, now)` returns
+`{key, label, tone}`. The share viewer's badge shows it in place of "Live"
+(`teams/shareGuest.js renderStatusBadge`); `tone: 'stopped'` gets the amber
+badge. In priority order:
+
+| Status | When |
+|--------|------|
+| Final | `gameEndTimestamp` is set |
+| Timeout / Injury / Paused | the point in progress has `clockStopped` (`timeout` / `injury` / `manual`); clears when the clock restarts |
+| Timeout | between points, a timeout is the last thing logged |
+| Halftime | between points, the last finished point carries a halftime event |
+| Universe | both teams are one short of the target, or tied after the hard-capped point |
+| Hard cap / Soft cap | the clock has passed that cap |
+| 2nd half | a halftime was recorded earlier |
+| Live | otherwise, including the whole first half: many coaches never tap Halftime, so "1st half" is never claimed |
+
+The soft cap rule is fixed: finish the point in progress, then play to the
+higher score plus one, never past `gameTo`. `scoreAtCap` finds that score
+from point timestamps and winners, and claims no capped target when the
+winners do not add up to the game's score (two-point plays).
+
+The public payload carries `clockStopped` on every point, `null` included,
+so the viewer can tell "clock running" from "this backend does not publish
+it". Against an older backend the key is absent and the log decides: stopped
+while a timeout or injury event is the last one in the point. The badge is
+re-derived on every poll, changed or not, because the caps move with the
+clock. A game with no activity for `LIVE_RECENCY_MS` still reads "In
+progress" whatever its status.
+
+The viewer's connection state is a dot, not a word (`setConnection`): green
+while polls succeed, red when they fail. A tap opens a one-line explanation
+under it, and the offline line opens by itself when the connection drops and
+closes by itself when it returns.
+
 ### Share Links (public game and event viewing)
 
 A coach mints a share link from the **Share** dialog (`game/shareGame.js`):
