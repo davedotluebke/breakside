@@ -40,11 +40,12 @@ import { createTranscriptItems } from './transcriptItems.js';
  * utterance — an `includes` check would wrongly drop genuinely repeated
  * phrases later in the recording.
  *
- * No longer used by this module or by the two narration surfaces: they take
- * the session's own transcript, which is kept per item (transcriptItems.js)
- * and passed as the second argument of both transcript callbacks. Kept for a
- * caller that still accumulates on its own from the first argument; such a
- * caller joins utterances with nothing between them.
+ * No longer used by this module or by the narration surfaces (plays,
+ * lineups, squads): they take the session's own transcript, which is kept
+ * per item (transcriptItems.js) and passed as the second argument of both
+ * transcript callbacks. Kept so that a branch written against the old
+ * callbacks still loads; a caller that accumulates on its own from the first
+ * argument joins utterances with nothing between them.
  * @returns {string} The (possibly unchanged) accumulated transcript
  */
 function mergeCompletedUtterance(accumulated, utterance) {

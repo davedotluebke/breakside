@@ -24,7 +24,7 @@
  *   says who moved. Names spoken without a squad go on the FIRST squad;
  *   that rule is the server's (narration_lineup.py), not the model's.
  */
-import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
+import { narrationRealtimeSession } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
 import { lineupNarration } from './lineupNarration.js';
 import { resolveSquadResult, buildSquadToast } from './squadResolve.js';
@@ -204,12 +204,14 @@ const squadNarration = (function() {
             await narrationRealtimeSession.start({
                 mode: 'transcription',
                 ...advOpts,
-                onTranscriptDelta: (delta) => {
-                    transcript += delta;
+                // The second argument is the session's whole transcript, kept
+                // per utterance with a space between them (transcriptItems.js).
+                onTranscriptDelta: (delta, sessionTranscript) => {
+                    transcript = sessionTranscript;
                     refreshStatusStrip();
                 },
-                onTranscriptComplete: (utterance) => {
-                    transcript = mergeCompletedUtterance(transcript, utterance);
+                onTranscriptComplete: (utterance, sessionTranscript) => {
+                    transcript = sessionTranscript;
                     refreshStatusStrip();
                 },
                 onError: (err) => {
