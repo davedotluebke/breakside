@@ -24,7 +24,7 @@
  *   are applied through selectLine's applyLineSelection (same path as the
  *   Auto button), replacing the active line's selection.
  */
-import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
+import { narrationRealtimeSession } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
 import { resolveLineupPlayers, buildLineupToast, displayFirstName } from './lineupResolve.js';
 import { log } from '../utils/logger.js';
@@ -246,12 +246,14 @@ const lineupNarration = (function() {
             await narrationRealtimeSession.start({
                 mode: 'transcription',
                 ...advOpts,
-                onTranscriptDelta: (delta) => {
-                    transcript += delta;
+                // The second argument is the session's whole transcript, kept
+                // per utterance with a space between them (transcriptItems.js).
+                onTranscriptDelta: (delta, sessionTranscript) => {
+                    transcript = sessionTranscript;
                     refreshStatusStrip();
                 },
-                onTranscriptComplete: (utterance) => {
-                    transcript = mergeCompletedUtterance(transcript, utterance);
+                onTranscriptComplete: (utterance, sessionTranscript) => {
+                    transcript = sessionTranscript;
                     refreshStatusStrip();
                 },
                 onError: (err) => {

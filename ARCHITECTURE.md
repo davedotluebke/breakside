@@ -1979,13 +1979,34 @@ narration/
 │                          # eventRetracted, transcriptUpdated, scoreChanged, etc.
 ├── realtimeSession.js     # OpenAI Realtime WebSocket client. PCM16 capture via
 │                          # MediaStream + AudioContext + ScriptProcessorNode.
+├── transcriptItems.js     # Pure: the transcript kept per committed item, and
+│                          # the "is it all in?" answer stop() waits on.
 ├── narrationEngine.js     # Orchestrator. Builds the system prompt, opens the
-│                          # session, accumulates transcript, runs the slow pass,
+│                          # session, mirrors its transcript, runs the slow pass,
 │                          # applies returned ops via the same applyThrow/etc.
 │                          # functions used by the manual flow.
 └── transcriptDisplay.js   # Floating panel that shows the live transcript
                            # (subscribes to transcriptUpdated channel).
 ```
+
+### The transcript and the stop path
+
+The Realtime server does not send one stream of text. It transcribes each stretch of audio it **commits** as its own item: a turn the voice-activity detector closed, or the buffer `stop()` commits by hand. `input_audio_buffer.committed` announces an item, `…input_audio_transcription.delta` events stream its text, `…completed` delivers the final text (and `…failed` says none is coming). Items overlap in time: the coach can say more, and tap stop, while an earlier phrase is still being transcribed.
+
+`narration/transcriptItems.js` therefore keeps the text **per item, joined in commit order with one space**, and `realtimeSession.js` hands that whole transcript to both transcript callbacks as their second argument (`onTranscriptDelta(delta, transcript)`, `onTranscriptComplete(utterance, transcript)`). The narration surfaces mirror it instead of appending deltas themselves. The single appended string this replaced ran phrases together ("…Dana in.Kris", and "inKris" when the first had no full stop), and repeated a phrase when a later one's deltas arrived before its completion.
+
+**`stop()` waits for exactly what is outstanding.** It closes the mic, sends `input_audio_buffer.commit`, and returns when (a) the server has answered that commit, with either a new `committed` item or the benign `input_audio_buffer_commit_empty` error ("buffer too small": the detector had already committed everything), and (b) every committed item has completed or failed. Two backstops cover a server that never answers: six seconds with no transcription event, twelve seconds in all. A socket close ends the wait as well.
+
+It used to wait for "the next completion, or 4 s". Measured against the live API on 2026-11-25, on both transcription models, that was wrong in both directions:
+
+- **A dead four seconds.** Tap stop about 1.6 s or more after the last word and the detector has already committed and transcribed everything; the manual commit is refused as empty, no completion follows, and the whole timeout elapsed before the lineup or events model was even called. Now about 0.2 s.
+- **A lost last word.** "…Mia and Dana in." (beat) "Kris", then stop: the first phrase's completion arrived after the tap, was taken for the end, and the socket closed with "Kris" still to come.
+
+Commit to completed normally took 0.4 to 1.5 s and at most 2.3 s across some 500 completions (the longest item the server allows is about 15 s of speech), and one stop in about 100 browser runs took 3.7 s to settle; the backstops are set well clear of that because they cost nothing while the server is answering.
+
+**Each socket's listeners answer only while it is the session's socket.** `stop()` drops its reference before the close handshake finishes, and the server takes a couple of seconds to finish it. Unguarded, that late close event tore down a recording started in the meantime ("Realtime WebSocket closed: 1005"), and a late message would have landed in the new transcript.
+
+Tests: `tests/unit/transcriptItems.test.mjs` (the item bookkeeping, on the event sequences the live API produced) and `tests/scenarios/27-narration-stop-path.spec.ts` (the real session module in the browser against a scripted server). The measurements come from two tools in the narration harness on branch `stt-swap`: `tools/stop_latency_probe.py` (what the server sends, with the client modelled) and `tools/browser_stop_check.js` (the real session module in a page against the live API, a clip in place of the microphone; the old-against-new comparison is recorded in its header). `mergeCompletedUtterance` is still exported for a caller that accumulates on its own from the callbacks' first argument; such a caller gets the old run-together text until it switches to the second.
 
 ### Backend endpoints
 

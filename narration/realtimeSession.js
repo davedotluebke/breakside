@@ -13,11 +13,13 @@
  *      that resamples to 24kHz PCM16, base64-encoded chunks streamed via
  *      input_audio_buffer.append messages
  *   6. Listen for events:
- *        - conversation.item.input_audio_transcription.delta/completed
- *          (accumulated transcript)
+ *        - input_audio_buffer.committed and
+ *          conversation.item.input_audio_transcription.delta/completed
+ *          (the transcript, kept per committed item: transcriptItems.js)
  *        - response.function_call_arguments.done
  *          (a provisional event — callback invoked)
- *   7. Caller invokes stop() to close mic + socket cleanly
+ *   7. Caller invokes stop(): the mic closes, the buffer is committed, and
+ *      the socket stays open until every committed item has its transcript
  *
  * Ephemeral tokens mean the OpenAI API key never touches the client.
  *
@@ -29,14 +31,20 @@
  */
 import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { log } from '../utils/logger.js';
+import { createTranscriptItems } from './transcriptItems.js';
 
 /**
  * Merge a completed-utterance transcript into an accumulated transcript.
  * Guards against double-appending text already received via streaming
  * deltas: skip only when the accumulated text already ends with this
  * utterance — an `includes` check would wrongly drop genuinely repeated
- * phrases later in the recording. Shared by this module's accumulator and
- * narrationEngine's slow-pass accumulator so the two can't diverge.
+ * phrases later in the recording.
+ *
+ * No longer used by this module or by the two narration surfaces: they take
+ * the session's own transcript, which is kept per item (transcriptItems.js)
+ * and passed as the second argument of both transcript callbacks. Kept for a
+ * caller that still accumulates on its own from the first argument; such a
+ * caller joins utterances with nothing between them.
  * @returns {string} The (possibly unchanged) accumulated transcript
  */
 function mergeCompletedUtterance(accumulated, utterance) {
@@ -49,6 +57,16 @@ const narrationRealtimeSession = (function() {
     const TOKEN_ENDPOINT_PATH = '/api/narration/token';
     const TARGET_SAMPLE_RATE = 24000;  // OpenAI Realtime API expects 24kHz PCM16
     const BUFFER_SIZE = 4096;           // ScriptProcessorNode buffer size (~170ms at 24kHz)
+    // Backstops for stop(), for a server that never answers. Normally stop()
+    // returns as soon as the transcript is settled: about 0.2 s after a
+    // pause, 0.5-1.5 s when the last words were still in the buffer. The
+    // server caps an item at about 15 s of speech and transcribed those
+    // within 2.3 s; across some 500 completions that was the slowest, and
+    // one stop in about 100 browser runs took 3.7 s to settle (live API,
+    // 2026-11-25). The backstops cost nothing while the server answers, so
+    // they are set well clear of that.
+    const STOP_QUIET_MS = 6000;         // give up after this long with no transcription event
+    const STOP_MAX_MS = 12000;          // and never wait longer than this in all
 
     // State
     let ws = null;
@@ -61,7 +79,8 @@ const narrationRealtimeSession = (function() {
     let onTranscriptDeltaCb = null;
     let onTranscriptCompleteCb = null;
     let onErrorCb = null;
-    let accumulatedTranscript = '';
+    // The transcript, one entry per committed item, and what stop() waits on.
+    const transcriptItems = createTranscriptItems();
 
     // Module-level mode flag, set by start() and read by stop() to decide
     // whether we need to commit + create a response (conversation) or just
@@ -95,8 +114,12 @@ const narrationRealtimeSession = (function() {
      * @param {string} [options.instructions] - Conversation-mode system prompt.
      * @param {Array}  [options.tools] - Conversation-mode tool definitions.
      * @param {function} [options.onFunctionCall] - Conversation-mode call back.
-     * @param {function} [options.onTranscriptDelta] - Called with delta transcript text.
-     * @param {function} [options.onTranscriptComplete] - Called with full utterance transcript.
+     * @param {function} [options.onTranscriptDelta] - Called as (delta, transcript):
+     *   the new text, and the whole transcript so far.
+     * @param {function} [options.onTranscriptComplete] - Called as (utterance,
+     *   transcript): one item's final text, and the whole transcript so far.
+     *   Use the second argument of either callback as the transcript; it is
+     *   assembled per item, in order, with a space between utterances.
      * @param {function} [options.onError] - Called on errors.
      * @returns {Promise<void>} Resolves when session is open and mic is streaming.
      */
@@ -132,7 +155,7 @@ const narrationRealtimeSession = (function() {
         onTranscriptDeltaCb = onTranscriptDelta || (() => {});
         onTranscriptCompleteCb = onTranscriptComplete || (() => {});
         onErrorCb = onError || ((e) => console.error('[realtimeSession]', e));
-        accumulatedTranscript = '';
+        transcriptItems.reset();
 
         // Timing breakdown — helps diagnose slow orange→green button transitions.
         const t0 = performance.now();
@@ -203,9 +226,14 @@ const narrationRealtimeSession = (function() {
             throw new Error('WebSocket closed before session setup');
         }
 
-        ws.addEventListener('message', handleServerMessage);
-        ws.addEventListener('close', handleSocketClose);
-        ws.addEventListener('error', (err) => onErrorCb(err));
+        // Each listener answers only while its socket is the session's socket.
+        // stop() nulls `ws` before the close handshake finishes, so without
+        // this a late message from a finished session would land in the next
+        // one's transcript, and its close event could tear that session down.
+        const socket = ws;
+        socket.addEventListener('message', (ev) => { if (ws === socket) handleServerMessage(ev); });
+        socket.addEventListener('close', (ev) => { if (ws === socket) handleSocketClose(ev); });
+        socket.addEventListener('error', (err) => { if (ws === socket) onErrorCb(err); });
 
         // 3. Configure the session.
         if (currentMode === 'transcription') {
@@ -316,11 +344,11 @@ const narrationRealtimeSession = (function() {
 
     /**
      * Stop the realtime session, closing mic and WebSocket.
-     * @returns {Promise<{transcript: string}>} The accumulated transcript for the slow pass.
+     * @returns {Promise<{transcript: string}>} The session's transcript for the slow pass.
      */
     async function stop() {
         if (!sessionActive) {
-            return { transcript: accumulatedTranscript };
+            return { transcript: transcriptItems.text() };
         }
         sessionActive = false;
 
@@ -330,26 +358,34 @@ const narrationRealtimeSession = (function() {
         // Force end-of-turn. VAD only commits after a silence window —
         // once we stop sending audio there's no silence for it to detect
         // either, so without a manual commit the trailing utterance sits
-        // pending forever. The "buffer too small" error this can produce
-        // (when VAD already committed mid-pause) is filtered in
-        // handleServerMessage as benign rather than skipped here.
+        // pending forever. The server answers the commit one of two ways:
+        // input_audio_buffer.committed with a new item to transcribe, or a
+        // "buffer too small" error when VAD had already committed everything
+        // (benign: handleServerMessage reads it as "no new item").
         //
         // In conversation mode we additionally fire response.create to
         // flush any pending function calls. Transcription-only sessions
         // have no response model — sending response.create is meaningless
-        // and will error, so we skip it and just wait for the final
-        // input_audio_transcription.completed event.
-        try {
-            send({ type: 'input_audio_buffer.commit' });
-            if (currentMode === 'conversation') {
-                send({ type: 'response.create' });
-            }
-        } catch (_) { /* socket may already be closing */ }
+        // and will error, so we skip it.
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const stoppedAt = performance.now();
+            if (currentMode === 'transcription') transcriptItems.expectCommit();
+            try {
+                send({ type: 'input_audio_buffer.commit' });
+                if (currentMode === 'conversation') {
+                    send({ type: 'response.create' });
+                }
+            } catch (_) { /* socket may already be closing */ }
 
-        // Wait for the server's end-of-utterance signal (or give up).
-        // Conversation: response.done; transcription: input_audio_transcription.completed
-        // (after the final commit). Both feed the same one-shot promise.
-        await waitForResponseDone(4000);
+            // Transcription: wait until the commit is answered and every
+            // committed item has its transcript — not for "the next
+            // completion", which may belong to an earlier phrase (and then
+            // the last words were lost), or may never come (and then the
+            // whole timeout was spent on nothing). Conversation: wait for
+            // response.done. Either way a close or the backstops end it.
+            const how = await waitForStop();
+            log(`[realtimeSession] stop: ${how} after ${Math.round(performance.now() - stoppedAt)}ms`);
+        }
 
         try {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -358,20 +394,45 @@ const narrationRealtimeSession = (function() {
         } catch (_) { /* ignore */ }
 
         ws = null;
-        return { transcript: accumulatedTranscript };
+        return { transcript: transcriptItems.text() };
     }
 
-    // One-shot promise that resolves on the next response.done event, or
-    // after a timeout. Used by stop() to flush pending transcription +
-    // function calls before closing the socket.
-    let pendingResponseDone = null;
-    function waitForResponseDone(timeoutMs) {
+    // What stop() is waiting on, or null: { finish(how), progress() }.
+    // finish() resolves the wait; progress() restarts the no-activity clock.
+    let pendingStop = null;
+
+    function waitForStop() {
         return new Promise((resolve) => {
             let done = false;
-            const finish = () => { if (!done) { done = true; pendingResponseDone = null; resolve(); } };
-            pendingResponseDone = finish;
-            setTimeout(finish, timeoutMs);
+            let quietTimer = null;
+            let maxTimer = null;
+            const finish = (how) => {
+                if (done) return;
+                done = true;
+                clearTimeout(quietTimer);
+                clearTimeout(maxTimer);
+                pendingStop = null;
+                resolve(how);
+            };
+            const progress = () => {
+                clearTimeout(quietTimer);
+                quietTimer = setTimeout(() => finish('gave up (no transcription activity)'), STOP_QUIET_MS);
+            };
+            pendingStop = { finish, progress };
+            maxTimer = setTimeout(() => finish('gave up (time limit)'), STOP_MAX_MS);
+            progress();
         });
+    }
+
+    // A transcription event arrived. If stop() is waiting, either the
+    // transcript is now settled, or the server is still working on it.
+    function noteTranscriptionActivity() {
+        if (!pendingStop) return;
+        if (currentMode === 'transcription' && transcriptItems.isSettled()) {
+            pendingStop.finish('settled');
+        } else {
+            pendingStop.progress();
+        }
     }
 
     /**
@@ -443,24 +504,36 @@ const narrationRealtimeSession = (function() {
                 // no-op; we don't gate on these
                 break;
 
+            case 'input_audio_buffer.committed':
+                // A stretch of audio became an item to transcribe: a turn the
+                // VAD closed, or the answer to stop()'s manual commit.
+                transcriptItems.onCommitted(msg.item_id);
+                noteTranscriptionActivity();
+                break;
+
             case 'conversation.item.input_audio_transcription.delta':
                 if (msg.delta) {
-                    accumulatedTranscript += msg.delta;
-                    onTranscriptDeltaCb(msg.delta);
+                    transcriptItems.onDelta(msg.item_id, msg.delta);
+                    onTranscriptDeltaCb(msg.delta, transcriptItems.text());
                 }
+                noteTranscriptionActivity();
                 break;
 
             case 'conversation.item.input_audio_transcription.completed':
-                // Some transports only send the full transcript here, not deltas.
-                accumulatedTranscript = mergeCompletedUtterance(accumulatedTranscript, msg.transcript);
-                onTranscriptCompleteCb(msg.transcript || '');
-                // Transcription-only sessions never emit response.done —
-                // the final transcription.completed (after our manual
-                // input_audio_buffer.commit on stop) IS the end-of-turn
-                // signal stop() is waiting for.
-                if (currentMode === 'transcription' && pendingResponseDone) {
-                    try { pendingResponseDone(); } catch (_) {}
-                }
+                // The item's final text (some transports send only this, no
+                // deltas). Transcription-only sessions never emit
+                // response.done; stop() is done when the last of these is in.
+                transcriptItems.onCompleted(msg.item_id, msg.transcript);
+                onTranscriptCompleteCb(msg.transcript || '', transcriptItems.text());
+                noteTranscriptionActivity();
+                break;
+
+            case 'conversation.item.input_audio_transcription.failed':
+                // Nothing more will come for this item; don't let stop() wait
+                // on it. What its deltas delivered, if anything, is kept.
+                console.warn('[realtimeSession] transcription failed for an item:', msg.error?.message || msg.error || '');
+                transcriptItems.onFailed(msg.item_id);
+                noteTranscriptionActivity();
                 break;
 
             case 'response.function_call_arguments.done': {
@@ -524,24 +597,31 @@ const narrationRealtimeSession = (function() {
                         log(`[rt] response.done: ${fnCalls} function call(s), status=${r.status}`);
                     }
                 } catch (_) {}
-                if (pendingResponseDone) {
-                    try { pendingResponseDone(); } catch (_) {}
-                }
+                if (pendingStop) pendingStop.finish('response done');
                 break;
 
             case 'error': {
                 const errMsg = msg.error?.message || 'Realtime API error';
-                // "buffer too small" is benign: it means server VAD already
-                // committed the audio before our manual commit in stop()
-                // reached the server. Likewise "active response" is benign in
-                // conversation mode: server VAD already auto-created the
-                // response before our explicit response.create in stop().
-                // Skip both silently — nothing went wrong.
-                if (errMsg.includes('buffer too small') ||
-                    errMsg.includes('buffer_empty') ||
-                    errMsg.includes('active response') ||
-                    msg.error?.code === 'conversation_already_has_active_response') {
-                    log('[rt] (ignored) server already handled commit/response:', errMsg);
+                const errCode = msg.error?.code;
+                // "buffer too small" (code input_audio_buffer_commit_empty) is
+                // benign: server VAD had already committed all the audio
+                // before our manual commit in stop() reached the server. It is
+                // also the answer stop() is waiting for: no new item is
+                // coming, so only items already committed are outstanding.
+                if (errCode === 'input_audio_buffer_commit_empty' ||
+                    errMsg.includes('buffer too small') ||
+                    errMsg.includes('buffer_empty')) {
+                    log('[rt] (ignored) server had already committed the audio:', errMsg);
+                    transcriptItems.onCommitRejected();
+                    noteTranscriptionActivity();
+                    break;
+                }
+                // Likewise "active response" is benign in conversation mode:
+                // server VAD already auto-created the response before our
+                // explicit response.create in stop(). Nothing went wrong.
+                if (errMsg.includes('active response') ||
+                    errCode === 'conversation_already_has_active_response') {
+                    log('[rt] (ignored) server already created the response:', errMsg);
                     break;
                 }
                 onErrorCb(new Error(errMsg));
@@ -555,16 +635,15 @@ const narrationRealtimeSession = (function() {
     }
 
     function handleSocketClose(ev) {
+        // A stop() waiting on this socket's answers has nothing more to wait
+        // for. (stop() clears sessionActive before it waits, so this cannot
+        // sit inside the branch below.)
+        if (pendingStop) pendingStop.finish('socket closed');
         if (sessionActive) {
             // Unexpected close. Tear down audio and reconcile state so the UI
             // doesn't latch in "recording"/"finalizing":
             sessionActive = false;
             stopAudioCapture();
-            // Resolve any stop() that's waiting on an end-of-turn signal — the
-            // socket is gone, so it would otherwise hang the full timeout.
-            if (pendingResponseDone) {
-                try { pendingResponseDone(); } catch (_) {}
-            }
             // Notify the engine so it can reset its phase out of "recording".
             onErrorCb(new Error(`Realtime WebSocket closed: ${ev.code} ${ev.reason}`));
         }

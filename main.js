@@ -190,6 +190,9 @@ import './narration/eventBus.js';
 // Pure leaf (no imports, no DOM) — the engine imports it for the toast text
 // that explains why an event wasn't recorded.
 import './narration/dropReasons.js';
+// Pure leaf as well: the per-utterance transcript the session keeps, and
+// what its stop() waits on.
+import './narration/transcriptItems.js';
 import './narration/realtimeSession.js';
 import { narrationEngine } from './narration/narrationEngine.js';
 import './narration/transcriptDisplay.js';
