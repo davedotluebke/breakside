@@ -58,6 +58,9 @@ const ICON = {
  *   the same entry list so indices line up with the log's data-entry attributes
  * @param {(name: string) => object|null} [cfg.getPlayerByName] - display info (jersey number) for actor labels
  * @param {boolean} [cfg.live] - offer Live (follow the tail); false for finished games
+ * @param {boolean} [cfg.mountWithoutLocations] - mount the transport, timeline and
+ *   narrator even when no event in the game has a field position (the field
+ *   stays hidden); default false = return null for such a game (Decision 5)
  * @param {() => boolean} [cfg.canEdit] - editing gate (playByPlay/replayEdit.js); absent = no Edit
  *   button, false = the button is hidden (viewers never see it)
  * @param {string} [cfg.editDeniedMessage] - toast when canEdit() refuses
@@ -74,7 +77,14 @@ function mountReplayView(cfg) {
         capWithinMs: settings.capWithinMs, capBetweenMs: settings.capBetweenMs,
         papHoldMs: SPEEDY_HOLD_MS,
     }, getEntryOptions()));
-    if (!engine.gameHasLocations()) return null;
+    // Decision 5: a game with no field positions normally gets no replay at
+    // all (the in-game Log tab stays as it was). A mount site that wants the
+    // transport anyway — the Review screen, where the log player and the
+    // narrator are the point even without a pitch — passes
+    // mountWithoutLocations; the field and the rotate button stay hidden
+    // until positions appear.
+    const noLocations = !engine.gameHasLocations();
+    if (noLocations && !cfg.mountWithoutLocations) return null;
 
     const controller = createReplayController(engine);
     const live = cfg.live !== false && !engine.isFinished();
@@ -82,7 +92,7 @@ function mountReplayView(cfg) {
 
     // ---- DOM ----
     const root = document.createElement('div');
-    root.className = 'rv-root';
+    root.className = 'rv-root' + (noLocations ? ' rv-nolocs' : '');
     root.innerHTML = `
         <div class="rv-stage" data-o="${orientation}">
             <div class="rv-possbanner"></div>
@@ -457,6 +467,7 @@ function mountReplayView(cfg) {
     /** The game changed (sync, local event, undo) and the log was re-rendered. */
     function onLogUpdated() {
         controller.refresh(getGame());
+        root.classList.toggle('rv-nolocs', !engine.gameHasLocations());
         renderTimeline();
         // Re-mark the redrawn lines. Only live-follow pulls the log to the
         // current line here: a reader who paused or scrolled away keeps their

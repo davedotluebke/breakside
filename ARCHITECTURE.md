@@ -708,7 +708,13 @@ Layers, bottom-up (all under `playByPlay/`):
   tap = seek). Mounted by `game/gameScreenSync.js` (lazily, when the log
   renders; live games start in Live) and `teams/gameSummary.js` (stored
   games, Live disabled). Late-bound from `ui/panelSystem.js` via
-  `window.replayView` for tab shown/hidden and screen exit.
+  `window.replayView` for tab shown/hidden and screen exit. A game with no
+  field positions anywhere mounts nothing by default (plan Decision 5: the
+  in-game Log tab looks as it always did); the Review screen passes
+  `mountWithoutLocations` and gets the transport, timeline and narrator with
+  the pitch, its "no field positions" banner and the rotate button hidden
+  (`rv-nolocs`), since most games are tracked in Simple / Full mode and the
+  log player is worth having without a pitch.
 - **`replayNarrator.js`** — the 🔊 toggle on the transport and the voice behind
   it (plan § 9's commentator hook, first subscriber to `entry`). Browser
   speech synthesis, no backend: `phraseEntry()` is a pure layer that turns a

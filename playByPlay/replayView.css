@@ -72,6 +72,9 @@
 }
 .rv-root.rv-collapsed .rv-stage { display: none; }
 .rv-root.rv-collapsed .rv-nofield { display: block; }
+/* No positions anywhere in the game (mountWithoutLocations): a log player
+   with no pitch — no "no field positions" banner, no rotate button. */
+.rv-root.rv-nolocs .rv-nofield, .rv-root.rv-nolocs .rv-rotate { display: none; }
 
 /* ---- transport ---- */
 .rv-transport {

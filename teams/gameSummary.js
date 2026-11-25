@@ -452,6 +452,11 @@ function renderGameSummaryEventLog(game, { live = false, editable = true, keepSc
             getEntryOptions: () => _entryOptions,
             getPlayerByName: name => { const r = _summaryLookup(name); return r && r.obj ? r.obj : null; },
             live,
+            // Most games are tracked without field positions (Simple / Full
+            // mode). On this screen the transport still earns its place as a
+            // log player — step, scrub, Live-follow and the 🔊 narrator —
+            // so mount it with the pitch hidden rather than not at all.
+            mountWithoutLocations: true,
         };
         if (editable) {
             // Editing (step 8): any coach of the team, not viewers. After a
