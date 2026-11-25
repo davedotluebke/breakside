@@ -678,10 +678,28 @@ body.scrimmage-dialog-open.mic-button-visible .scrimmage-dialog .event-dialog-bo
     }
 }
 
+/* Separate borders, not the global collapsed ones (css/base.css table, th, td).
+   A collapsed border is painted by the table at the cell's unscrolled
+   position, so the sticky header left its 1px top border behind and the rows
+   scrolling under it showed through that strip. Separate borders belong to
+   their cells and stick with the header. The scroll box draws the frame, so
+   the table and the outer cell edges have none. */
 .scrimmage-picker {
     width: 100%;
-    border-collapse: collapse;
+    border: none;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 0.95rem;
+}
+
+.scrimmage-picker th,
+.scrimmage-picker td {
+    border: none;
+}
+
+.scrimmage-picker th + th,
+.scrimmage-picker td + td {
+    border-left: 1px solid var(--border-light);
 }
 
 .scrimmage-picker th {
@@ -689,6 +707,7 @@ body.scrimmage-dialog-open.mic-button-visible .scrimmage-dialog .event-dialog-bo
     top: 0;
     z-index: 1;
     background: var(--surface-raised);
+    border-bottom: 1px solid var(--border-light);
     padding: 6px 8px;
     font-size: 0.85rem;
     text-align: center;
@@ -714,6 +733,11 @@ body.scrimmage-dialog-open.mic-button-visible .scrimmage-dialog .event-dialog-bo
     padding: 3px 8px;
     border-top: 1px solid var(--border-lighter);
     text-align: center;
+}
+
+/* The header's bottom border already separates the first row. */
+.scrimmage-picker tbody tr:first-child td {
+    border-top: none;
 }
 
 .scrimmage-picker td.scrimmage-player-col {
