@@ -11,6 +11,7 @@ import {
     resolveLineupPlayers,
     displayFirstName,
     buildLineupToast,
+    shortfallText,
 } from '../../narration/lineupResolve.js';
 
 const roster = [
@@ -156,4 +157,19 @@ test('displayFirstName picks the first non-decoration token', () => {
     assert.equal(displayFirstName('23 Jamal'), 'Jamal');
     assert.equal(displayFirstName('Morgan Vale'), 'Morgan');
     assert.equal(displayFirstName('42'), '42');
+});
+
+test('buildLineupToast: a narrated count that ran short is said, and is a warning', () => {
+    const { message, type } = buildLineupToast({
+        selectedCount: 7, expectedCount: 7, added: ['Dana'],
+        shortfalls: [{ group: 'FMP', wanted: 2, got: 1 }],
+    });
+    assert.equal(message, '7/7 selected. Added: Dana. Only 1 of 2 FMPs available');
+    assert.equal(type, 'warning');
+});
+
+test('shortfallText: shared by the lineup and squad toasts', () => {
+    assert.equal(shortfallText({ group: 'MMP', wanted: 3, got: 2 }, 'available'), 'Only 2 of 3 MMPs available');
+    assert.equal(shortfallText({ group: 'ANY', wanted: 2, got: 0 }, 'free for Orange'), 'No players free for Orange');
+    assert.equal(shortfallText({ group: 'Other', wanted: 2, got: 1 }, 'available'), 'Only 1 of 2 players available');
 });

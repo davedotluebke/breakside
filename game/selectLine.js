@@ -375,11 +375,18 @@ function getAutoLineSide(game) {
  * is shuffled once up front (utils/shuffle.js) and the first of a tie wins,
  * so clearing and tapping Auto again can give a different line — the same
  * device as the scrimmage dealer (store/scrimmage.js autoFillSquads).
+ *
+ * A narrated count ("two more women", narration/lineupNarration.js) uses the
+ * same pick with two limits: `count` adds exactly that many players — the
+ * coach said how many, so the field count and the gender ratio are not
+ * consulted, and the line may go past seven — and `eligible` restricts who
+ * may be picked (the gender group). Fewer come back when the pool runs out.
  * @param {string[]} alreadySelected - player names the coach has already picked
- * @param {{random?: () => number}} [opts] - random is injectable for tests
+ * @param {{random?: () => number, count?: number, eligible?: (player: object) => boolean}} [opts]
+ *        random is injectable for tests; count / eligible are the narrated-count limits
  * @returns {string[]} The full line (alreadySelected + auto-filled additions)
  */
-function computeAutoLine(alreadySelected = [], { random = Math.random } = {}) {
+function computeAutoLine(alreadySelected = [], { random = Math.random, count = null, eligible = null } = {}) {
     const game = typeof currentGame === 'function' ? currentGame() : null;
     const activeRoster = typeof getActiveRoster === 'function'
         ? getActiveRoster()
@@ -390,7 +397,8 @@ function computeAutoLine(alreadySelected = [], { random = Math.random } = {}) {
     const expectedCount = parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
     const selectedSet = new Set(alreadySelected);
     const result = alreadySelected.slice();
-    if (result.length >= expectedCount) return result;
+    const narratedCount = Number.isInteger(count) && count > 0 ? count : 0;
+    if (!narratedCount && result.length >= expectedCount) return result;
 
     const stats = buildAutoLineStats(game, roster);
     const byName = {};
@@ -482,6 +490,14 @@ function computeAutoLine(alreadySelected = [], { random = Math.random } = {}) {
             if (isCutterCapable(best)) haveCutter++;
         }
     };
+
+    // A narrated count: exactly that many, from whoever is eligible. The
+    // same greedy pick, so position, rest, O/D line and playing time decide
+    // who, as they would for the Auto button.
+    if (narratedCount) {
+        greedyFill(typeof eligible === 'function' ? roster.filter(eligible) : roster, narratedCount);
+        return result;
+    }
 
     // Gender ratio is the top priority: fill each gender's deficit from that
     // gender's pool (greedy handles rules 2–8), then top up from anyone.

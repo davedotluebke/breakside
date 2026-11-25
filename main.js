@@ -198,6 +198,7 @@ import { narrationEngine } from './narration/narrationEngine.js';
 import './narration/transcriptDisplay.js';
 // lineupNarration before micButton: the FAB imports it to route Line-tab
 // presses, so it evaluates first either way — list it in the real order.
+import './narration/rosterNarration.js';
 import './narration/lineupNarration.js';
 import './narration/squadNarration.js';
 import './narration/micButton.js';

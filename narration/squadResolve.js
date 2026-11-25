@@ -8,7 +8,7 @@
  * builds the toast. Free of browser and app-module dependencies so
  * tests/unit/squadResolve.test.mjs can import it under plain node.
  */
-import { matchRosterPlayer, displayFirstName } from './lineupResolve.js';
+import { matchRosterPlayer, displayFirstName, shortfallText } from './lineupResolve.js';
 import { pickForSquad } from '../store/scrimmage.js';
 
 const SQUADS = ['X', 'Y'];
@@ -129,8 +129,6 @@ function resolveSquadResult(data, ctx, opts = {}) {
     };
 }
 
-const GROUP_LABEL = { FMP: 'FMPs', MMP: 'MMPs', ANY: 'players' };
-
 /**
  * The toast shown after a voice action changes the squads. Sideline-short:
  *   "Orange 5 · Black 4. To Orange: Alice, Bob. To Black: Dana"
@@ -152,12 +150,7 @@ function buildSquadToast({ names, counts, moved = {}, removed = [], unmatched = 
         if (list.length) parts.push(`To ${names[squad]}: ${fmtList(list)}`);
     });
     if (removed.length) parts.push(`Out: ${fmtList(removed)}`);
-    shortfalls.forEach(s => {
-        const label = GROUP_LABEL[s.group] || 'players';
-        parts.push(s.got
-            ? `Only ${s.got} of ${s.wanted} ${label} free for ${names[s.squad]}`
-            : `No ${label} free for ${names[s.squad]}`);
-    });
+    shortfalls.forEach(s => parts.push(shortfallText(s, `free for ${names[s.squad]}`)));
     if (unmatched.length) {
         const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
         parts.push(`No match: ${shown}${unmatched.length > 3 ? ', …' : ''}`);

@@ -107,12 +107,15 @@ function displayFirstName(name) {
  *   "6/7 selected. No match: \"Cris\""
  * Success only when the count matches expectations and nothing failed to
  * match; anything else is a warning so the coach glances at the list.
+ * A narrated count that could not be filled ("two more women" with one on
+ * the bench) is said too, and is a warning.
  * @param {{ selectedCount: number, expectedCount: number,
- *           added?: string[], removed?: string[], unmatched?: string[] }} args
+ *           added?: string[], removed?: string[], unmatched?: string[],
+ *           shortfalls?: Array<{group: string, wanted: number, got: number}> }} args
  *   added/removed/unmatched are display-ready name strings.
  * @returns {{ message: string, type: 'success'|'warning' }}
  */
-function buildLineupToast({ selectedCount, expectedCount, added = [], removed = [], unmatched = [] }) {
+function buildLineupToast({ selectedCount, expectedCount, added = [], removed = [], unmatched = [], shortfalls = [] }) {
     // Long delta lists (a voiced wholesale takes seven players off at once)
     // collapse to a count — the checkbox list is the source of truth.
     const fmtList = (names) => names.length > 4
@@ -121,15 +124,30 @@ function buildLineupToast({ selectedCount, expectedCount, added = [], removed = 
     const parts = [`${selectedCount}/${expectedCount} selected`];
     if (added.length) parts.push(`Added: ${fmtList(added)}`);
     if (removed.length) parts.push(`Off: ${fmtList(removed)}`);
+    shortfalls.forEach(s => parts.push(shortfallText(s, 'available')));
     if (unmatched.length) {
         const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
         parts.push(`No match: ${shown}${unmatched.length > 3 ? ', …' : ''}`);
     }
-    const clean = selectedCount === expectedCount && unmatched.length === 0;
+    const clean = selectedCount === expectedCount && unmatched.length === 0 && shortfalls.length === 0;
     return { message: parts.join('. '), type: clean ? 'success' : 'warning' };
+}
+
+const GROUP_LABEL = { FMP: 'FMPs', MMP: 'MMPs', ANY: 'players' };
+
+/**
+ * A narrated count that came up short, in words — shared by the lineup and
+ * squad toasts: "Only 1 of 2 FMPs available", "No MMPs free for Orange".
+ * @param {{group: string, wanted: number, got: number}} shortfall
+ * @param {string} tail - what the players would have been ('available',
+ *        'free for Orange')
+ */
+function shortfallText({ group, wanted, got }, tail) {
+    const label = GROUP_LABEL[group] || 'players';
+    return got ? `Only ${got} of ${wanted} ${label} ${tail}` : `No ${label} ${tail}`;
 }
 
 export {
     normalizeName, matchRosterPlayer, resolveLineupPlayers,
-    displayFirstName, buildLineupToast,
+    displayFirstName, buildLineupToast, shortfallText,
 };

@@ -1,478 +1,216 @@
 /*
  * Lineup Narration — speak the next line on the Lines tab.
  *
- * A SEPARATE layer on top of the base narration plumbing. It reuses
- * narrationRealtimeSession (transcription-only mode) for capture and the
- * Advanced Settings narration knobs, but has its own state machine and its
- * own backend endpoint (/api/narration/lineup). It never touches the
- * in-point narration engine beyond checking that it's idle — the two can't
- * record at once because they share the realtime-session singleton.
+ * A layer on the shared capture machinery (narration/rosterNarration.js: the
+ * state machine, the status strip, the request, the toasts), with its own
+ * backend endpoint (/api/narration/lineup). Its sibling is squad narration
+ * (narration/squadNarration.js), which does the same for a scrimmage's two
+ * squads. It never touches the in-point narration engine beyond checking
+ * that it's idle — they can't record at once because they share the
+ * realtime-session singleton.
  *
  * No button of its own: the floating mic FAB (narration/micButton.js) routes
- * to this layer whenever the Line tab is active, and drives start()/stop()
- * with the same tap-toggle / hold-to-record gestures it uses for event
- * narration. This module owns only the inline status strip under the Select
- * Line toolbar; button state is reported back through the late-bound
- * window.narrationMicButton.refresh() hook.
+ * to this layer whenever a line, rather than play, is what the coach would be
+ * narrating, and drives start()/stop() with the same tap-toggle /
+ * hold-to-record gestures it uses for event narration. This module owns what
+ * is the Lines tab's: where the strip goes (under the Select Line toolbar),
+ * what the server is told, and how its answer is applied.
  *
  * Flow:
- *   tap the mic on the Line tab → transcription session opens (vocabulary
- *   biased to the FULL active roster — calling a line names bench players)
- *   → coach speaks ("Kris goes in for Wes", "same line but…", corrections)
- *   → tap again → transcript + roster + expected count + previous lineup +
- *   current selection POST to /api/narration/lineup → returned players
- *   are applied through selectLine's applyLineSelection (same path as the
- *   Auto button), replacing the active line's selection.
+ *   tap the mic → transcription session opens (vocabulary biased to the
+ *   FULL active roster — calling a line names bench players) → coach speaks
+ *   ("Kris goes in for Wes", "same line but…", "two more women", "the guys
+ *   come off", corrections) → tap again → transcript + roster (with each
+ *   player's gender group) + expected count + previous lineup + current
+ *   selection POST to /api/narration/lineup → the returned players are
+ *   applied through selectLine's applyLineSelection (the same path as the
+ *   Auto button), and any counts the server could only verify ("two more
+ *   women") are filled here by Auto's own rules (computeAutoLine).
+ *   A name the recognizer mangled is resolved against the closed roster by
+ *   the server (narration_common.py), as for squads.
  */
-import { narrationRealtimeSession } from './realtimeSession.js';
-import { narrationEngine } from './narrationEngine.js';
+import { createRosterNarration, rosterInfo, rosterForServer } from './rosterNarration.js';
 import { resolveLineupPlayers, buildLineupToast, displayFirstName } from './lineupResolve.js';
 import { log } from '../utils/logger.js';
-import { advancedSettings } from '../settings/advancedSettings.js';
-import { authFetch, API_BASE_URL } from '../store/sync.js';
 import { getActiveRoster } from '../store/storage.js';
 import { currentGame, buildPointPlayerLookup } from '../utils/helpers.js';
-import { showControllerToast, dismissToast } from '../game/controllerState.js';
-import { applyLineSelection, canEditSelectLinePanel } from '../game/selectLine.js';
+import { applyLineSelection, canEditSelectLinePanel, computeAutoLine } from '../game/selectLine.js';
 import { getActiveTab } from '../ui/panelSystem.js';
 
-const lineupNarration = (function() {
-    const STATUS_ID = 'lineupNarrationStatus';
-    const LINEUP_ENDPOINT = '/api/narration/lineup';
-    const TRANSCRIPT_TAIL_CHARS = 120;
+// showControllerToast's own default, which the confirmation toast scales
+// off. It reports a whole line ("7/7 selected. Added: Kris. Off: Wes") and
+// flags a miscount, so it needs reading time, not glance time — 3x on the
+// Line tab, where the checkboxes next to it already tell the story, and
+// double that again elsewhere, where the toast IS the only feedback.
+const TOAST_BASE_MS = 4000;
+const CONFIRM_TOAST_MS = TOAST_BASE_MS * 3;
+const CONFIRM_TOAST_OFF_LINE_TAB_MS = CONFIRM_TOAST_MS * 2;
 
-    // showControllerToast's own default, which the confirmation toast scales
-    // off. It reports a whole line ("7/7 selected. Added: Kris. Off: Wes") and
-    // flags a miscount, so it needs reading time, not glance time — 3x on the
-    // Line tab, where the checkboxes next to it already tell the story, and
-    // double that again elsewhere, where the toast IS the only feedback.
-    const TOAST_BASE_MS = 4000;
-    const CONFIRM_TOAST_MS = TOAST_BASE_MS * 3;
-    const CONFIRM_TOAST_OFF_LINE_TAB_MS = CONFIRM_TOAST_MS * 2;
+const NEED_ROLE = 'You need a coach role to change the line';
 
-    // 'idle' | 'connecting' | 'recording' | 'processing'
-    let phase = 'idle';
-    // Stop requested while the realtime session was still connecting; the
-    // start() continuation tears the half-open session down (same pattern
-    // as narrationEngine — never leave the mic hot after a cancel).
-    let abortRequested = false;
-    let transcript = '';
-    // The long-lived confirmation toast, held so we can retire it early once
-    // the coach has visibly moved on. Cleared by its own onDismiss, so a
-    // manual close/swipe doesn't leave us holding a detached node.
-    let confirmToast = null;
+function getExpectedCount() {
+    // Same idiom as selectLine.js — the game-settings field, default 7.
+    return parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
+}
 
-    function toast(message, type = 'info') {
-        if (typeof showControllerToast === 'function') {
-            showControllerToast(message, type);
-        } else {
-            console.warn(`[lineupNarration] (no toast) ${type}: ${message}`);
-        }
-    }
+/** Names of the last point's line — who just played / is on the field.
+ *  Entries may be ids (id-era games); resolve through the era-aware lookup. */
+function getPreviousLineupNames(game) {
+    if (!game || !game.points || !game.points.length) return [];
+    const pt = game.points[game.points.length - 1];
+    if (!pt || !pt.players || !pt.players.length) return [];
+    const lookup = buildPointPlayerLookup(game);
+    return pt.players.map(entry => lookup(entry).name).filter(Boolean);
+}
 
-    /**
-     * The "here's your line" toast. Outlives a normal toast (see the constants
-     * above) and is dismissed early by dismissConfirmToast() rather than being
-     * left to time out after the coach has already acted on it.
-     */
-    function showConfirmToast(message, type) {
-        if (typeof showControllerToast !== 'function') {
-            console.warn(`[lineupNarration] (no toast) ${type}: ${message}`);
-            return;
-        }
-        dismissConfirmToast();  // never stack two line reports
-        const onLineTab = (typeof getActiveTab === 'function') && getActiveTab() === 'line';
-        confirmToast = showControllerToast(
-            message,
-            type,
-            onLineTab ? CONFIRM_TOAST_MS : CONFIRM_TOAST_OFF_LINE_TAB_MS,
-            { onDismiss: () => { confirmToast = null; } }
-        );
-    }
+/** Names currently selected on the active line bucket (what we replace). */
+function getCurrentSelectionNames(game) {
+    const pending = game && game.pendingNextLine;
+    if (!pending) return [];
+    const activeType = pending.activeType || 'od';
+    const entries = pending[activeType + 'Line'] || [];
+    if (!entries.length) return [];
+    const lookup = buildPointPlayerLookup(game);
+    return entries.map(entry => lookup(entry).name).filter(Boolean);
+}
 
-    /** Retire the confirmation toast early. Safe to call when there isn't one
-     *  (or when the coach already closed it — dismissToast no-ops on a node
-     *  that's out of the DOM). */
-    function dismissConfirmToast() {
-        if (!confirmToast) return;
-        const t = confirmToast;
-        confirmToast = null;
-        if (typeof dismissToast === 'function') dismissToast(t);
-    }
-
-    // -----------------------------------------------------------------
-    // UI: button state + status strip
-    // -----------------------------------------------------------------
-
-    function setPhase(p) {
-        phase = p;
-        refresh();
-    }
-
-    /** Sync the status strip to `phase`, and nudge the shared mic FAB to
-     *  re-render — it reads getPhase() to pick its colour and tooltip.
-     *  window-qualified: micButton imports us, so importing it back would
-     *  make a cycle (same pattern as narrationEngine's setPhase). */
-    function refresh() {
-        refreshStatusStrip();
-        window.narrationMicButton?.refresh?.();
-    }
-
-    /** The inline "Listening… <transcript tail>" strip under the toolbar.
-     *  Created lazily inside the Lines panel; recreated if a rebuild ate it. */
-    function ensureStatusEl() {
-        let el = document.getElementById(STATUS_ID);
-        if (el) return el;
-        const toolbar = document.querySelector('.panel-selectLine .select-line-toolbar');
-        if (!toolbar) return null;
-        el = document.createElement('div');
-        el.id = STATUS_ID;
-        el.className = 'lineup-narration-status';
-        toolbar.insertAdjacentElement('afterend', el);
-        return el;
-    }
-
-    function refreshStatusStrip() {
-        const el = ensureStatusEl();
-        if (!el) return;
-        if (phase === 'idle') {
-            el.classList.remove('visible');
-            el.textContent = '';
-            return;
-        }
-        const labels = {
-            connecting: 'Connecting…',
-            recording: transcript.trim() ? '' : 'Listening — name the line, or call subs like "Kris in for Wes"',
-            processing: 'Working out the lineup…'
-        };
-        const tail = transcript.length > TRANSCRIPT_TAIL_CHARS
-            ? '…' + transcript.slice(-TRANSCRIPT_TAIL_CHARS)
-            : transcript;
-        el.textContent = labels[phase] || tail || '';
-        if (phase === 'recording' && tail.trim()) el.textContent = tail;
-        el.classList.add('visible');
-    }
-
-    function isSupported() {
-        return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-    }
-
-    // -----------------------------------------------------------------
-    // Context gathering
-    // -----------------------------------------------------------------
-
-    function getExpectedCount() {
-        // Same idiom as selectLine.js — the game-settings field, default 7.
-        return parseInt(document.getElementById('playersOnFieldInput')?.value || '7', 10);
-    }
-
-    /** Names of the last point's line — who just played / is on the field.
-     *  Entries may be ids (id-era games); resolve through the era-aware lookup. */
-    function getPreviousLineupNames(game) {
-        if (!game || !game.points || !game.points.length) return [];
-        const pt = game.points[game.points.length - 1];
-        if (!pt || !pt.players || !pt.players.length) return [];
-        const lookup = buildPointPlayerLookup(game);
-        return pt.players.map(entry => lookup(entry).name).filter(Boolean);
-    }
-
-    /** Names currently selected on the active line bucket (what we replace). */
-    function getCurrentSelectionNames(game) {
-        const pending = game && game.pendingNextLine;
-        if (!pending) return [];
-        const activeType = pending.activeType || 'od';
-        const entries = pending[activeType + 'Line'] || [];
-        if (!entries.length) return [];
-        const lookup = buildPointPlayerLookup(game);
-        return entries.map(entry => lookup(entry).name).filter(Boolean);
-    }
-
-    function rosterInfo(roster) {
-        return roster.map(p => ({
-            name: p.name,
-            nickname: p.nickname || null,
-            number: p.number != null ? String(p.number) : null
-        }));
-    }
-
-    // -----------------------------------------------------------------
-    // Start / stop
-    // -----------------------------------------------------------------
-
-    async function start() {
-        if (phase !== 'idle') return;
-        if (!isSupported()) {
-            toast('Lineup narration needs microphone support', 'warning');
-            return;
-        }
-        const game = typeof currentGame === 'function' ? currentGame() : null;
-        if (!game) {
-            toast('Open a game to narrate a lineup', 'warning');
-            return;
-        }
-        if (!canEditSelectLinePanel()) {
-            toast('You need a coach role to change the line', 'warning');
-            return;
-        }
-        // The realtime session is a singleton shared with in-point narration.
-        // Refuse with a clear message rather than letting start() throw.
-        if ((narrationEngine && narrationEngine.getPhase && narrationEngine.getPhase() !== 'idle')
-            || (narrationRealtimeSession && narrationRealtimeSession.isActive())) {
-            toast('Game narration is running — stop it before narrating the lineup', 'warning');
-            return;
-        }
-        const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : null;
-        if (!roster || !roster.length) {
-            toast('No roster to match a lineup against', 'warning');
-            return;
-        }
-
-        // Narrating again supersedes the previous line report.
-        dismissConfirmToast();
-
-        abortRequested = false;
-        transcript = '';
-        setPhase('connecting');
-
-        // Vocabulary-bias transcription toward the FULL roster — a line call
-        // names bench players, so on-field-only biasing (the in-point default)
-        // would miss exactly the names that matter here.
-        const info = rosterInfo(roster);
-        const advOpts = (advancedSettings && advancedSettings.getNarrationSessionOptions)
-            ? advancedSettings.getNarrationSessionOptions(info)
-            : {};
-
-        try {
-            await narrationRealtimeSession.start({
-                mode: 'transcription',
-                ...advOpts,
-                // The second argument is the session's whole transcript, kept
-                // per utterance with a space between them (transcriptItems.js).
-                onTranscriptDelta: (delta, sessionTranscript) => {
-                    transcript = sessionTranscript;
-                    refreshStatusStrip();
-                },
-                onTranscriptComplete: (utterance, sessionTranscript) => {
-                    transcript = sessionTranscript;
-                    refreshStatusStrip();
-                },
-                onError: (err) => {
-                    console.error('[lineupNarration] Session error:', err);
-                    // Mirror narrationEngine: a death while recording resets +
-                    // toasts here; a connect-phase failure surfaces through
-                    // start()'s throw path, so stay silent to avoid doubles.
-                    if (phase === 'recording') {
-                        setPhase('idle');
-                        toast('Lineup narration stopped: ' + (err && err.message ? err.message : 'connection lost'), 'error');
-                    } else if (phase === 'connecting') {
-                        setPhase('idle');
-                    }
-                }
-            });
-
-            // Cancelled while connecting: tear the just-opened session down.
-            if (abortRequested) {
-                abortRequested = false;
-                try {
-                    if (narrationRealtimeSession.isActive()) {
-                        await narrationRealtimeSession.stop();
-                    }
-                } catch (_) { /* best-effort teardown */ }
-                setPhase('idle');
-                return;
-            }
-
-            setPhase('recording');
-        } catch (err) {
-            abortRequested = false;
-            setPhase('idle');
-            console.error('[lineupNarration] start failed:', err);
-            // Rethrown rather than toasted here, the same as narrationEngine's
-            // startRecording: the mic button reports start failures for both
-            // layers, and it is the one that tells a denied microphone apart
-            // from everything else (narration/micButton.js).
-            throw err;
-        }
-    }
-
-    async function stop() {
-        if (phase === 'connecting') {
-            abortRequested = true;
-            return;
-        }
-        if (phase !== 'recording') return;
-
-        setPhase('processing');
-        try {
-            if (narrationRealtimeSession.isActive()) {
-                const result = await narrationRealtimeSession.stop();
-                if (result && result.transcript) {
-                    transcript = result.transcript;
-                }
-            }
-        } catch (err) {
-            console.error('[lineupNarration] session stop error:', err);
-        }
-
-        try {
-            await processTranscript();
-        } finally {
-            setPhase('idle');
-        }
-    }
-
-    async function processTranscript() {
-        if (!transcript.trim()) {
-            // Same signature as a dead audio path (G5) — always say something.
-            toast('No speech captured', 'warning');
-            return;
-        }
-        const game = typeof currentGame === 'function' ? currentGame() : null;
-        const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : [];
+/**
+ * The Lines tab as it stands, or why a line cannot be narrated right now.
+ * Asked again at every stage: the game can end, and the Line Coach role can
+ * move, while the coach is still talking.
+ */
+function readContext(stage) {
+    const game = typeof currentGame === 'function' ? currentGame() : null;
+    const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : null;
+    if (stage === 'process' || stage === 'apply') {
         if (!game || !roster || !roster.length) {
-            toast('Voice lineup failed — game context lost', 'error');
-            return;
+            return { problem: 'Voice lineup failed — game context lost', level: 'error' };
         }
+    }
+    if (!game) return { problem: 'Open a game to narrate a lineup' };
+    if (stage !== 'process' && !canEditSelectLinePanel()) return { problem: NEED_ROLE };
+    if (!roster || !roster.length) return { problem: 'No roster to match a lineup against' };
+    return { ctx: { game, roster } };
+}
 
-        const payload = {
-            game_id: game.id || null,
-            transcript: transcript,
-            roster: rosterInfo(roster),
-            expected_count: getExpectedCount(),
-            previous_lineup: getPreviousLineupNames(game),
-            current_selection: getCurrentSelectionNames(game)
-        };
-
-        let data;
-        try {
-            const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-            const resp = await authFetch(`${apiBase}${LINEUP_ENDPOINT}`, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            if (!resp.ok) {
-                const hint = resp.status === 503 ? 'not configured on the server'
-                    : resp.status === 404 ? 'server needs an update'
-                    : `${resp.status}`;
-                toast(`Lineup processing failed (${hint}) — selection unchanged`, 'error');
-                return;
-            }
-            data = await resp.json();
-        } catch (err) {
-            console.error('[lineupNarration] request failed:', err);
-            toast('Lineup processing failed (network) — selection unchanged', 'error');
-            return;
-        }
-
-        applyResult(data);
+/**
+ * Apply the backend's lineup to the Lines tab. The server returns the FULL
+ * resulting selection — the coach's words applied to the current one by set
+ * arithmetic — so applying is a plain replace, plus the counts it could
+ * only verify ("two more women"), which are filled here by the Auto
+ * button's own rules. The toast reports the DELTA ("Added: …", "Off: …").
+ * Never applies a result in which nothing was heard: a wrong no-op beats
+ * wiping the coach's selection.
+ */
+function applyLineup(data, { game, roster }, { toast, showConfirmToast }) {
+    const returned = Array.isArray(data.players) ? data.players : [];
+    const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
+    const fills = Array.isArray(data.fills) ? data.fills.filter(f => f && f.count > 0) : [];
+    // A voiced clear ("wholesale", "everybody comes off"), explicit removals
+    // or a group coming off legitimately empty the selection — distinguish
+    // that from "nothing lineup-related was heard", which must never wipe.
+    const voicedClear = data.voiced_clear === true;
+    const voicedOut = Array.isArray(data.voiced_out) ? data.voiced_out : [];
+    const groupOut = Array.isArray(data.voiced_group_out) ? data.voiced_group_out : [];
+    const legitimatelyEmpty = voicedClear || voicedOut.length > 0 || groupOut.length > 0;
+    if (!returned.length && !modelUnmatched.length && !legitimatelyEmpty && !fills.length) {
+        toast('No lineup heard', 'info');
+        return false;
     }
 
-    /**
-     * Apply the backend's lineup to the Lines tab. The model returns the
-     * FULL resulting lineup — partial utterances are resolved as additions
-     * against the current selection server-side — so applying is a plain
-     * replace, and the toast reports the DELTA ("Added: …", "Off: …").
-     * Never applies an empty or error result — a wrong no-op beats wiping
-     * the coach's selection.
-     */
-    function applyResult(data) {
-        if (!data || data.error) {
-            if (data && data.error) console.warn('[lineupNarration] server error:', data.error);
-            toast('Voice lineup failed — selection unchanged', 'error');
-            return false;
-        }
-        const returned = Array.isArray(data.players) ? data.players : [];
-        const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
-        // A voiced clear ("wholesale", "everybody comes off") or explicit
-        // removals legitimately empty the selection — distinguish that from
-        // "nothing lineup-related was heard", which must never wipe.
-        const voicedClear = data.voiced_clear === true;
-        const voicedOut = Array.isArray(data.voiced_out) ? data.voiced_out : [];
-        const legitimatelyEmpty = voicedClear || voicedOut.length > 0;
-        if (!returned.length && !modelUnmatched.length && !legitimatelyEmpty) {
-            toast('No lineup heard', 'info');
-            return false;
-        }
+    const { players, unmatched: localUnmatched } = resolveLineupPlayers(returned, roster);
+    const unmatched = modelUnmatched.concat(localUnmatched);
 
-        const game = typeof currentGame === 'function' ? currentGame() : null;
-        const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : [];
-        const { players, unmatched: localUnmatched } = resolveLineupPlayers(returned, roster);
-        const unmatched = modelUnmatched.concat(localUnmatched);
+    if (!players.length && !legitimatelyEmpty && !fills.length) {
+        const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
+        toast(`No roster match: ${shown}${unmatched.length > 3 ? ', …' : ''} — selection unchanged`, 'warning');
+        return false;
+    }
 
-        if (!players.length && !legitimatelyEmpty) {
-            const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
-            toast(`No roster match: ${shown}${unmatched.length > 3 ? ', …' : ''} — selection unchanged`, 'warning');
-            return false;
-        }
-        // Re-check: the Line Coach role can move while recording.
-        if (!canEditSelectLinePanel()) {
-            toast('You need a coach role to change the line', 'warning');
-            return false;
-        }
-
-        // Delta vs the selection being replaced — what this voice action did.
-        const prevNames = getCurrentSelectionNames(game);
-        const newNames = players.map(p => p.name);
-        const prevSet = new Set(prevNames);
-        const newSet = new Set(newNames);
-        const added = newNames.filter(n => !prevSet.has(n)).map(displayFirstName);
-        const removed = prevNames.filter(n => !newSet.has(n)).map(displayFirstName);
-
-        applyLineSelection('main', newNames);
-
-        // The model's free-text note is for debugging, not the sideline.
-        if (data.note) log('[lineupNarration] note:', data.note);
-        const { message, type } = buildLineupToast({
-            selectedCount: newNames.length,
-            expectedCount: getExpectedCount(),
-            added, removed, unmatched
+    // Narrated counts, in spoken order: the coach said how many and of which
+    // group; who is Auto's call (position, rest, O/D line, playing time —
+    // game/selectLine.js computeAutoLine), exactly as if the coach had
+    // tapped Auto with only those slots open.
+    let newNames = players.map(p => p.name);
+    const shortfalls = [];
+    fills.forEach(fill => {
+        const before = newNames.length;
+        newNames = computeAutoLine(newNames, {
+            count: fill.count,
+            eligible: p => fill.group === 'ANY' || p.gender === fill.group,
         });
-        showConfirmToast(message, type);
-        return true;
-    }
+        const got = newNames.length - before;
+        if (got < fill.count) shortfalls.push({ group: fill.group, wanted: fill.count, got });
+    });
 
-    function toggle() {
-        if (phase === 'idle') {
-            start();
-        } else if (phase === 'connecting' || phase === 'recording') {
-            stop();
-        } else {
-            toast('Still working out the previous lineup…', 'info');
-        }
-    }
+    // Delta vs the selection being replaced — what this voice action did.
+    const prevNames = getCurrentSelectionNames(game);
+    const prevSet = new Set(prevNames);
+    const newSet = new Set(newNames);
+    const added = newNames.filter(n => !prevSet.has(n)).map(displayFirstName);
+    const removed = prevNames.filter(n => !newSet.has(n)).map(displayFirstName);
 
-    // -----------------------------------------------------------------
-    // Wiring
-    // -----------------------------------------------------------------
+    applyLineSelection('main', newNames);
 
-    // Navigating to any nav-managed screen means leaving the game (the
-    // panel-based game screen isn't one of them, so this only fires on the
-    // way out) — the line report is moot once the coach is elsewhere.
-    document.addEventListener('breakside:screen-shown', dismissConfirmToast);
+    // The model's free-text note is for debugging, not the sideline.
+    if (data.note) log('[lineupNarration] note:', data.note);
+    const { message, type } = buildLineupToast({
+        selectedCount: newNames.length,
+        expectedCount: getExpectedCount(),
+        added, removed, unmatched, shortfalls
+    });
+    showConfirmToast(message, type);
+    return true;
+}
 
-    // Public API — driven by narration/micButton.js whenever a line, rather
-    // than play, is what the coach would be narrating.
-    return {
-        start,
-        stop,
-        toggle,
-        // Point start = the coach accepted this line and moved on; called
-        // window-qualified by game/pointManagement.js startNextPoint.
-        onPointStarted: dismissConfirmToast,
-        getPhase: () => phase,
-        isActive: () => phase !== 'idle',
-        refresh,
-        // Debug/e2e seams: drive the apply path without mic or backend
-        // (e.g. lineupNarration._applyResult({players: ['Alice']})), and
-        // inspect the transcript mid-recording.
-        _applyResult: applyResult,
-        _getTranscript: () => transcript
-    };
-})();
+const layer = createRosterNarration({
+    name: 'lineupNarration',
+    label: 'Lineup',
+    voiceLabel: 'Voice lineup',
+    unchanged: 'selection',
+    endpoint: '/api/narration/lineup',
+    statusId: 'lineupNarrationStatus',
+    statusAnchor: () => document.querySelector('.panel-selectLine .select-line-toolbar'),
+    listeningHint: () => 'Listening — name the line, or call subs like "Kris in for Wes" or "two more women"',
+    processingLabel: 'Working out the lineup…',
+    busyMessage: 'Still working out the previous lineup…',
+    otherRunningMessage: 'Game narration is running — stop it before narrating the lineup',
+    context: readContext,
+    // The FULL roster — a line call names bench players, so on-field-only
+    // biasing (the in-point default) would miss exactly the names that matter.
+    vocabulary: ({ roster }) => rosterInfo(roster),
+    buildPayload: ({ game, roster }, transcript) => ({
+        game_id: game.id || null,
+        transcript,
+        roster: rosterForServer(roster),
+        expected_count: getExpectedCount(),
+        previous_lineup: getPreviousLineupNames(game),
+        current_selection: getCurrentSelectionNames(game)
+    }),
+    apply: applyLineup,
+    confirmToastMs: () => ((typeof getActiveTab === 'function') && getActiveTab() === 'line')
+        ? CONFIRM_TOAST_MS
+        : CONFIRM_TOAST_OFF_LINE_TAB_MS,
+});
+
+// Navigating to any nav-managed screen means leaving the game (the
+// panel-based game screen isn't one of them, so this only fires on the
+// way out) — the line report is moot once the coach is elsewhere.
+document.addEventListener('breakside:screen-shown', layer.dismissConfirmToast);
+
+// Public API — driven by narration/micButton.js whenever a line, rather
+// than play, is what the coach would be narrating.
+const lineupNarration = {
+    ...layer,
+    // Point start = the coach accepted this line and moved on; called
+    // window-qualified by game/pointManagement.js startNextPoint.
+    onPointStarted: layer.dismissConfirmToast,
+};
 
 // --- ES-module export ---
 export { lineupNarration };
 // window survivor: debug/e2e seam — lets the console and Playwright drive
-// the apply path (lineupNarration._applyResult) without mic hardware or a
-// configured ANTHROPIC_API_KEY; mirrors the computeAutoLine seam.
+// the apply path (lineupNarration._applyResult) and the typed-transcript
+// path (lineupNarration._narrate) without mic hardware; mirrors the
+// computeAutoLine seam.
 window.lineupNarration = lineupNarration;

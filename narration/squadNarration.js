@@ -1,18 +1,20 @@
 /*
  * Squad Narration — speak the squads in the scrimmage picker.
  *
- * The third narration layer, a sibling of lineupNarration.js: the same
- * transcription-only Realtime session for capture, its own state machine,
- * and its own backend endpoint (/api/narration/squads). It drives the New
- * Scrimmage / Edit Squads dialog (teams/scrimmageDialogs.js) rather than
- * the Line tab, through the dialog's narration seam
+ * A layer on the shared capture machinery (narration/rosterNarration.js: the
+ * state machine, the status strip, the request, the toasts), with its own
+ * backend endpoint (/api/narration/squads). Its sibling is lineup narration
+ * (narration/lineupNarration.js), which does the same for the next point's
+ * line. It drives the New Scrimmage / Edit Squads dialog
+ * (teams/scrimmageDialogs.js) through the dialog's narration seam
  * (getSquadDialogContext / applyNarratedSquads).
  *
  * No button of its own: the floating mic FAB (narration/micButton.js) routes
  * to this layer whenever the squad picker is open — on the team list, or
  * over a game for Edit Squads — with the same tap-toggle / hold-to-record
- * gestures as the other two layers. This module owns only the inline status
- * strip under the picker's Clear / Auto row.
+ * gestures as the other layers. This module owns what is the picker's: where
+ * the strip goes (under its Clear / Auto row), what the server is told, and
+ * how its answer is applied.
  *
  * Flow:
  *   tap the mic with the picker open → transcription session opens
@@ -27,431 +29,151 @@
  *   balance rules (narration/squadResolve.js), and a toast says who moved.
  *   Names spoken without a squad go on the FIRST squad, and a name the
  *   recognizer mangled is resolved against the closed roster; both rules
- *   are the server's (narration_lineup.py), not the model's.
+ *   are the server's (narration_squads.py over narration_common.py), not
+ *   the model's.
  */
-import { narrationRealtimeSession } from './realtimeSession.js';
-import { narrationEngine } from './narrationEngine.js';
-import { lineupNarration } from './lineupNarration.js';
+import { createRosterNarration, rosterInfo, rosterForServer } from './rosterNarration.js';
 import { resolveSquadResult, buildSquadToast } from './squadResolve.js';
 import { log } from '../utils/logger.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
-import { authFetch, API_BASE_URL } from '../store/sync.js';
-import { showControllerToast, dismissToast } from '../game/controllerState.js';
 import { getSquadDialogContext, applyNarratedSquads } from '../teams/scrimmageDialogs.js';
 
-const squadNarration = (function() {
-    const STATUS_ID = 'squadNarrationStatus';
-    const SQUADS_ENDPOINT = '/api/narration/squads';
-    const TRANSCRIPT_TAIL_CHARS = 120;
+// The confirmation toast reports a whole split, next to a picker that shows
+// it; lineup narration's on-Line-tab lifetime is the right one.
+const CONFIRM_TOAST_MS = 4000 * 3;
 
-    // The confirmation toast reports a whole split, next to a picker that
-    // shows it; lineupNarration's on-Line-tab lifetime is the right one.
-    const CONFIRM_TOAST_MS = 4000 * 3;
+const PICKER_CLOSED = 'Squad picker closed — nothing applied';
 
-    // 'idle' | 'connecting' | 'recording' | 'processing'
-    let phase = 'idle';
-    let abortRequested = false;
-    let transcript = '';
-    let confirmToast = null;
+/**
+ * The open picker's state, or why squads cannot be narrated right now.
+ * Asked again at every stage: the dialog can close while the coach talks.
+ */
+function readContext(stage) {
+    const ctx = getSquadDialogContext();
+    if (stage === 'start') {
+        if (!ctx) return { problem: 'Open the squad picker to narrate squads' };
+        if (!ctx.roster.length) return { problem: 'The roster is still loading — try again in a moment' };
+        return { ctx };
+    }
+    if (!ctx || !ctx.roster.length) return { problem: PICKER_CLOSED, level: 'info' };
+    if (!ctx.teamId) return { problem: 'Voice squads failed — team context lost', level: 'error' };
+    return { ctx };
+}
 
-    function toast(message, type = 'info') {
-        if (typeof showControllerToast === 'function') {
-            showControllerToast(message, type);
-        } else {
-            console.warn(`[squadNarration] (no toast) ${type}: ${message}`);
-        }
+/** {X: [names], Y: [names]} from the picker's id → squad map. */
+function currentSquadNames(ctx) {
+    const out = { X: [], Y: [] };
+    ctx.roster.forEach(p => {
+        const squad = ctx.assignment.get(p.id);
+        if (squad === 'X' || squad === 'Y') out[squad].push(p.name);
+    });
+    return out;
+}
+
+/**
+ * Apply the backend's squads to the open picker. The server returns the
+ * FULL resulting squads (its current squads ± the voiced changes), so
+ * applying is a plain replacement — plus the counts it could only verify
+ * ("two more FMPs on Dark"), which are picked here — and the toast reports
+ * the delta. A result in which nothing was heard never touches the picker.
+ */
+function applySquads(data, ctx, { toast, showConfirmToast }) {
+    const voicedAssign = Array.isArray(data.voiced_assign) ? data.voiced_assign : [];
+    const voicedOut = Array.isArray(data.out) ? data.out : [];
+    const voicedGroups = Array.isArray(data.voiced_groups) ? data.voiced_groups : [];
+    const fills = Array.isArray(data.fills) ? data.fills : [];
+    const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
+    const heard = voicedAssign.length || voicedOut.length || voicedGroups.length || fills.length
+        || data.voiced_clear === true || !!data.voiced_rest;
+    if (!heard && !modelUnmatched.length) {
+        toast('No squad changes heard', 'info');
+        return false;
     }
 
-    function showConfirmToast(message, type) {
-        if (typeof showControllerToast !== 'function') {
-            console.warn(`[squadNarration] (no toast) ${type}: ${message}`);
-            return;
-        }
-        dismissConfirmToast();
-        confirmToast = showControllerToast(message, type, CONFIRM_TOAST_MS,
-            { onDismiss: () => { confirmToast = null; } });
+    const result = resolveSquadResult(data, ctx, {
+        // A narrated count is picked by the Auto button's own rules.
+        priorityOrder: (advancedSettings && advancedSettings.getAutoLinePriorityOrder)
+            ? advancedSettings.getAutoLinePriorityOrder()
+            : undefined
+    });
+    if (!heard) {
+        // Only unmatched references: nothing to apply, say what was missed.
+        const shown = result.unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
+        toast(`No roster match: ${shown}${result.unmatched.length > 3 ? ', …' : ''} — squads unchanged`, 'warning');
+        return false;
     }
 
-    function dismissConfirmToast() {
-        if (!confirmToast) return;
-        const t = confirmToast;
-        confirmToast = null;
-        if (typeof dismissToast === 'function') dismissToast(t);
-    }
+    if (!applyNarratedSquads(result.assignment, { absent: result.absent, pinned: result.pinned })) return false;
 
-    // -----------------------------------------------------------------
-    // UI: button state + status strip
-    // -----------------------------------------------------------------
+    if (data.note) log('[squadNarration] note:', data.note);
+    const { message, type } = buildSquadToast({
+        names: ctx.names, counts: result.counts,
+        moved: result.moved, removed: result.removed, unmatched: result.unmatched,
+        shortfalls: result.shortfalls
+    });
+    showConfirmToast(message, type);
+    return true;
+}
 
-    function setPhase(p) {
-        phase = p;
-        refresh();
-    }
-
-    /** Sync the status strip, and re-render the shared mic FAB (it reads
-     *  getPhase()). window-qualified: micButton imports us. */
-    function refresh() {
-        refreshStatusStrip();
-        window.narrationMicButton?.refresh?.();
-    }
-
-    /** The "Listening… <transcript tail>" strip under the picker's tools
-     *  row. Created lazily inside whichever squad dialog is open. */
-    function ensureStatusEl() {
-        let el = document.getElementById(STATUS_ID);
-        if (el && el.isConnected) return el;
-        const tools = document.querySelector('.scrimmage-dialog .scrimmage-tools');
-        if (!tools) return null;
-        el = document.createElement('div');
-        el.id = STATUS_ID;
-        el.className = 'lineup-narration-status';
-        tools.insertAdjacentElement('afterend', el);
-        return el;
-    }
-
-    function refreshStatusStrip() {
-        const el = ensureStatusEl();
-        if (!el) return;
-        if (phase === 'idle') {
-            el.classList.remove('visible');
-            el.textContent = '';
-            return;
-        }
-        const ctx = getSquadDialogContext();
+const layer = createRosterNarration({
+    name: 'squadNarration',
+    label: 'Squad',
+    voiceLabel: 'Voice squads',
+    unchanged: 'squads',
+    endpoint: '/api/narration/squads',
+    statusId: 'squadNarrationStatus',
+    statusAnchor: () => document.querySelector('.scrimmage-dialog .scrimmage-tools'),
+    listeningHint: (ctx) => {
         const names = ctx ? ctx.names : { X: 'Dark', Y: 'Light' };
-        const labels = {
-            connecting: 'Connecting…',
-            recording: transcript.trim() ? ''
-                : `Listening — "Alice and Bob on ${names.X}, the rest of the FMPs on ${names.Y}"; names alone go on ${names.X}`,
-            processing: 'Working out the squads…'
-        };
-        const tail = transcript.length > TRANSCRIPT_TAIL_CHARS
-            ? '…' + transcript.slice(-TRANSCRIPT_TAIL_CHARS)
-            : transcript;
-        el.textContent = labels[phase] || tail || '';
-        if (phase === 'recording' && tail.trim()) el.textContent = tail;
-        el.classList.add('visible');
-    }
-
-    function isSupported() {
-        return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-    }
-
-    /** Whether a squad picker is open with its roster loaded — the mic
-     *  button's cue to route to this layer. */
-    function isDialogOpen() {
-        return !!getSquadDialogContext();
-    }
-
-    // -----------------------------------------------------------------
-    // Context gathering
-    // -----------------------------------------------------------------
-
-    function rosterInfo(roster) {
-        return roster.map(p => ({
-            name: p.name,
-            nickname: p.nickname || null,
-            number: p.number != null ? String(p.number) : null
-        }));
-    }
-
-    /** The roster as the server needs it to expand collective phrases:
-     *  each player's gender group ("the FMPs"), whether they are here today
-     *  (never swept up when not), and whether the coach already placed them
-     *  ("everyone else" leaves those alone). */
-    function rosterForServer(ctx) {
-        return ctx.roster.map(p => ({
-            name: p.name,
-            nickname: p.nickname || null,
-            number: p.number != null ? String(p.number) : null,
-            gender: p.gender || null,
+        return `Listening — "Alice and Bob on ${names.X}, the rest of the FMPs on ${names.Y}"; names alone go on ${names.X}`;
+    },
+    processingLabel: 'Working out the squads…',
+    busyMessage: 'Still working out the previous squads…',
+    otherRunningMessage: 'Narration is already running — stop it before narrating squads',
+    context: readContext,
+    // The whole roster and the squad names: the squad words are what tell
+    // this narration apart from a line call, so the recognizer must get them
+    // right. They ride along as roster-shaped entries, which is all the
+    // vocabulary prompt reads.
+    vocabulary: (ctx) => rosterInfo(ctx.roster).concat([{ name: ctx.names.X }, { name: ctx.names.Y }]),
+    // Per player the server also needs: whether they are here today (never
+    // swept up by a collective phrase when not) and whether the coach
+    // already placed them ("everyone else" leaves those alone).
+    buildPayload: (ctx, transcript) => ({
+        teamId: ctx.teamId,
+        transcript,
+        roster: rosterForServer(ctx.roster, p => ({
             here: !ctx.absent.has(p.id),
             pinned: ctx.pinned.has(p.id)
-        }));
-    }
+        })),
+        squad_names: { X: ctx.names.X, Y: ctx.names.Y },
+        current_squads: currentSquadNames(ctx)
+    }),
+    apply: applySquads,
+    confirmToastMs: () => CONFIRM_TOAST_MS,
+});
 
-    // The gender-group words, for the recognizer: said as initialisms they
-    // are otherwise transcribed every which way.
-    const GROUP_VOCABULARY = ['FMP', 'FMPs', 'MMP', 'MMPs'];
+// The picker closing mid-recording ends the recording: there is nothing
+// left to apply it to (the context is read again before the request and
+// before the apply, and says so). Its report is moot once the dialog is
+// gone, too.
+document.addEventListener('breakside:scrimmage-dialog', (e) => {
+    if (e.detail && e.detail.open) return;
+    layer.dismissConfirmToast();
+    if (layer.getPhase() === 'recording' || layer.getPhase() === 'connecting') layer.stop();
+});
 
-    /** {X: [names], Y: [names]} from the picker's id → squad map. */
-    function currentSquadNames(ctx) {
-        const out = { X: [], Y: [] };
-        ctx.roster.forEach(p => {
-            const squad = ctx.assignment.get(p.id);
-            if (squad === 'X' || squad === 'Y') out[squad].push(p.name);
-        });
-        return out;
-    }
-
-    // -----------------------------------------------------------------
-    // Start / stop
-    // -----------------------------------------------------------------
-
-    async function start() {
-        if (phase !== 'idle') return;
-        if (!isSupported()) {
-            toast('Squad narration needs microphone support', 'warning');
-            return;
-        }
-        const ctx = getSquadDialogContext();
-        if (!ctx) {
-            toast('Open the squad picker to narrate squads', 'warning');
-            return;
-        }
-        if (!ctx.roster.length) {
-            toast('The roster is still loading — try again in a moment', 'warning');
-            return;
-        }
-        if ((narrationEngine && narrationEngine.getPhase && narrationEngine.getPhase() !== 'idle')
-            || (lineupNarration && lineupNarration.getPhase && lineupNarration.getPhase() !== 'idle')
-            || (narrationRealtimeSession && narrationRealtimeSession.isActive())) {
-            toast('Narration is already running — stop it before narrating squads', 'warning');
-            return;
-        }
-
-        dismissConfirmToast();
-        abortRequested = false;
-        transcript = '';
-        setPhase('connecting');
-
-        // Vocabulary-bias toward the whole roster and the squad names: the
-        // squad words are what tell this narration apart from a line call,
-        // so the recognizer must get them right. The names ride along as
-        // roster-shaped entries, which is all the vocabulary prompt reads.
-        const info = rosterInfo(ctx.roster)
-            .concat([{ name: ctx.names.X }, { name: ctx.names.Y }])
-            .concat(GROUP_VOCABULARY.map(name => ({ name })));
-        const advOpts = (advancedSettings && advancedSettings.getNarrationSessionOptions)
-            ? advancedSettings.getNarrationSessionOptions(info)
-            : {};
-
-        try {
-            await narrationRealtimeSession.start({
-                mode: 'transcription',
-                ...advOpts,
-                // The second argument is the session's whole transcript, kept
-                // per utterance with a space between them (transcriptItems.js).
-                onTranscriptDelta: (delta, sessionTranscript) => {
-                    transcript = sessionTranscript;
-                    refreshStatusStrip();
-                },
-                onTranscriptComplete: (utterance, sessionTranscript) => {
-                    transcript = sessionTranscript;
-                    refreshStatusStrip();
-                },
-                onError: (err) => {
-                    console.error('[squadNarration] Session error:', err);
-                    if (phase === 'recording') {
-                        setPhase('idle');
-                        toast('Squad narration stopped: ' + (err && err.message ? err.message : 'connection lost'), 'error');
-                    } else if (phase === 'connecting') {
-                        setPhase('idle');
-                    }
-                }
-            });
-
-            if (abortRequested) {
-                abortRequested = false;
-                try {
-                    if (narrationRealtimeSession.isActive()) {
-                        await narrationRealtimeSession.stop();
-                    }
-                } catch (_) { /* best-effort teardown */ }
-                setPhase('idle');
-                return;
-            }
-
-            setPhase('recording');
-        } catch (err) {
-            abortRequested = false;
-            setPhase('idle');
-            console.error('[squadNarration] start failed:', err);
-            // Rethrown for the mic button, which tells a denied microphone
-            // apart from everything else (narration/micButton.js).
-            throw err;
-        }
-    }
-
-    async function stop() {
-        if (phase === 'connecting') {
-            abortRequested = true;
-            return;
-        }
-        if (phase !== 'recording') return;
-
-        setPhase('processing');
-        try {
-            if (narrationRealtimeSession.isActive()) {
-                const result = await narrationRealtimeSession.stop();
-                if (result && result.transcript) {
-                    transcript = result.transcript;
-                }
-            }
-        } catch (err) {
-            console.error('[squadNarration] session stop error:', err);
-        }
-
-        try {
-            await processTranscript();
-        } finally {
-            setPhase('idle');
-        }
-    }
-
-    async function processTranscript() {
-        if (!transcript.trim()) {
-            toast('No speech captured', 'warning');
-            return;
-        }
-        const ctx = getSquadDialogContext();
-        if (!ctx || !ctx.roster.length) {
-            toast('Squad picker closed — nothing applied', 'info');
-            return;
-        }
-        if (!ctx.teamId) {
-            toast('Voice squads failed — team context lost', 'error');
-            return;
-        }
-
-        const payload = {
-            teamId: ctx.teamId,
-            transcript: transcript,
-            roster: rosterForServer(ctx),
-            squad_names: { X: ctx.names.X, Y: ctx.names.Y },
-            current_squads: currentSquadNames(ctx)
-        };
-
-        let data;
-        try {
-            const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-            const resp = await authFetch(`${apiBase}${SQUADS_ENDPOINT}`, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            if (!resp.ok) {
-                const hint = resp.status === 503 ? 'not configured on the server'
-                    : resp.status === 404 ? 'server needs an update'
-                    : `${resp.status}`;
-                toast(`Squad processing failed (${hint}) — squads unchanged`, 'error');
-                return;
-            }
-            data = await resp.json();
-        } catch (err) {
-            console.error('[squadNarration] request failed:', err);
-            toast('Squad processing failed (network) — squads unchanged', 'error');
-            return;
-        }
-
-        applyResult(data);
-    }
-
-    /**
-     * Apply the backend's squads to the open picker. The server returns the
-     * FULL resulting squads (its current squads ± the voiced changes), so
-     * applying is a plain replacement — plus the counts it could only
-     * verify ("two more FMPs on Dark"), which are picked here — and the
-     * toast reports the delta. An error result, or one that heard nothing,
-     * never touches the picker.
-     */
-    function applyResult(data) {
-        if (!data || data.error) {
-            if (data && data.error) console.warn('[squadNarration] server error:', data.error);
-            toast('Voice squads failed — squads unchanged', 'error');
-            return false;
-        }
-        const ctx = getSquadDialogContext();
-        if (!ctx || !ctx.roster.length) {
-            toast('Squad picker closed — nothing applied', 'info');
-            return false;
-        }
-        const voicedAssign = Array.isArray(data.voiced_assign) ? data.voiced_assign : [];
-        const voicedOut = Array.isArray(data.out) ? data.out : [];
-        const voicedGroups = Array.isArray(data.voiced_groups) ? data.voiced_groups : [];
-        const fills = Array.isArray(data.fills) ? data.fills : [];
-        const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
-        const heard = voicedAssign.length || voicedOut.length || voicedGroups.length || fills.length
-            || data.voiced_clear === true || !!data.voiced_rest;
-        if (!heard && !modelUnmatched.length) {
-            toast('No squad changes heard', 'info');
-            return false;
-        }
-
-        const result = resolveSquadResult(data, ctx, {
-            // A narrated count is picked by the Auto button's own rules.
-            priorityOrder: (advancedSettings && advancedSettings.getAutoLinePriorityOrder)
-                ? advancedSettings.getAutoLinePriorityOrder()
-                : undefined
-        });
-        if (!heard) {
-            // Only unmatched references: nothing to apply, say what was missed.
-            const shown = result.unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
-            toast(`No roster match: ${shown}${result.unmatched.length > 3 ? ', …' : ''} — squads unchanged`, 'warning');
-            return false;
-        }
-
-        if (!applyNarratedSquads(result.assignment, { absent: result.absent, pinned: result.pinned })) return false;
-
-        if (data.note) log('[squadNarration] note:', data.note);
-        const { message, type } = buildSquadToast({
-            names: ctx.names, counts: result.counts,
-            moved: result.moved, removed: result.removed, unmatched: result.unmatched,
-            shortfalls: result.shortfalls
-        });
-        showConfirmToast(message, type);
-        return true;
-    }
-
-    function toggle() {
-        if (phase === 'idle') {
-            start();
-        } else if (phase === 'connecting' || phase === 'recording') {
-            stop();
-        } else {
-            toast('Still working out the previous squads…', 'info');
-        }
-    }
-
-    // -----------------------------------------------------------------
-    // Wiring
-    // -----------------------------------------------------------------
-
-    // The picker closing mid-recording ends the recording: there is nothing
-    // left to apply it to (processTranscript checks again and says so). Its
-    // report is moot once the dialog is gone, too.
-    document.addEventListener('breakside:scrimmage-dialog', (e) => {
-        if (e.detail && e.detail.open) return;
-        dismissConfirmToast();
-        if (phase === 'recording' || phase === 'connecting') stop();
-    });
-
-    return {
-        start,
-        stop,
-        toggle,
-        getPhase: () => phase,
-        isActive: () => phase !== 'idle',
-        isDialogOpen,
-        refresh,
-        // Debug/e2e seams: drive the apply path without mic or backend
-        // (squadNarration._applyResult({squads: {X: ['Alice'], Y: []}})),
-        // or the whole path after the recognizer — the real request, server
-        // and model — from typed words
-        // (await squadNarration._narrate('Alice and Bob on Dark')).
-        _applyResult: applyResult,
-        _narrate: async (text) => {
-            if (phase !== 'idle') return false;
-            transcript = String(text || '');
-            await processTranscript();
-            return true;
-        },
-        _getTranscript: () => transcript
-    };
-})();
+// Public API — driven by narration/micButton.js while the picker is open.
+const squadNarration = {
+    ...layer,
+    /** Whether a squad picker is open — the mic button's cue to route here. */
+    isDialogOpen: () => !!getSquadDialogContext(),
+};
 
 // --- ES-module export ---
 export { squadNarration };
 // window survivor: debug/e2e seam — lets the console and Playwright drive
-// the apply path (squadNarration._applyResult) without mic hardware or a
-// configured ANTHROPIC_API_KEY; mirrors lineupNarration's seam.
+// the apply path (squadNarration._applyResult) and the typed-transcript
+// path (squadNarration._narrate) without mic hardware; mirrors
+// lineupNarration's seam.
 window.squadNarration = squadNarration;
