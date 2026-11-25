@@ -124,6 +124,46 @@ test('buildClipBundle: lineup clips carry the request/response draft; no result 
     assert.deepEqual(bare, ['audio.wav', 'transcript.txt', 'roster.json', 'meta.json']);
 });
 
+test('buildClipBundle: a squads clip carries its own draft and no invented game', () => {
+    // Narrated in the scrimmage picker, outside any game: no game context is
+    // recorded, and none may be made up for the bundle.
+    const squads = {
+        ...clip, kind: 'squads', onField: [], gameId: null, gameContext: null,
+        transcript: 'Alice and Bob on Dark, the rest on Light.',
+        result: { type: 'squads',
+            request: { transcript: 'Alice and Bob on Dark, the rest on Light.', squad_names: { X: 'Dark', Y: 'Light' },
+                roster: [{ name: 'Alice', here: true }, { name: 'Bob', here: true }, { name: 'Dana', here: true }],
+                current_squads: { X: [], Y: [] } },
+            response: { squads: { X: ['Alice', 'Bob'], Y: ['Dana'] } } },
+    };
+    const entries = buildClipBundle(squads, new Uint8Array(0));
+    const byName = Object.fromEntries(entries.map(e => [e.name, e.data]));
+    assert.deepEqual(entries.map(e => e.name),
+        ['audio.wav', 'transcript.txt', 'roster.json', 'meta.json', 'squads.draft.json']);
+    assert.equal(JSON.parse(byName['roster.json']).game_context, null);
+    const meta = JSON.parse(byName['meta.json']);
+    assert.equal(meta.kind, 'squads');
+    assert.equal(meta.game_id, null);
+    assert.deepEqual(meta.on_field, []);
+    const draft = JSON.parse(byName['squads.draft.json']);
+    assert.deepEqual(draft.request.squad_names, { X: 'Dark', Y: 'Light' });
+    assert.deepEqual(draft.response.squads.X, ['Alice', 'Bob']);
+    assert.match(clipBundleStem(squads), /^breakside-clip-squads-\d{8}-\d{6}$/);
+});
+
+test('buildClipBundle: meta says which build heard the clip', () => {
+    const withApp = { ...clip, app: { version: '2.27.0', build: '1653', deployLabel: 'narration-clips v3' } };
+    const meta = JSON.parse(Object.fromEntries(buildClipBundle(withApp, new Uint8Array(0)).map(e => [e.name, e.data]))['meta.json']);
+    assert.equal(meta.app_version, '2.27.0');
+    assert.equal(meta.app_build, '1653');
+    assert.equal(meta.app_deploy_label, 'narration-clips v3');
+    // A clip saved before the build was recorded: the fields are there, null.
+    const old = JSON.parse(Object.fromEntries(buildClipBundle(clip, new Uint8Array(0)).map(e => [e.name, e.data]))['meta.json']);
+    assert.equal(old.app_version, null);
+    assert.equal(old.app_build, null);
+    assert.equal(old.app_deploy_label, null);
+});
+
 test('names and formatting helpers', () => {
     assert.match(clipBundleStem(clip), /^breakside-clip-events-\d{8}-\d{6}$/);
     assert.equal(formatDuration(4500), '5s');

@@ -14,16 +14,18 @@
  *
  * Capture taps realtimeSession's outgoing PCM16 chunks — the exact bytes
  * streamed to OpenAI, so a replay in the harness is byte-identical — via
- * setAudioTap(). Session context (roster, on-field line, game context) is
- * read at session start; the transcript arrives at session stop; the
- * model's result is attached afterwards from the event bus
- * (narrationFinalized / lineupResolved). Each clip exports as a scenario
- * bundle (clipBundle.js) needing only a hand-checked expected.json.
+ * setAudioTap(). Session context (roster, and for the in-game surfaces the
+ * on-field line and game context) is read at session start; the transcript
+ * arrives at session stop; the model's result is attached afterwards from
+ * the event bus (narrationFinalized / lineupResolved / squadsResolved).
+ * Each clip exports as a scenario bundle (clipBundle.js) needing only a
+ * hand-checked expected.json.
  */
 import { narrationRealtimeSession } from './realtimeSession.js';
 import { narrationEventBus } from './eventBus.js';
 import { narrationEngine } from './narrationEngine.js';
 import { lineupNarration } from './lineupNarration.js';
+import { squadNarration } from './squadNarration.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { getActiveRoster } from '../store/storage.js';
 import { currentGame } from '../utils/helpers.js';
@@ -41,7 +43,9 @@ const narrationClipRecorder = (function() {
     const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
     // Shorter than this is a mis-tap, not a narration.
     const MIN_CLIP_MS = 500;
-    const RESULT_KINDS = { finalize: 'events', lineup: 'lineup' };
+    const RESULT_KINDS = { finalize: 'events', lineup: 'lineup', squads: 'squads' };
+    // The surfaces that narrate inside a game; only their clips carry game context.
+    const GAME_KINDS = ['events', 'lineup'];
     // Set the first time this browser saves a clip. Until then nothing here
     // opens IndexedDB, so a device that never opted in has no clip database.
     const USED_KEY = 'breakside_narration_clips_used';
@@ -83,18 +87,30 @@ const narrationClipRecorder = (function() {
     // Session context
     // -----------------------------------------------------------------
 
-    // Which narration surface owns this session. Both set their phase to
+    // Which narration surface owns this session. Each sets its phase to
     // 'connecting' before calling realtimeSession.start(), so the phase
-    // tells us without either of them having to know the recorder exists.
+    // tells us without any of them having to know the recorder exists.
     function inferKind() {
-        const ep = narrationEngine && narrationEngine.getPhase ? narrationEngine.getPhase() : 'idle';
-        if (ep === 'connecting' || ep === 'recording') return 'events';
-        const lp = lineupNarration && lineupNarration.getPhase ? lineupNarration.getPhase() : 'idle';
-        if (lp === 'connecting' || lp === 'recording') return 'lineup';
+        const live = (surface) => {
+            const phase = surface && surface.getPhase ? surface.getPhase() : 'idle';
+            return phase === 'connecting' || phase === 'recording';
+        };
+        if (live(narrationEngine)) return 'events';
+        if (live(lineupNarration)) return 'lineup';
+        if (live(squadNarration)) return 'squads';
         return 'unknown';
     }
 
-    function snapshotContext() {
+    // Which build heard this (main.js sets these from version.json at boot).
+    function appInfo() {
+        return {
+            version: window.APP_VERSION || null,
+            build: window.APP_BUILD || null,
+            deployLabel: window.APP_DEPLOY_LABEL || null
+        };
+    }
+
+    function snapshotContext(kind) {
         const ctx = { roster: [], onField: [], gameId: null, gameContext: null };
         try {
             const roster = typeof getActiveRoster === 'function' ? getActiveRoster() : [];
@@ -106,6 +122,11 @@ const narrationClipRecorder = (function() {
         } catch (err) {
             log('[clipRecorder] roster snapshot failed:', err);
         }
+        // Game context only for the surfaces that narrate inside a game. The
+        // squad picker opens from the team screen, where currentGame() is
+        // whichever game was open last: its score and line are not this
+        // session's. (What the squads pass was given arrives with its result.)
+        if (!GAME_KINDS.includes(kind)) return ctx;
         try {
             const game = typeof currentGame === 'function' ? currentGame() : null;
             if (game) {
@@ -133,15 +154,17 @@ const narrationClipRecorder = (function() {
     function onSessionStart(info) {
         active = null;
         if (!isEnabled()) return;
+        const kind = inferKind();
         active = {
-            kind: inferKind(),
+            kind,
             mode: info.mode,
             transcriptionModel: info.transcriptionModel || null,
             sampleRate: info.sampleRate || 24000,
             startedAt: Date.now(),
+            app: appInfo(),
             chunks: [],
             samples: 0,
-            ...snapshotContext()
+            ...snapshotContext(kind)
         };
         log(`[clipRecorder] capturing ${active.kind} session`);
     }
@@ -177,6 +200,7 @@ const narrationClipRecorder = (function() {
             onField: a.onField,
             gameId: a.gameId,
             gameContext: a.gameContext,
+            app: a.app,
             result: null,
             exportedAt: null,
             pcm: new Blob(a.chunks, { type: 'audio/pcm' })
@@ -206,7 +230,17 @@ const narrationClipRecorder = (function() {
             const clip = await clipStore.getClip(id);
             if (!clip || clip.result) return;
             if (clip.kind !== 'unknown' && clip.kind !== RESULT_KINDS[type]) return;
-            await clipStore.updateClip(id, { result: { type, ...result } });
+            const patch = { result: { type, ...result } };
+            // The squads pass names its own pool (the picker's players, with
+            // who is here); that, not the team roster read at the start, is
+            // the roster this clip was heard against.
+            const pool = type === 'squads' && result.request && result.request.roster;
+            if (Array.isArray(pool) && pool.length) {
+                patch.roster = pool.map(p => ({
+                    name: p.name, nickname: p.nickname || null, number: p.number != null ? String(p.number) : null
+                }));
+            }
+            await clipStore.updateClip(id, patch);
         }).catch(err => console.warn('[clipRecorder] result attach failed:', err));
     }
 
@@ -331,7 +365,7 @@ const narrationClipRecorder = (function() {
     }
 
     function kindLabel(kind) {
-        return kind === 'lineup' ? 'Lineup' : kind === 'events' ? 'Play-by-play' : 'Narration';
+        return kind === 'lineup' ? 'Lineup' : kind === 'events' ? 'Play-by-play' : kind === 'squads' ? 'Squads' : 'Narration';
     }
 
     function renderRows(clips) {
@@ -455,6 +489,9 @@ const narrationClipRecorder = (function() {
     });
     narrationEventBus.subscribe('lineupResolved', (p) => {
         attachResult('lineup', { request: p.request || null, response: p.response || null });
+    });
+    narrationEventBus.subscribe('squadsResolved', (p) => {
+        attachResult('squads', { request: p.request || null, response: p.response || null });
     });
 
     // Startup trim, so a device that stopped being used still bounds itself

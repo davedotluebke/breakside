@@ -160,10 +160,13 @@ function zipStore(entries, mtime) {
  * @returns {Array<{name:string, data:(Uint8Array|string)}>}
  */
 function buildClipBundle(clip, pcmBytes) {
+    // game_context is null for a clip that was not narrated inside a game
+    // (the squad picker); an invented one would read as real.
     const rosterFile = {
         roster: clip.roster || [],
-        game_context: clip.gameContext || { offense: true, our_score: 0, their_score: 0, point: 1 }
+        game_context: clip.gameContext || null
     };
+    const app = clip.app || {};
     const meta = {
         id: clip.id,
         created_at: clip.createdAt,
@@ -175,7 +178,9 @@ function buildClipBundle(clip, pcmBytes) {
         aborted: !!clip.aborted,
         on_field: clip.onField || [],
         game_id: clip.gameId || null,
-        app_build: clip.appBuild || null,
+        app_version: app.version || null,
+        app_build: app.build || null,
+        app_deploy_label: app.deployLabel || null,
         result: clip.result || null
     };
     const entries = [
@@ -190,9 +195,11 @@ function buildClipBundle(clip, pcmBytes) {
             .filter(op => op && op.op === 'ADD' && op.event)
             .map(op => op.event);
         entries.push({ name: 'expected.draft.json', data: JSON.stringify(events, null, 2) + '\n' });
-    } else if (r && r.type === 'lineup') {
+    } else if (r && (r.type === 'lineup' || r.type === 'squads')) {
+        // What the pass was asked and what it answered: lineup.draft.json or
+        // squads.draft.json.
         entries.push({
-            name: 'lineup.draft.json',
+            name: `${r.type}.draft.json`,
             data: JSON.stringify({ request: r.request || null, response: r.response || null }, null, 2) + '\n'
         });
     }

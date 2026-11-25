@@ -13,6 +13,8 @@
  *   - with it off, an identical session saves nothing
  *   - a browser that never saved a clip never opens the clip database, at
  *     startup or from the manage dialog; the first save creates it
+ *   - a squad-picker session is saved as its own kind, with the roster and
+ *     answer of the squads pass and no game context, and names its build
  */
 import { test, expect, Page } from '@playwright/test';
 import { goToApp } from '../helpers/app';
@@ -150,6 +152,91 @@ test.describe('narration clip recorder', () => {
     await page.waitForTimeout(500);
     expect(await clipCount(page)).toBe(0);
     expect(await page.evaluate(() => (window as any).narrationClipRecorder.isCapturing())).toBe(false);
+  });
+
+  test('a squad session is saved as squads: the pass\'s roster and answer, no game, the build', async ({ page }) => {
+    await goToApp(page);
+    await page.evaluate(() => (window as any).advancedSettings.set('narration.recordClips', true));
+
+    // The squad surface is live for the length of the session: its phase is
+    // how the recorder tells whose session this is.
+    const said = 'Alice and Bob on Dark, the rest on Light.';
+    await page.evaluate((t) => {
+      const squads = (window as any).squadNarration;
+      const realPhase = squads.getPhase;
+      squads.getPhase = () => 'recording';
+      try {
+        const rec = (window as any).narrationClipRecorder;
+        rec._tap.onSessionStart({ mode: 'transcription', transcriptionModel: 'gpt-4o-transcribe', sampleRate: 24000 });
+        for (let k = 0; k < 15; k++) rec._tap.onAudioChunk(new Int16Array(2400).fill(k * 100));
+        rec._tap.onSessionStop({ transcript: t });
+      } finally {
+        squads.getPhase = realPhase;
+      }
+    }, said);
+    await expect.poll(() => clipCount(page)).toBe(1);
+
+    // What the squads pass was asked and answered arrives on the bus.
+    await page.evaluate(async (t) => {
+      const { narrationEventBus } = await import('/narration/eventBus.js');
+      narrationEventBus.publish('squadsResolved', {
+        transcript: t,
+        request: {
+          transcript: t, squad_names: { X: 'Dark', Y: 'Light' }, current_squads: { X: [], Y: [] },
+          roster: [
+            { name: 'Alice', nickname: null, number: '7', gender: 'FMP', here: true, pinned: false },
+            { name: 'Bob', nickname: null, number: null, gender: 'MMP', here: true, pinned: false },
+            { name: 'Dana', nickname: null, number: '22', gender: 'FMP', here: true, pinned: false },
+          ],
+        },
+        response: { squads: { X: ['Alice', 'Bob'], Y: ['Dana'] } },
+      });
+    }, said);
+    await expect.poll(() => page.evaluate(async () => {
+      const [c] = await (window as any).narrationClipRecorder.listClips();
+      return c?.result?.type ?? null;
+    })).toBe('squads');
+
+    const clip = await page.evaluate(async () => {
+      const [c] = await (window as any).narrationClipRecorder.listClips();
+      return { kind: c.kind, gameId: c.gameId, gameContext: c.gameContext, onField: c.onField,
+               roster: c.roster, app: c.app };
+    });
+    expect(clip.kind).toBe('squads');
+    // No game owns a squad-picker session, whatever game was open last.
+    expect(clip.gameId).toBeNull();
+    expect(clip.gameContext).toBeNull();
+    expect(clip.onField).toEqual([]);
+    expect(clip.roster).toEqual([
+      { name: 'Alice', nickname: null, number: '7' },
+      { name: 'Bob', nickname: null, number: null },
+      { name: 'Dana', nickname: null, number: '22' },
+    ]);
+    expect(clip.app.version).toBeTruthy();
+    expect(clip.app.build).toBeTruthy();
+
+    // Listed as a squads clip, and exported with the pass's draft.
+    await page.evaluate(() => (window as any).narrationClipRecorder.showClips());
+    await expect(manageModal(page).locator('.clip-row')).toContainText('Squads');
+    const names = await page.evaluate(async () => {
+      let shared: string[] = [];
+      (navigator as any).canShare = () => true;
+      (navigator as any).share = async ({ files }: { files: File[] }) => {
+        const b = new Uint8Array(await files[0].arrayBuffer());
+        const v = new DataView(b.buffer);
+        const eocd = b.length - 22;
+        let p = v.getUint32(eocd + 16, true);
+        for (let i = 0; i < v.getUint16(eocd + 10, true); i++) {
+          const len = v.getUint16(p + 28, true);
+          shared.push(new TextDecoder().decode(b.subarray(p + 46, p + 46 + len)));
+          p += 46 + len;
+        }
+      };
+      const [c] = await (window as any).narrationClipRecorder.listClips();
+      await (window as any).narrationClipRecorder.exportClip(c.id);
+      return shared;
+    });
+    expect(names).toEqual(['audio.wav', 'transcript.txt', 'roster.json', 'meta.json', 'squads.draft.json']);
   });
 
   test('a browser that never saved a clip has no clip database', async ({ page }) => {

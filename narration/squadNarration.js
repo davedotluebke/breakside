@@ -121,6 +121,7 @@ const layer = createRosterNarration({
     voiceLabel: 'Voice squads',
     unchanged: 'squads',
     endpoint: '/api/narration/squads',
+    resultChannel: 'squadsResolved',
     statusId: 'squadNarrationStatus',
     statusAnchor: () => document.querySelector('.scrimmage-dialog .scrimmage-tools'),
     listeningHint: (ctx) => {
