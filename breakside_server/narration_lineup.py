@@ -43,6 +43,7 @@ of the LAST thing said.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import os
@@ -528,15 +529,43 @@ def _parse_lineup_json(text: str) -> Dict[str, Any]:
 # Squads — speech-to-squads for the scrimmage dialog
 #
 # POST /api/narration/squads. Same contract shape as /lineup: the model
-# returns tap-equivalent placements, the server applies them. Here a "tap"
-# is a pick button in the New Scrimmage / Edit Squads picker: a player goes
-# on squad X, on squad Y, or on neither (sitting out). The one extra rule
-# is the DEFAULT SQUAD — a coach reading out a list without naming squads
-# means the first squad, and the server applies that, not the model: the
-# model leaves the squad blank when none was spoken.
+# reports what the coach said, the server applies it. Here a "tap" is a pick
+# button in the New Scrimmage / Edit Squads picker: a player goes on squad
+# X, on squad Y, or on neither. Four things are the server's, not the
+# model's:
+#   - the DEFAULT SQUAD: a name read out with no squad means the first
+#     squad; the model leaves the squad blank and the server fills it in;
+#   - the CLOSED ROSTER: a coach only names players on the team, so a name
+#     the recognizer mangled ("Dayna" for Dana) is resolved to the one
+#     roster name it is closest to (_closest_roster_name) when the model
+#     did not do so itself;
+#   - COLLECTIVE phrases — "everyone else on Black", "the FMPs on Orange",
+#     "the rest of the guys on Black" — which the model only reports, with a
+#     quote; the server verifies the quote and expands it over the roster,
+#     skipping anyone who is not here today and, for a "rest", anyone the
+#     coach has already placed (roster[].pinned);
+#   - COUNTS — "two more FMPs on Dark" — which nobody on the server picks:
+#     the verified instruction goes back as a ``fill`` and the picker
+#     chooses, with the same balance rules as its Auto button.
 # =============================================================================
 
 SQUAD_KEYS = ("X", "Y")
+GENDER_GROUPS = ("FMP", "MMP")
+ANY_GROUP = "ANY"
+MAX_FILL_COUNT = 30
+
+
+class SquadsRosterPlayer(LineupRosterPlayer):
+    # "FMP" | "MMP"; anything else is unknown and belongs to neither group.
+    gender: Optional[str] = None
+    # The picker's "here today" box. A player who is not here is never
+    # swept up by a collective phrase or picked for a count — only naming
+    # them puts them on a squad.
+    here: bool = True
+    # Placed on a squad by the coach (a tap, or an earlier narration), as
+    # opposed to dealt there by Auto. "Everyone else" and "the rest of the
+    # FMPs" leave pinned players where the coach put them.
+    pinned: bool = False
 
 
 class SquadsRequest(BaseModel):
@@ -545,7 +574,7 @@ class SquadsRequest(BaseModel):
     teamId: str
     transcript: str = Field(max_length=8000)
     # The whole team roster (everyone the picker lists), not one squad's.
-    roster: List[LineupRosterPlayer] = Field(max_length=60)
+    roster: List[SquadsRosterPlayer] = Field(max_length=60)
     # {"X": "Dark", "Y": "Light"} — what the coach calls the two squads.
     squad_names: Dict[str, str]
     # Who is on each squad now, by roster name — the picker's current state,
@@ -558,19 +587,37 @@ class SquadPlacement(BaseModel):
     squad: str  # "X" | "Y"
 
 
+class SquadGroupMove(BaseModel):
+    group: str  # "FMP" | "MMP"
+    squad: str  # "X" | "Y"
+    scope: str  # "all" | "rest"
+
+
+class SquadFill(BaseModel):
+    """A verified "N more <group> on <squad>": the picker chooses who."""
+    squad: str  # "X" | "Y"
+    group: str  # "FMP" | "MMP" | "ANY"
+    count: int
+
+
 class SquadsResponse(BaseModel):
-    # The resulting squads, derived server-side: {"X": [...], "Y": [...]}.
+    # The resulting squads, derived server-side: {"X": [...], "Y": [...]},
+    # before any ``fills`` are picked.
     squads: Dict[str, List[str]]
     # Players voiced off both squads (evidence-verified), in spoken order.
     out: List[str] = []
+    # Counts for the picker to fill, in spoken order, after ``squads``.
+    fills: List[SquadFill] = []
     unmatched: List[str] = []
     note: str = ""
     error: Optional[str] = None
-    # Observability: what the model voiced, after the default-squad rule.
+    # Observability: what the model voiced, after the default-squad rule
+    # and name resolution.
     voiced_assign: List[SquadPlacement] = []
     voiced_clear: bool = False
     # The squad an honored "everyone else on …" sent the unnamed players to.
     voiced_rest: Optional[str] = None
+    voiced_groups: List[SquadGroupMove] = []
 
 
 async def _squads_request(
@@ -613,15 +660,22 @@ async def extract_squads(
         logger.exception("Squad extraction LLM call failed")
         return SquadsResponse(squads=unchanged, error=str(e))
 
-    squads, assign, outs, cleared, rest, dropped = _derive_squads(result, req)
-    if dropped:
-        logger.info("Squad outs/clear/rest dropped (missing/unrelated evidence): %s", dropped)
-    unmatched = [str(u) for u in result.get("unmatched", []) if isinstance(u, (str, int))]
+    d = _derive_squads(result, req)
+    # Counts only — no names, no transcript: enough to tell, from the log,
+    # whether a "that didn't work" was the recognizer, the model or a guard.
+    logger.info(
+        "Squads: placed=%d out=%d groups=%d fills=%d rest=%s clear=%s "
+        "unmatched=%d resolved_by_closest=%d dropped=%d",
+        len(d.assign), len(d.outs), len(d.groups), len(d.fills), d.rest, d.cleared,
+        len(d.unmatched), len(d.resolved), len(d.dropped),
+    )
     note = str(result.get("note") or "")
     return SquadsResponse(
-        squads=squads, out=outs, unmatched=unmatched, note=note,
-        voiced_assign=[SquadPlacement(name=n, squad=s) for n, s in assign],
-        voiced_clear=cleared, voiced_rest=rest,
+        squads=d.squads, out=d.outs, unmatched=d.unmatched, note=note,
+        fills=[SquadFill(squad=k, group=g, count=n) for g, k, n in d.fills],
+        voiced_assign=[SquadPlacement(name=n, squad=s) for n, s in d.assign],
+        voiced_clear=d.cleared, voiced_rest=d.rest,
+        voiced_groups=[SquadGroupMove(group=g, squad=k, scope=s) for g, k, s in d.groups],
     )
 
 
@@ -629,22 +683,81 @@ def _current_squads(req: SquadsRequest) -> Dict[str, List[str]]:
     return {k: [str(n) for n in (req.current_squads.get(k) or [])] for k in SQUAD_KEYS}
 
 
-# "everyone else on Black" — the one collective phrase that places players the
-# coach did not name. Honored only with a quote from the transcript that
-# contains one of these.
+# ── evidence lexicons ────────────────────────────────────────────────────
+
+# "everyone else on Black" — and, inside a group quote, what makes "the rest
+# of the FMPs" a rest rather than "all the FMPs". Matched against the
+# light-normalized quote.
 _REST_LEXICON_RE = re.compile(
     r"every(one|body)\s+else"
     r"|(the\s+)?rest\s+(of\s+)?"
-    r"|(all\s+)?the\s+others"
+    r"|(all\s+)?the\s+others?\b"
+    r"|\bother\s"
     r"|(all\s+)?the\s+remaining"
+    r"|\bremaining\b"
     r"|the\s+remainder"
+    r"|\bleft\s*over"
 )
+
+# Words that name a gender group. FMP = female-matching player, MMP =
+# male-matching player (the app's own terms, store/models.js Gender); GMP
+# and BMP are the girl-/boy-matching spellings some teams use. Speech-to-
+# text writes the initialisms every which way ("FMPs", "F.M.P.s", "FMP's"),
+# and light normalization turns the punctuation into spaces.
+_GROUP_LEXICON = {
+    "FMP": re.compile(r"\b(f\s?m\s?p|g\s?m\s?p|females?|wom[ae]n|girls?|lad(y|ies)|gals?)(\s?s)?\b"),
+    "MMP": re.compile(r"\b(m\s?m\s?p|b\s?m\s?p|males?|m[ae]n|guys?|boys?|dudes?|gentlem[ae]n|fellas?)(\s?s)?\b"),
+}
+
+_COUNT_SYNONYMS = {
+    1: {"a", "an", "one", "another", "single"},
+    2: {"couple", "pair"},
+}
 
 
 def _rest_evidence_ok(said: str, transcript: str) -> bool:
     if not said or not _evidence_in_transcript(said, transcript):
         return False
     return bool(_REST_LEXICON_RE.search(_light_normalize(said)))
+
+
+def _group_evidence_ok(said: str, group: str, transcript: str) -> bool:
+    """A group phrase is honored only when its quote occurs in the transcript
+    and, for a gender group, actually contains a word for THAT group — a
+    model that reports "the FMPs" from a quote about "the guys" is refused."""
+    if not said or not _evidence_in_transcript(said, transcript):
+        return False
+    if group == ANY_GROUP:
+        return True
+    lexicon = _GROUP_LEXICON.get(group)
+    return bool(lexicon and lexicon.search(_light_normalize(said)))
+
+
+def _group_in_quote(said: str) -> Optional[str]:
+    """The gender group a quote names, when it names exactly one."""
+    norm = _light_normalize(said)
+    hits = [g for g in GENDER_GROUPS if _GROUP_LEXICON[g].search(norm)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _count_evidence_ok(said: str, count: int) -> bool:
+    """The number in a "two more FMPs" must be in the quote — as digits, as
+    words, or as one of the few idioms for one and two."""
+    norm = _light_normalize(said)
+    tokens = set(norm.split())
+    if re.search(rf"(?<![0-9]){count}(?![0-9])", norm):
+        return True
+    words = set(_number_words(count).split())
+    if words and words <= tokens:
+        return True
+    return bool(_COUNT_SYNONYMS.get(count, set()) & tokens)
+
+
+def _group_key(spoken: Any) -> Optional[str]:
+    g = str(spoken or "").strip().upper()
+    if g in GENDER_GROUPS or g == ANY_GROUP:
+        return g
+    return None
 
 
 def _squad_key(spoken: str, squad_names: Dict[str, str]) -> Optional[str]:
@@ -671,58 +784,305 @@ def _squad_key(spoken: str, squad_names: Dict[str, str]) -> Optional[str]:
     return None
 
 
-def _derive_squads(result: Dict[str, Any], req: SquadsRequest):
-    """The complete post-model derivation for /squads, in one place (the
-    same reason as _derive_players): shape the reply defensively, verify
-    the evidence for a clear, the sit-outs and an "everyone else", apply
-    the default-squad rule, then the tap-equivalent set arithmetic.
+# ── the closed roster: resolving a name as heard ─────────────────────────
 
-    Returns (squads, assign, honored_outs, cleared, rest, dropped), where
-    assign is [(name, key)] after defaulting.
+# A heard name is taken for a roster player when it is at least this similar
+# to one of their names and clearly more similar than to anyone else's.
+_CLOSEST_MIN_SCORE = 0.65
+_CLOSEST_MIN_MARGIN = 0.1
+
+
+def _exact_roster_name(name: str, roster) -> Optional[str]:
+    """The roster's own spelling for ``name`` when it IS a roster name:
+    exact → casefold → nickname → unique normalized (the frontend matcher's
+    ladder, narration/lineupResolve.js matchRosterPlayer)."""
+    wanted = str(name or "").strip()
+    if not wanted:
+        return None
+    for p in roster:
+        if p.name == wanted:
+            return p.name
+    folded = wanted.casefold()
+    for p in roster:
+        if p.name.casefold() == folded:
+            return p.name
+    for p in roster:
+        if p.nickname and str(p.nickname).casefold() == folded:
+            return p.name
+    norm = _normalize_name(wanted)
+    if norm:
+        hits = [p for p in roster if _normalize_name(p.name) == norm]
+        if len(hits) == 1:
+            return hits[0].name
+    return None
+
+
+def _name_similarity(heard: str, candidate: str) -> float:
+    if not heard or not candidate:
+        return 0.0
+    score = difflib.SequenceMatcher(None, heard, candidate).ratio()
+    # Recognizers get the start of a name right far more often than the
+    # rest; a shared first letter separates "Mya" → Mia from the Omar that
+    # merely shares its letters.
+    if heard[0] == candidate[0]:
+        score = min(1.0, score + 0.05)
+    # A clipped name ("Char" for Charlie) is a prefix, which the ratio
+    # alone undersells.
+    if len(heard) >= 3 and candidate.startswith(heard):
+        score = max(score, 0.85)
+    return score
+
+
+def _closest_roster_name(heard: str, roster) -> Optional[str]:
+    """The ONE roster player a mangled name most plausibly is, or None.
+
+    The roster is closed — a coach setting up a scrimmage names only people
+    on the team — so a name the recognizer wrote wrongly ("Dayna", "Chris",
+    "Zoey") is somebody on it. Compared against each player's full name, each
+    word of it and their nickname; taken only when the best score clears
+    _CLOSEST_MIN_SCORE and beats the runner-up by _CLOSEST_MIN_MARGIN, so a
+    name that could be two players stays unmatched rather than guessed.
     """
-    dropped: List[str] = []
+    norm = _normalize_name(heard)
+    forms = {norm} | {t for t in norm.split() if len(t) >= 3}
+    forms = {f for f in forms if len(f) >= 3}
+    if not forms:
+        return None
+    scored = []
+    for p in roster:
+        cands = set()
+        for source in (p.name, p.nickname):
+            n = _normalize_name(source or "")
+            if n:
+                cands.add(n)
+                cands.update(n.split())
+        best = max((_name_similarity(f, c) for f in forms for c in cands), default=0.0)
+        scored.append((best, p.name))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    if not scored:
+        return None
+    best, name = scored[0]
+    runner_up = scored[1][0] if len(scored) > 1 else 0.0
+    if best >= _CLOSEST_MIN_SCORE and best - runner_up >= _CLOSEST_MIN_MARGIN:
+        return name
+    return None
 
-    cleared = bool(result.get("clear"))
-    if cleared and not _clear_evidence_ok(str(result.get("clear_said") or ""), req.transcript):
-        cleared = False
-        dropped.append("<clear>")
 
-    assign: List[tuple] = []
+def _resolve_roster_name(name: str, roster):
+    """(roster name | None, resolved_by_closest)."""
+    exact = _exact_roster_name(name, roster)
+    if exact is not None:
+        return exact, False
+    closest = _closest_roster_name(name, roster)
+    return closest, closest is not None
+
+
+def _worksheet_squad(heard: str, phrases, req) -> Optional[str]:
+    """The squad of the worksheet phrase a heard name was spoken in, or None
+    when no phrase of the transcript contains it (or the phrase is not about
+    placing anyone — a sit-out, say, which the caller must not turn into a
+    placement)."""
+    word = _light_normalize(heard)
+    if not word:
+        return None
+    for ph in phrases or []:
+        words = _light_normalize(ph.get("words", ""))
+        if not words or word not in words.split() and f" {word} " not in f" {words} ":
+            continue
+        if not _evidence_in_transcript(ph.get("words", ""), req.transcript):
+            continue
+        if _SIT_OUT_RE.search(words):
+            return None
+        key = _squad_key(ph.get("squad"), req.squad_names)
+        return key if key is not None else SQUAD_KEYS[0]
+    return None
+
+
+# A worksheet phrase that takes somebody OFF rather than putting them on.
+_SIT_OUT_RE = re.compile(
+    r"\bsits?\b|\bsitting\b|\bis out\b|\bs out\b|\bare out\b|\bisn t here\b|\bnot here\b"
+    r"|\binjured\b|\bhurt\b|\boff\b|\babsent\b|\bcan t (make|play)\b"
+)
+
+
+def _quote_names_player(said: str, roster_name: str, roster) -> bool:
+    """Does a quote refer to this player once mangled names are allowed for?
+    The strict check first (a name, nickname or number token); failing that,
+    any word of the quote that resolves — as a heard name — to this player
+    and to nobody else ("Dayna sits out" names Dana)."""
+    if _evidence_references_player(said, roster_name, roster):
+        return True
+    for token in _normalize_name(said).split():
+        if len(token) >= 3 and _closest_roster_name(token, roster) == roster_name:
+            return True
+    return False
+
+
+# ── derivation ───────────────────────────────────────────────────────────
+
+class SquadDerivation:
+    """Everything _derive_squads works out, named so callers do not unpack
+    a tuple that keeps growing."""
+
+    def __init__(self):
+        self.squads: Dict[str, List[str]] = {k: [] for k in SQUAD_KEYS}
+        self.assign: List[tuple] = []      # (roster name, squad key)
+        self.outs: List[str] = []          # roster names
+        self.cleared: bool = False
+        self.rest: Optional[str] = None    # squad key
+        self.groups: List[tuple] = []      # (group, squad key, "all" | "rest")
+        self.fills: List[tuple] = []       # (group, squad key, count)
+        self.unmatched: List[str] = []
+        self.resolved: List[tuple] = []    # (heard, roster name) — closest-name resolutions
+        self.dropped: List[str] = []       # what a guard refused, for the log
+
+
+def _derive_squads(result: Dict[str, Any], req: SquadsRequest) -> SquadDerivation:
+    """The complete post-model derivation for /squads, in one place (the
+    same reason as _derive_players): shape the reply defensively, resolve
+    names against the closed roster, verify the evidence for a clear, the
+    sit-outs, an "everyone else" and the group phrases, apply the
+    default-squad rule, then the tap-equivalent set arithmetic."""
+    d = SquadDerivation()
+    roster = req.roster
+    unresolved: List[str] = []
+
+    d.cleared = bool(result.get("clear"))
+    if d.cleared and not _clear_evidence_ok(str(result.get("clear_said") or ""), req.transcript):
+        d.cleared = False
+        d.dropped.append("<clear>")
+
     for entry in result.get("assign", []):
         if not isinstance(entry, dict) or not entry.get("name"):
             continue
+        heard = str(entry["name"])
+        name, by_closest = _resolve_roster_name(heard, roster)
+        if name is None:
+            unresolved.append(heard)
+            continue
+        if by_closest:
+            d.resolved.append((heard, name))
         key = _squad_key(entry.get("squad"), req.squad_names)
         if key is None:
             # Named a squad that is not one of the two: the player was still
-            # placed on purpose, so the first squad is the honest fallback,
-            # and the note says why.
-            dropped.append(f"{entry['name']}:squad={entry.get('squad')!r}")
+            # placed on purpose, so the first squad is the honest fallback.
+            d.dropped.append(f"{name}:squad={entry.get('squad')!r}")
             key = SQUAD_KEYS[0]
-        assign.append((str(entry["name"]), key))
+        d.assign.append((name, key))
 
-    outs: List[str] = []
+    # A name the model gave up on ("unmatched") although exactly one roster
+    # player is close to it: the roster is closed, so that is who it is. The
+    # squad comes from the model's own worksheet — the phrase the word was
+    # spoken in — and only a phrase that really is in the transcript counts.
+    # Never overrides something the model did place.
+    placed = {n for n, _ in d.assign}
+    out_names_raw = {str(e.get("name")) for e in result.get("out", []) if isinstance(e, dict)}
+    for u in result.get("unmatched", []):
+        if not isinstance(u, (str, int)):
+            continue
+        heard = str(u)
+        name, _ = _resolve_roster_name(heard, roster)
+        if name is None or name in placed or name in out_names_raw:
+            continue
+        key = _worksheet_squad(heard, result.get("phrases", []), req)
+        if key is None:
+            continue
+        d.assign.append((name, key))
+        d.resolved.append((heard, name))
+        placed.add(name)
+
     for e in result.get("out", []):
         if not isinstance(e, dict) or not e.get("name"):
             continue
+        heard = str(e["name"])
         said = str(e.get("said") or "").strip()
-        if (said and _evidence_in_transcript(said, req.transcript)
-                and _evidence_references_player(said, e["name"], req.roster)):
-            outs.append(str(e["name"]))
+        name, by_closest = _resolve_roster_name(heard, roster)
+        if (name is not None and said and _evidence_in_transcript(said, req.transcript)
+                and _quote_names_player(said, name, roster)):
+            d.outs.append(name)
+            if by_closest:
+                d.resolved.append((heard, name))
         else:
-            dropped.append(str(e["name"]))
+            d.dropped.append(name or heard)
 
-    rest = None
     rest_raw = str(result.get("rest") or "").strip()
     if rest_raw:
         rest_key = _squad_key(rest_raw, req.squad_names)
         if rest_key is None or not _rest_evidence_ok(str(result.get("rest_said") or ""), req.transcript):
-            dropped.append("<rest>")
+            d.dropped.append("<rest>")
         else:
-            rest = rest_key
+            d.rest = rest_key
 
-    base = {k: [] for k in SQUAD_KEYS} if cleared else _current_squads(req)
-    squads = _apply_squad_changes(base, assign, outs, rest, [p.name for p in req.roster])
-    return squads, assign, outs, cleared, rest, dropped
+    for g in result.get("groups", []):
+        if not isinstance(g, dict):
+            continue
+        group = _group_key(g.get("group"))
+        key = _squad_key(g.get("squad"), req.squad_names)
+        said = str(g.get("said") or "").strip()
+        count = g.get("count")
+        if isinstance(count, bool) or not isinstance(count, int):
+            count = None
+        # The quote outranks the model's label: "the rest of the GMPs" names
+        # the FMP group whatever the model made of the initialism.
+        quoted = _group_in_quote(said)
+        if quoted is not None:
+            group = quoted
+        if group is None or key is None or not _group_evidence_ok(said, group, req.transcript):
+            d.dropped.append("<group>")
+            continue
+        if count is not None:
+            if not (1 <= count <= MAX_FILL_COUNT) or not _count_evidence_ok(said, count):
+                d.dropped.append("<group:count>")
+                continue
+            d.fills.append((group, key, count))
+        elif group == ANY_GROUP:
+            # "Everyone on Dark" with no gender and no number is not a
+            # group move; an ungendered "everyone else" is ``rest``.
+            d.dropped.append("<group:any>")
+        else:
+            scope = "rest" if _REST_LEXICON_RE.search(_light_normalize(said)) else "all"
+            d.groups.append((group, key, scope))
+
+    base = {k: [] for k in SQUAD_KEYS} if d.cleared else _current_squads(req)
+    d.squads = _apply_squad_changes(
+        base, d.assign, d.outs, d.rest, roster, groups=d.groups, cleared=d.cleared)
+
+    # What could not be placed: the model's own unmatched references — minus
+    # any that turn out to be a player it did place (a small model lists
+    # "Dayna" as unmatched AND places Dana) — plus names it placed that
+    # resolve to nobody.
+    named = {n for n, _ in d.assign} | set(d.outs)
+    seen = set()
+    for u in list(result.get("unmatched", [])) + unresolved:
+        if not isinstance(u, (str, int)):
+            continue
+        u = str(u)
+        resolved, _ = _resolve_roster_name(u, roster)
+        if resolved is not None and resolved in named:
+            continue
+        if u.casefold() in seen:
+            continue
+        seen.add(u.casefold())
+        d.unmatched.append(u)
+    return d
+
+
+def _roster_facts(roster) -> List[tuple]:
+    """(name, gender group | None, here, pinned) per roster entry. A plain
+    list of names is accepted too (everyone here, nobody pinned)."""
+    facts = []
+    for p in roster:
+        if isinstance(p, str):
+            facts.append((p, None, True, False))
+            continue
+        gender = str(getattr(p, "gender", None) or "").strip().upper()
+        facts.append((
+            p.name,
+            gender if gender in GENDER_GROUPS else None,
+            bool(getattr(p, "here", True)),
+            bool(getattr(p, "pinned", False)),
+        ))
+    return facts
 
 
 def _apply_squad_changes(
@@ -730,16 +1090,25 @@ def _apply_squad_changes(
     assign: List[tuple],
     outs: List[str],
     rest: Optional[str],
-    roster_names: List[str],
+    roster,
+    groups=(),
+    cleared: bool = False,
 ) -> Dict[str, List[str]]:
-    """squads = current, with every named player moved to the squad voiced
-    for them, every out taken off both, and — when an "everyone else" was
-    honored — every roster player NOT named sent to that squad.
+    """squads = current, with the collective phrases expanded first and the
+    named placements applied over them.
 
-    A later statement about a player wins (the model is asked to resolve
-    that, but a duplicate name is kept to the last placement anyway), and
-    an out beats a placement for the same name. Name matching is the same
-    exact → casefold → unique-normalized ladder as _apply_changes.
+    Collective phrases place players the coach did NOT name, and only ones
+    who are here today: a gender group ("the FMPs on Orange": everyone in
+    the group; "the rest of the FMPs": everyone in it the coach has not
+    already placed — roster ``pinned``), then an ungendered "everyone else"
+    over whoever no group claimed, again leaving pinned players alone. A
+    clear un-pins everyone: nothing placed before it survives it.
+
+    Then every out comes off both squads and every named player moves to
+    the squad voiced for them. A later statement about a player wins (a
+    duplicate name is kept to the last placement), and an out beats a
+    placement for the same name. Name matching is the same exact → casefold
+    → unique-normalized ladder as _apply_changes.
     """
     def _matches(a: str, b: str) -> bool:
         if a == b or a.casefold() == b.casefold():
@@ -766,17 +1135,35 @@ def _apply_squad_changes(
 
     squads = {k: list(current.get(k) or []) for k in SQUAD_KEYS}
     named = [n for n, _ in final] + list(outs)
+    facts = _roster_facts(roster)
+
+    def _move(names: List[str], key: str) -> None:
+        for k in SQUAD_KEYS:
+            for n in names:
+                squads[k] = _remove(squads[k], n)
+        for n in names:
+            if not any(_matches(n, x) for x in squads[key]):
+                squads[key].append(n)
+
+    claimed: List[str] = []
+
+    def _unnamed(include_pinned: bool, group: Optional[str] = None) -> List[str]:
+        return [
+            name for name, gender, here, pinned in facts
+            if here
+            and (group is None or gender == group)
+            and (include_pinned or cleared or not pinned)
+            and not any(_matches(name, m) for m in named)
+            and name not in claimed
+        ]
+
+    for group, key, scope in groups:
+        members = _unnamed(include_pinned=(scope == "all"), group=group)
+        _move(members, key)
+        claimed.extend(members)
 
     if rest:
-        # Everyone the coach did not name goes to the rest squad — the
-        # placements and outs below then override for the named ones.
-        others = [n for n in roster_names if not any(_matches(n, m) for m in named)]
-        for k in SQUAD_KEYS:
-            for n in others:
-                squads[k] = _remove(squads[k], n)
-        for n in others:
-            if not any(_matches(n, x) for x in squads[rest]):
-                squads[rest].append(n)
+        _move(_unnamed(include_pinned=False), rest)
 
     for name in outs:
         for k in SQUAD_KEYS:
@@ -788,8 +1175,18 @@ def _apply_squad_changes(
     return squads
 
 
+# ── prompt ───────────────────────────────────────────────────────────────
+
+def _squad_roster_line(p) -> str:
+    line = _roster_line(p)
+    gender = str(getattr(p, "gender", None) or "").strip().upper()
+    if gender in GENDER_GROUPS:
+        line += f" [{gender}]"
+    return line
+
+
 def _build_squads_prompt(req: SquadsRequest) -> str:
-    roster_block = "\n".join(_roster_line(p) for p in req.roster)
+    roster_block = "\n".join(_squad_roster_line(p) for p in req.roster)
     first = req.squad_names["X"].strip()
     second = req.squad_names["Y"].strip()
 
@@ -797,34 +1194,42 @@ def _build_squads_prompt(req: SquadsRequest) -> str:
         names = req.current_squads.get(key) or []
         return "\n".join(f"- {n}" for n in names) if names else "(empty)"
 
-    return f"""You are the voice-input layer for a scrimmage set-up screen in an ultimate frisbee app. The team is split into two squads, "{first}" and "{second}". The coach speaks; you extract WHICH PLAYERS GO ON WHICH SQUAD and WHO SITS OUT — the verbal equivalent of tapping a player's "{first}" or "{second}" button on the list. You never fill, balance, complete or output a squad: the app applies your placements to the squads on screen.
+    return f"""You are the voice-input layer for a scrimmage set-up screen in an ultimate frisbee app. The team is split into two squads, "{first}" and "{second}". The coach speaks; you report WHICH PLAYERS GO ON WHICH SQUAD and WHO SITS OUT — the verbal equivalent of tapping a player's "{first}" or "{second}" button on the list. You never fill, balance, complete or output a squad yourself: you report what the coach said and the app applies it, including choosing the players when the coach asks for a number of them.
 
-Team roster. These are the ONLY valid players. Match spoken references against the name, the "nickname" in quotes, and the #jersey-number:
+Team roster. This list is CLOSED: these are the only people the coach can be talking about. Each line is the name, then an optional "nickname" in quotes, an optional #jersey-number, and the player's gender group in brackets ([FMP] female-matching, [MMP] male-matching):
 {roster_block}
 
-Currently on "{first}" (context only — the app applies your placements to this):
+Currently on "{first}" (context only — the app applies what you report to this):
 {squad_block("X")}
 
 Currently on "{second}" (context only):
 {squad_block("Y")}
 
-Transcript of what the coach said (speech-to-text; may contain transcription errors and unrelated chatter):
+Transcript of what the coach said (speech-to-text; names are often transcribed wrongly, and there may be unrelated chatter):
 ---
 {req.transcript}
 ---
 
 Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
-{{"clear": false, "clear_said": "", "assign": [{{"name": "Name", "squad": "{first}" | "{second}" | ""}}, ...], "rest": "", "rest_said": "", "out": [{{"name": "Name", "said": "the coach's exact words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
+{{"phrases": [{{"words": "a phrase of the transcript", "squad": "{first}" | "{second}" | ""}}, ...], "clear": false, "clear_said": "", "assign": [{{"name": "Name", "squad": "{first}" | "{second}" | ""}}, ...], "groups": [{{"group": "FMP" | "MMP" | "ANY", "squad": "{first}" | "{second}" | "", "count": null, "said": "the coach's exact words"}}, ...], "rest": "", "rest_said": "", "out": [{{"name": "Name", "said": "the coach's exact words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
+
+Fill "phrases" FIRST, as a worksheet: cut the transcript into its placement phrases in the order spoken ("Alice and Dana on {first}" / "the rest of the FMPs on {second}"), and beside each write the squad THAT phrase puts people on ("" when it names none and none carries to it). Then build everything else from the worksheet, one phrase at a time: the names in a phrase get that phrase's squad and no other phrase's.
 
 How to interpret the transcript:
 1. Every player the coach names goes in "assign", with "squad" set to the squad the coach put them on, spelled exactly "{first}" or "{second}". "Alice and Bob on {first}, Dana {second}" → Alice and Bob with "{first}", Dana with "{second}". Squads may be referred to by name, by colour, or by a word of the name; map them to the two names above.
 2. A name spoken with NO squad gets "squad": "" — leave it blank, never guess. The app puts blank placements on "{first}", so a coach who simply reads out a list ("Alice, Bob, Charlie, Dana") is filling "{first}". A squad named once carries to the names that follow it until another squad is named: "{second} is Eve, Hank and Iris" gives all three "{second}"; "{first}: Alice, Bob. {second}: Dana, Eve" splits them.
-3. "X sits out", "X is out", "X isn't here", "X is injured", "X off", "take X off" — X goes in "out", quoting the coach's exact words in "said". A player never appears in both "assign" and "out": the coach's LAST statement about a player wins ("Alice on {first}… actually Alice is sitting out" → out only). RETRACTED words are void as evidence.
-4. "everyone else on {second}", "the rest on {first}", "the others are {second}" — set "rest" to that squad name and quote the words in "rest_said". The app then sends every roster player you did NOT name to that squad. Do not list those players yourself.
-5. CLEAR-EVERYONE: "clear the squads", "start fresh", "everybody off", "wholesale" — set "clear": true and quote the words in "clear_said". A clear empties both squads before your placements apply.
-6. Later statements override earlier ones ("Dana on {first} — no, {second}" → Dana with "{second}"; "is that Hank? no, Morgan" → Morgan, Hank nowhere). Ignore asides: chatter, the weather, who is late, the score of the last point. Wrap-ups ("that's everyone", "that's the split") add nobody.
-7. Spoken references may be first names, full names, nicknames, jersey numbers ("number 12", "twelve", "#12"), or mispronounced / mistranscribed versions — map each to the closest roster player; a trailing initial disambiguates similar names. Spell every "name" EXACTLY as its roster line spells it, digits and symbols included, with no nickname or #number decoration. A reference that matches nobody goes in "unmatched", never in "assign" or "out".
-8. THE CARDINAL RULE: "assign" and "out" contain ONLY players the coach referred to. Never anyone else, however uneven the squads would be: if the coach named 3 players, "assign" has exactly 3 entries. Reciting names taps those players onto a squad; it moves nobody else. Say anything notable (a retraction, an ambiguous reference) in one short sentence in "note".
+3. THE ROSTER IS CLOSED, and speech-to-text mangles names. A name-like word that is not spelled like anyone on the roster is a MISHEARING of somebody who is — never a different person. "Dayna" on a roster with a Dana IS Dana; "Chris" is Kris; "Zoey" is Zoe; "Jakes" is Jake. Put the ROSTER spelling in "name" and do NOT also list the word in "unmatched". Only when a name-like word sounds equally like two roster players, or like none of them, put it in "name" exactly AS HEARD (keeping its squad) — the app will resolve it or tell the coach. Spoken references may also be full names, nicknames or jersey numbers ("number 12", "twelve", "#12"); a trailing initial disambiguates similar names. Spell every resolved "name" EXACTLY as its roster line spells it, digits and symbols included, without the nickname, #number or [group] decorations. "unmatched" is only for references you could not turn into a placement at all ("the new kid", "what's-his-name").
+4. "X sits out", "X is out", "X isn't here", "X is injured", "X off", "take X off" — X goes in "out" (rule 3 applies to the name), quoting the coach's exact words in "said". A player never appears in both "assign" and "out": the coach's LAST statement about a player wins ("Alice on {first}… actually Alice is sitting out" → out only). RETRACTED words are void as evidence.
+5. GROUPS — the coach places players by gender group or by number instead of by name. Report each such phrase as one "groups" entry, quoting the coach's exact words in "said"; NEVER expand it into names in "assign" — the app knows who is in each group, who is here and who is already placed.
+   - Gender words: FMP = "FMP(s)", "GMP(s)" (girl-matching player — a real term some teams use; it is NOT a mishearing of MMP), "female players", "female-matching players", "women", "girls", "ladies". MMP = "MMP(s)", "BMP(s)" (boy-matching player), "male players", "male-matching players", "men", "guys", "boys". Use "ANY" only for a number with no gender word.
+   - The whole group, "count": null: "the FMPs on {first}", "all the women on {second}", "girls are {first}" → {{"group": "FMP", "squad": "…", "count": null, "said": "…"}}.
+   - The rest of a group, "count": null: "the rest of the FMPs on {second}", "the other guys on {first}", "the remaining women go {second}" → the same shape. Keep the word "rest" / "other" / "remaining" inside "said": the app reads from your quote that the coach meant only the ones not yet placed.
+   - A number of them: "two more FMPs on {first}", "another guy on {second}", "add a couple of women to {first}", "three more on {second}" → "count" is the number (2, 1, 2, 3) and "said" contains the number word; "group" is "ANY" when no gender word was said. The app chooses which players.
+   - A group phrase with no squad gets "squad": "", like a name (rule 2), and a squad named earlier carries to it.
+6. "everyone else on {second}", "the rest on {first}", "the others are {second}" — with NO gender word — set "rest" to that squad name and quote the words in "rest_said". The app then sends every player you did not name, and no group covered, to that squad. Do not list those players yourself.
+7. CLEAR-EVERYONE: "clear the squads", "start fresh", "start over", "everybody off", "wholesale" — set "clear": true and quote the words in "clear_said". A clear empties both squads before anything else you report applies.
+8. Later statements override earlier ones ("Dana on {first} — no, {second}" → Dana with "{second}"; "is that Hank? no, Morgan" → Morgan, Hank nowhere). Ignore asides: chatter, the weather, who is late, the score of the last point. Wrap-ups ("that's everyone", "that's the split") add nobody.
+9. THE CARDINAL RULE: "assign" and "out" contain ONLY players the coach referred to by name, nickname or number. Never anyone else, however uneven the squads would be: if the coach named 3 players, "assign" has exactly 3 entries. Reciting names taps those players onto a squad; it moves nobody else. Say anything notable (a retraction, an ambiguous reference) in one short sentence in "note".
 """
 
 
@@ -882,4 +1287,27 @@ def _parse_squads_json(text: str) -> Dict[str, Any]:
         elif isinstance(entry, (str, int)):
             outs.append({"name": str(entry), "said": ""})
     parsed["out"] = outs
+    groups = []
+    raw_groups = parsed.get("groups")
+    for entry in (raw_groups if isinstance(raw_groups, list) else []):
+        if not isinstance(entry, dict):
+            continue
+        count = entry.get("count")
+        if isinstance(count, str) and count.strip().isdigit():
+            count = int(count.strip())
+        if isinstance(count, bool) or not isinstance(count, int):
+            count = None
+        groups.append({
+            "group": str(entry.get("group") or ""),
+            "squad": str(entry.get("squad") or ""),
+            "count": count,
+            "said": str(entry.get("said") or ""),
+        })
+    parsed["groups"] = groups
+    phrases = []
+    raw_phrases = parsed.get("phrases")
+    for entry in (raw_phrases if isinstance(raw_phrases, list) else []):
+        if isinstance(entry, dict) and entry.get("words"):
+            phrases.append({"words": str(entry["words"]), "squad": str(entry.get("squad") or "")})
+    parsed["phrases"] = phrases
     return parsed
