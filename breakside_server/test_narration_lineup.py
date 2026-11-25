@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 
 import narration_lineup
 from narration_lineup import (
+    _derive_players,
     LineupRequest,
     LineupRosterPlayer,
     _apply_changes,
@@ -128,7 +129,9 @@ class TestLineupPrompt:
 
     def test_prompt_output_shape_is_changes_only(self):
         prompt = _build_lineup_prompt(make_request())
-        assert '{"clear": false, "clear_said": "", "in": ["Name", ...], "out": [{"name": "Name", "said":' in prompt
+        assert '"clear": false, "clear_said": "", "in": ["Name", ...], "out": [{"name": "Name", "said":' in prompt
+        # Group phrases are reported, never expanded into names
+        assert '"groups": [{"group": "FMP" | "MMP" | "ANY", "does": "in" | "out", "count": null' in prompt
         # The retired full-lineup output shape must be gone
         assert '"players":' not in prompt
 
@@ -279,6 +282,152 @@ class TestModelSelection:
         monkeypatch.delenv("NARRATION_LINEUP_MODEL", raising=False)
         monkeypatch.delenv("NARRATION_SLOW_MODEL", raising=False)
         assert _lineup_model() == "claude-sonnet-4-5-20250929"
+
+
+# =============================================================================
+# The closed roster, group phrases and counts (shared with squads:
+# narration_common.py)
+# =============================================================================
+
+G_ROSTER = [
+    LineupRosterPlayer(name="Kris", number="12", gender="MMP"),
+    LineupRosterPlayer(name="Wes", nickname="Big Wes", number="7", gender="MMP"),
+    LineupRosterPlayer(name="Sam", number="3", gender="MMP"),
+    LineupRosterPlayer(name="Alice", number="2", gender="FMP"),
+    LineupRosterPlayer(name="Nora", number="44", gender="FMP"),
+    LineupRosterPlayer(name="Dana", number="22", gender="FMP"),
+    LineupRosterPlayer(name="Morgan Vale", nickname="MV", gender="Unknown"),
+]
+
+
+def g_request(transcript, sel=("Wes", "Alice", "Sam"), **overrides):
+    return make_request(transcript=transcript, roster=G_ROSTER,
+                        current_selection=list(sel), previous_lineup=list(sel), **overrides)
+
+
+def reply(ins=(), out=(), groups=(), unmatched=(), phrases=(), clear=False, clear_said=""):
+    return {"in": list(ins), "out": list(out), "groups": list(groups), "unmatched": list(unmatched),
+            "phrases": list(phrases), "clear": clear, "clear_said": clear_said, "note": ""}
+
+
+class TestLineupClosedRoster:
+    def test_mangled_in_resolves_to_the_roster_spelling(self):
+        d = _derive_players(reply(ins=["Chris", "Norah"]), g_request("Chris and Norah"))
+        assert d.players == ["Wes", "Alice", "Sam", "Kris", "Nora"]
+        assert d.ins == ["Kris", "Nora"]
+        assert d.resolved == [("Chris", "Kris"), ("Norah", "Nora")] and d.unmatched == []
+
+    def test_stranger_goes_to_unmatched_not_into_the_line(self):
+        d = _derive_players(reply(ins=["Kris", "Zebediah"]), g_request("Kris and Zebediah"))
+        assert d.players == ["Wes", "Alice", "Sam", "Kris"] and d.unmatched == ["Zebediah"]
+
+    def test_nickname_and_bare_jersey_number(self):
+        d = _derive_players(reply(ins=["MV", 44, "#22"]), g_request("MV, forty four and twenty two", sel=()))
+        assert d.players == ["Morgan Vale", "Nora", "Dana"]
+
+    def test_sit_out_of_a_mangled_name(self):
+        d = _derive_players(reply(out=[{"name": "Wes", "said": "Wess sits"}]), g_request("Wess sits"))
+        assert d.outs == ["Wes"] and d.players == ["Alice", "Sam"] and not d.dropped
+
+    def test_out_named_as_heard_still_needs_its_quote(self):
+        d = _derive_players(reply(out=[{"name": "Wess", "said": "Wess sits"}]), g_request("Kris in"))
+        assert d.outs == [] and d.dropped == ["Wes"] and d.players == ["Wes", "Alice", "Sam"]
+
+    def test_spurious_unmatched_for_a_reported_player_is_dropped(self):
+        d = _derive_players(reply(ins=["Kris"], unmatched=["Chris"]), g_request("Chris goes in"))
+        assert d.players[-1] == "Kris" and d.unmatched == []
+
+    def test_given_up_name_is_recovered_from_an_in_phrase_only(self):
+        req = g_request("Norah goes in. Kris in for Dayna.")
+        phrases = [{"words": "Norah goes in", "does": "in"}, {"words": "Kris in for Dayna", "does": "swap"}]
+        d = _derive_players(reply(ins=["Kris"], unmatched=["Norah", "Dayna"], phrases=phrases), req)
+        assert d.ins == ["Kris", "Nora"]            # Norah recovered; Dayna is not guessed at
+        assert d.unmatched == ["Dayna"]
+        assert "Dana" not in d.players
+
+    def test_recovery_needs_the_phrase_in_the_transcript(self):
+        req = g_request("Kris goes in")
+        d = _derive_players(reply(ins=["Kris"], unmatched=["Norah"],
+                                  phrases=[{"words": "Norah goes in", "does": "in"}]), req)
+        assert d.ins == ["Kris"] and d.unmatched == ["Norah"]
+
+
+class TestLineupGroups:
+    def test_count_becomes_a_fill_and_selects_nobody(self):
+        req = g_request("Two more women, and add a guy")
+        d = _derive_players(reply(groups=[
+            {"group": "FMP", "does": "in", "count": 2, "said": "Two more women"},
+            {"group": "MMP", "does": "in", "count": 1, "said": "add a guy"},
+        ]), req)
+        assert d.fills == [("FMP", 2), ("MMP", 1)]
+        assert d.players == ["Wes", "Alice", "Sam"] and d.group_outs == []
+
+    def test_ungendered_count(self):
+        d = _derive_players(reply(groups=[
+            {"group": "ANY", "does": "in", "count": 3, "said": "three more"}]), g_request("and three more"))
+        assert d.fills == [("ANY", 3)]
+
+    def test_count_must_be_in_the_quote(self):
+        d = _derive_players(reply(groups=[
+            {"group": "FMP", "does": "in", "count": 4, "said": "more women"}]), g_request("more women"))
+        assert d.fills == [] and d.dropped == ["<group:count>"]
+
+    def test_whole_group_comes_off(self):
+        req = g_request("The guys come off", sel=("Wes", "Alice", "Sam", "Nora", "Morgan Vale"))
+        d = _derive_players(reply(groups=[
+            {"group": "MMP", "does": "out", "count": None, "said": "The guys come off"}]), req)
+        assert d.group_outs == ["MMP"]
+        assert d.players == ["Alice", "Nora", "Morgan Vale"]   # unknown gender is in neither group
+
+    def test_group_off_spares_a_player_named_in_the_same_breath(self):
+        req = g_request("All the guys off, but Wes stays in, and Kris goes in")
+        d = _derive_players(reply(ins=["Wes", "Kris"], groups=[
+            {"group": "MMP", "does": "out", "count": None, "said": "All the guys off"}]), req)
+        assert d.players == ["Wes", "Alice", "Kris"]
+
+    def test_the_quote_decides_the_group_and_checks_the_direction(self):
+        req = g_request("The GMPs come off")
+        d = _derive_players(reply(groups=[
+            {"group": "MMP", "does": "out", "count": None, "said": "The GMPs come off"}]), req)
+        assert d.group_outs == ["FMP"] and d.players == ["Wes", "Sam"]
+        # "out" without removal words in the quote, "in" with them: refused
+        for g in ({"group": "MMP", "does": "out", "count": None, "said": "the guys"},
+                  {"group": "MMP", "does": "in", "count": 2, "said": "two guys come off"}):
+            d = _derive_players(reply(groups=[g]), g_request("the guys. two guys come off"))
+            assert d.fills == [] and d.group_outs == [] and d.dropped == ["<group:unsupported>"]
+
+    def test_a_whole_group_going_in_is_not_supported(self):
+        d = _derive_players(reply(groups=[
+            {"group": "FMP", "does": "in", "count": None, "said": "all the women"}]), g_request("all the women"))
+        assert d.fills == [] and d.group_outs == [] and d.dropped == ["<group:unsupported>"]
+
+    def test_group_without_evidence_is_dropped(self):
+        d = _derive_players(reply(groups=[
+            {"group": "FMP", "does": "in", "count": 2, "said": "two more women"}]), g_request("Kris in"))
+        assert d.fills == [] and d.dropped == ["<group>"]
+
+    def test_prompt_carries_the_shared_rules(self):
+        prompt = _build_lineup_prompt(g_request("Kris in"))
+        assert "THE ROSTER IS CLOSED" in prompt
+        assert "it is NOT a mishearing of MMP" in prompt
+        assert "- Wes \"Big Wes\" #7 [MMP]" in prompt and "- Morgan Vale \"MV\"\n" in prompt
+        assert 'Fill "phrases" FIRST, as a worksheet' in prompt
+
+    def test_both_prompts_use_the_same_names_and_gender_rules(self):
+        """The point of narration_common: a rule about names or gender words
+        is written once."""
+        from narration_common import rule_gender_words
+        from narration_squads import SquadsRequest, SquadsRosterPlayer, _build_squads_prompt
+        lineup = _build_lineup_prompt(g_request("Kris in"))
+        squads = _build_squads_prompt(SquadsRequest(
+            teamId="t", transcript="Kris on Dark",
+            roster=[SquadsRosterPlayer(**p.model_dump()) for p in G_ROSTER],
+            squad_names={"X": "Dark", "Y": "Light"}))
+        assert rule_gender_words() in lineup and rule_gender_words() in squads
+        closed = lineup[lineup.index("THE ROSTER IS CLOSED"):lineup.index("Put the ROSTER spelling")]
+        assert closed in squads
+        roster_intro = lineup[lineup.index("Team roster."):lineup.index("- Kris")]
+        assert roster_intro in squads
 
 
 # =============================================================================
@@ -461,6 +610,36 @@ class TestLineupEndpoint:
         assert data["players"] == ["Wes", "Kris"]      # Wes kept, Alice removed
         assert data["voiced_out"] == ["Alice"]
 
+    def test_fills_and_group_out_in_the_response(self, client, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        async def call(api_key, prompt):
+            return reply(groups=[
+                {"group": "MMP", "does": "out", "count": None, "said": "the guys come off"},
+                {"group": "FMP", "does": "in", "count": 2, "said": "two more women"}])
+        monkeypatch.setattr(narration_lineup, "_call_claude_lineup", call)
+        body = request_body(transcript="the guys come off and two more women",
+                            roster=[p.model_dump() for p in G_ROSTER],
+                            current_selection=["Wes", "Alice", "Sam"])
+        data = client.post("/api/narration/lineup", json=body).json()
+        assert data["players"] == ["Alice"]
+        assert data["voiced_group_out"] == ["MMP"]
+        assert data["fills"] == [{"group": "FMP", "count": 2}]
+        assert data["error"] is None
+
+    def test_a_client_that_sends_no_gender_still_works(self, client, monkeypatch):
+        """Clients before the group phrases send name / nickname / number only:
+        names work as ever, a group phrase finds nobody to take off."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        async def call(api_key, prompt):
+            return reply(ins=["Kris"], groups=[
+                {"group": "MMP", "does": "out", "count": None, "said": "the guys come off"}])
+        monkeypatch.setattr(narration_lineup, "_call_claude_lineup", call)
+        data = client.post("/api/narration/lineup", json=request_body(
+            transcript="the guys come off, Kris in")).json()
+        assert data["players"] == ["Wes", "Alice", "Kris"]
+
     def test_model_cannot_inject_players_field(self, client, monkeypatch):
         """Even if the model regresses to emitting a full-lineup 'players'
         field alongside in/out, only the derived set arithmetic counts."""
@@ -508,7 +687,8 @@ class TestLineupEndpoint:
         monkeypatch.setattr(narration_lineup, "_call_claude_lineup", odd_call)
         resp = client.post("/api/narration/lineup", json=request_body(current_selection=[]))
         data = resp.json()
-        assert data["players"] == ["Kris", "7"]
+        # A bare number is a jersey number: 7 is Wes (#7), not a player called "7".
+        assert data["players"] == ["Kris", "Wes"]
         assert data["unmatched"] == []
         assert data["note"] == ""
 
@@ -644,6 +824,9 @@ _EVAL_NUMBERED = [{"name": f"{n} {j}"} for n, j in [
     ("DeShawn", 11), ("Lena", 9), ("Otis", 30), ("Rosa", 2), ("Andre", 55),
 ]]
 _EVAL_PREV = ["Kris", "Wes", "Alice", "Sam", "Hank", "Nora", "Omar"]
+# The same roster with gender groups, for the group-phrase scenarios (G).
+_EVAL_FMP = {"Morgan Vale", "Nora", "Alice", "Priya", "Dana"}
+_EVAL_RG = [dict(p, gender="FMP" if p["name"] in _EVAL_FMP else "MMP") for p in _EVAL_R]
 _RECITE7 = {"Kris", "Sam", "Morgan Vale", "Nora", "Omar", "Wes", "Alice"}
 
 _EVAL_SCENARIOS = [
@@ -701,6 +884,35 @@ _EVAL_SCENARIOS = [
     dict(id="M2-numbered-single-add-partial", roster=_EVAL_NUMBERED,
          prev=["Keisha 7", "Tanya 4"], sel=["Keisha 7", "Tanya 4"],
          t="Add Jamal", expect={"Keisha 7", "Tanya 4", "Jamal 23"}),
+    # Names the recognizer mangled (N): the roster is closed, so each is
+    # somebody on it. Deliberately not the prompt's own examples.
+    dict(id="N1-mangled-names-go-in", roster=_EVAL_R, prev=_EVAL_PREV, sel=[],
+         t="Omer, Norah, and Preeya go in", expect={"Omar", "Nora", "Priya"}),
+    dict(id="N2-mangled-sub", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Charly in for Wess",
+         expect={"Kris", "Charlie", "Alice", "Sam", "Hank", "Nora", "Omar"}),
+    dict(id="N3-mangled-add-and-off", roster=_EVAL_R, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Hanc is coming off. Add Jakey.",
+         expect={"Kris", "Wes", "Alice", "Sam", "Nora", "Omar", "Jake"}),
+    # Group phrases and counts (G): reported, never expanded into names.
+    dict(id="G1-count-of-a-group", roster=_EVAL_RG, prev=_EVAL_PREV,
+         sel=["Kris", "Wes", "Alice", "Sam", "Hank"], t="Two more women",
+         expect={"Kris", "Wes", "Alice", "Sam", "Hank"}, fills=[("FMP", 2)]),
+    dict(id="G2-names-then-a-count", roster=_EVAL_RG, prev=_EVAL_PREV, sel=[],
+         t="Kris, Sam and Alice, plus a couple of guys",
+         expect={"Kris", "Sam", "Alice"}, fills=[("MMP", 2)]),
+    dict(id="G3-group-off-then-names", roster=_EVAL_RG, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="All the guys come off. Jake and Charlie go in.",
+         expect={"Alice", "Nora", "Jake", "Charlie"}, group_out=["MMP"]),
+    dict(id="G4-ungendered-count", roster=_EVAL_RG, prev=_EVAL_PREV,
+         sel=["Kris", "Wes", "Alice", "Sam"], t="Add three more",
+         expect={"Kris", "Wes", "Alice", "Sam"}, fills=[("ANY", 3)]),
+    dict(id="G5-wrap-up-is-not-a-fill", roster=_EVAL_RG, prev=_EVAL_PREV, sel=[],
+         t="Kris and Sam, and Nora completes the line. That's the seven.",
+         expect={"Kris", "Sam", "Nora"}),
+    dict(id="G6-fmps-initialism", roster=_EVAL_RG, prev=_EVAL_PREV,
+         sel=["Kris", "Wes", "Sam", "Hank"], t="Three F.M.P.s and we're good",
+         expect={"Kris", "Wes", "Sam", "Hank"}, fills=[("FMP", 3)]),
 ]
 
 _EVAL_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-5-20250929"]
@@ -744,7 +956,7 @@ def _frontend_match(returned, roster):
 def test_live_lineup_eval_matrix(sc, model, monkeypatch):
     """The shipping gate for lineup prompt/contract changes. Run with:
     NARRATION_LIVE_TESTS=1 pytest test_narration_lineup.py -k live -v
-    (36 calls, ~2min, ~$0.10). One retry absorbs transient API timeouts."""
+    (54 calls, ~2min, ~$0.15). One retry absorbs transient API timeouts."""
     import asyncio
     from narration_lineup import _call_claude_lineup, _derive_players
 
@@ -765,10 +977,16 @@ def test_live_lineup_eval_matrix(sc, model, monkeypatch):
     else:
         pytest.fail(f"model call failed twice: {last_err}")
 
-    players, ins, outs, cleared, dropped = _derive_players(res, req)
+    d = _derive_players(res, req)
+    players, ins, outs = d.players, d.ins, d.outs
     fe = _frontend_match(players, sc["roster"])
     matched = set(fe["m"])
     assert not fe["u"], f"unmatched leak: {fe['u']} (in={ins})"
+    # A fill or a group coming off only when the coach asked for one — on
+    # every scenario, so a wrap-up ("Omar completes the lineup") that starts
+    # producing fills is caught.
+    assert d.fills == sc.get("fills", []), f"fills={d.fills} dropped={d.dropped} note={res.get('note')!r}"
+    assert d.group_outs == sc.get("group_out", []), f"group_outs={d.group_outs} dropped={d.dropped}"
     if sc.get("grade") == "s1":
         assert _grade_s1(matched), f"matched={sorted(matched)} in={ins} out={outs}"
     else:
