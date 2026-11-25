@@ -72,7 +72,11 @@ const advancedSettings = (function() {
         'narration.mode': 'all',
         'narration.vadEagerness': 'medium',              // low | medium | high | auto
         'narration.noiseReduction': 'near_field',        // near_field | far_field | off
-        'narration.transcriptionModel': 'gpt-4o-mini-transcribe', // or gpt-4o-transcribe
+        // Full model by default since 2.25.1: on spoken line calls it keeps
+        // roster names that mini mishears (97.7% vs 82.5% of mentions in the
+        // October 2026 comparison) at twice the per-minute rate. Mini stays
+        // selectable; a device that already chose a model keeps its choice.
+        'narration.transcriptionModel': 'gpt-4o-transcribe', // or gpt-4o-mini-transcribe
         'narration.forceEnglish': true,                  // true -> language 'en'; false -> auto-detect
         'narration.vocabularyHint': true,                // bias ASR toward roster names + ultimate jargon
         'narration.vocabularyPrompt': DEFAULT_VOCAB_PROMPT, // editable template; {names} -> roster
@@ -332,11 +336,11 @@ const advancedSettings = (function() {
                 },
                 {
                     key: 'narration.transcriptionModel', label: 'Transcription model',
-                    help: 'The full model is more accurate but costs more per minute.',
+                    help: 'The full model hears player names more reliably, in sideline noise especially. Mini costs half as much per minute and misses more names.',
                     type: 'select',
                     options: [
-                        ['gpt-4o-mini-transcribe', 'Mini (faster, cheaper)'],
-                        ['gpt-4o-transcribe', 'Full (more accurate)']
+                        ['gpt-4o-transcribe', 'Full (recommended)'],
+                        ['gpt-4o-mini-transcribe', 'Mini (cheaper, less accurate)']
                     ]
                 },
                 {

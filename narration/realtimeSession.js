@@ -108,7 +108,9 @@ const narrationRealtimeSession = (function() {
         const {
             mode = 'transcription',
             model = 'gpt-realtime',
-            transcriptionModel = 'gpt-4o-mini-transcribe',
+            // Fallback only: both callers pass the Advanced Settings value
+            // (settings/advancedSettings.js owns the real default).
+            transcriptionModel = 'gpt-4o-transcribe',
             transcriptionLanguage,
             transcriptionPrompt,
             vadEagerness,

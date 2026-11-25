@@ -2043,6 +2043,15 @@ The fast-pass `AMEND` operation is intentionally not emitted by the prompt; corr
   `gpt-4o-transcribe` ~$0.006/min (OpenAI pricing page, verified 2026-07-19; an
   earlier ~$0.06/min figure here was ~20x too high). Worth confirming once
   against the OpenAI usage dashboard.
+  **The default is `gpt-4o-transcribe` since 2.25.1** (`narration.transcriptionModel`
+  in `settings/advancedSettings.js`; Mini is still a choice in Advanced
+  Settings, and a device that picked a model keeps it). The October 2026
+  comparison is why: on spoken line calls the full model kept 97.7% of
+  roster-name mentions against mini's 82.5%, and under sideline chatter mini
+  echoed the vocabulary prompt into the transcript and invented play-by-play.
+  About $0.36 instead of $0.18 per hour of mic time. Results and the harness
+  that produced them are on branch `stt-swap`
+  (`docs/narration-stt-model-eval-2026-10.md`).
 - Slow pass (Claude Sonnet, ~1-3K tokens per possession): $0.01-0.03 per call —
   now the *majority* of narration spend
 - A typical full game (~25 possessions, sporadic narration): roughly $0.35-1 total
