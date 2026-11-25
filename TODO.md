@@ -292,7 +292,10 @@ Deliberately left out of editing v1 / the share-viewer port:
 - **Commentator**: v1 shipped as the browser-voice narrator (branch
   `replay-narrator`, `playByPlay/replayNarrator.js`; ARCHITECTURE.md §
   Replay viewer); it is the live-game narration spectators asked for in
-  [#33](https://github.com/davedotluebke/breakside/issues/33). The ⚙ beside
+  [#33](https://github.com/davedotluebke/breakside/issues/33) (closed). Voice
+  and style quality is tracked as
+  [#44](https://github.com/davedotluebke/breakside/issues/44), which points
+  at the September mockups on branch `tts-narration-mockup`. The ⚙ beside
   the 🔊 picks the voice (male / female / robot) and the detail level
   (play-by-play / game events / score only). Follow-ups: a server voice (Polly
   generative, compared in `mockups/commentator/`) behind a share-hash-keyed
