@@ -23,9 +23,10 @@ POST /api/narration/squads
     squad keys, puts every UNSTATED placement on the FIRST squad (the one
     rule a coach who just rattles off names relies on), verifies the
     evidence for sit-outs, a clear and an "everyone else", and derives the
-    resulting squads itself (_apply_squad_changes). Requires Coach access
-    to the ``teamId`` in the body — there is no game yet when a scrimmage
-    is being set up.
+    resulting squads itself (_apply_squad_changes). Requires Coach or Stat
+    Keeper access to the ``teamId`` in the body (whoever may start the
+    scrimmage may narrate its squads) — there is no game yet when a
+    scrimmage is being set up.
 
 This is a SEPARATE layer from the in-point narration pipeline in
 narration.py (token minting + play-by-play finalize). It deliberately
@@ -56,12 +57,12 @@ logger = logging.getLogger(__name__)
 
 # Dual-import pattern, mirroring narration.py / the rest of the backend.
 try:
-    from auth import get_json_body, require_body_game_recorder, require_body_team_coach  # type: ignore
+    from auth import get_json_body, require_body_game_recorder, require_body_team_recorder  # type: ignore
 except ImportError:
     from breakside_server.auth import (  # type: ignore
         get_json_body,
         require_body_game_recorder,
-        require_body_team_coach,
+        require_body_team_recorder,
     )
 
 try:
@@ -539,7 +540,7 @@ SQUAD_KEYS = ("X", "Y")
 
 
 class SquadsRequest(BaseModel):
-    # Authorization is against the TEAM (require_body_team_coach): a new
+    # Authorization is against the TEAM (require_body_team_recorder): a new
     # scrimmage has no game yet when its squads are being called.
     teamId: str
     transcript: str = Field(max_length=8000)
@@ -580,7 +581,7 @@ async def _squads_request(
 
 @router.post("/squads", response_model=SquadsResponse)
 async def extract_squads(
-    user: dict = Depends(require_body_team_coach),
+    user: dict = Depends(require_body_team_recorder),
     req: SquadsRequest = Depends(_squads_request),
 ):
     """

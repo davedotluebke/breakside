@@ -10,7 +10,7 @@ FIRST squad — is applied here, by the server, to a blank squad field.
 
 Pure tests cover the derivation, the squad-word mapping, the evidence
 guards and the prompt; endpoint tests run TestClient with the Claude call
-mocked and only ``get_current_user`` overridden, so ``require_body_team_coach``
+mocked and only ``get_current_user`` overridden, so ``require_body_team_recorder``
 runs for real against the ``narration_data`` fixture's memberships.
 
 Run with: cd breakside_server && python -m pytest test_narration_squads.py -v
@@ -362,8 +362,9 @@ class TestSquadsEndpoint:
 
 
 class TestSquadsAuthorization:
-    """``require_body_team_coach`` runs for real: the team's coach passes,
-    everyone else is refused before the model is ever called."""
+    """``require_body_team_recorder`` runs for real: the team's coach and
+    its stat keeper pass (whoever may start the scrimmage may narrate its
+    squads); everyone else is refused before the model is ever called."""
 
     @pytest.fixture(autouse=True)
     def _key_and_model(self, monkeypatch):
@@ -381,6 +382,19 @@ class TestSquadsAuthorization:
         resp = self._as(NARRATION_COACH).post(
             "/api/narration/squads", json=request_body(narration_data["team_id"]))
         assert resp.status_code == 200 and resp.json()["squads"]["X"] == ["Charlie", "Alice"]
+
+    def test_stat_keeper_allowed(self, narration_data):
+        from storage import membership_storage
+        keeper = {"id": "narr-keeper", "email": "narr-keeper@test", "role": "authenticated"}
+        membership_storage.create_membership(narration_data["team_id"], keeper["id"], "statkeeper")
+        resp = self._as(keeper).post(
+            "/api/narration/squads", json=request_body(narration_data["team_id"]))
+        assert resp.status_code == 200 and resp.json()["error"] is None
+
+    def test_malformed_team_id_is_rejected(self, narration_data):
+        resp = self._as(NARRATION_COACH).post(
+            "/api/narration/squads", json=request_body("../../etc"))
+        assert resp.status_code == 400
 
     def test_viewer_forbidden(self, narration_data):
         resp = self._as(NARRATION_VIEWER).post(

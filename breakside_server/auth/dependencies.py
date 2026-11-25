@@ -615,6 +615,47 @@ async def require_body_team_coach(
     return user
 
 
+async def require_body_team_recorder(
+    body: Dict[str, Any] = Depends(get_json_body),
+    user: dict = Depends(get_current_user)
+) -> dict:
+    """
+    Dependency for recording-side endpoints that name a TEAM in their request
+    body and have no game to authorize against yet (POST
+    /api/narration/squads: the squads of a scrimmage that is still being set
+    up, which spends the operator's LLM budget on behalf of whoever is
+    setting it up).
+
+    Requires Coach or Stat Keeper access to the body's ``teamId`` — the same
+    roles that may create the scrimmage's games through sync, so whoever may
+    start the scrimmage may narrate its squads. Nothing is stored from the
+    body, so unlike ``require_body_team_coach`` there is no stored content
+    for the checked teamId to diverge from.
+    When AUTH_REQUIRED is false, skips the membership check.
+
+    Raises:
+        HTTPException 400: If the body has no teamId
+        HTTPException 403: If user may not record for the claimed team
+    """
+    team_id = body.get("teamId")
+    # Validate before the auth short-circuit, as require_body_game_recorder
+    # does for game_id.
+    if team_id is not None:
+        validate_id(team_id, "team_id")
+
+    if not auth_required():
+        return user
+
+    if not team_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="teamId is required"
+        )
+
+    assert_team_recorder(user["id"], team_id)
+    return user
+
+
 async def require_body_game_recorder(
     body: Dict[str, Any] = Depends(get_json_body),
     user: dict = Depends(get_current_user)
