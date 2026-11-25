@@ -33,7 +33,7 @@ import { touchPointClock } from '../store/pointClock.js';
 import { advancedSettings } from '../settings/advancedSettings.js';
 import { summarizeDrops } from './dropReasons.js';
 import { narrationEventBus } from './eventBus.js';
-import { narrationRealtimeSession, mergeCompletedUtterance } from './realtimeSession.js';
+import { narrationRealtimeSession } from './realtimeSession.js';
 
 const narrationEngine = (function() {
     const FINALIZE_ENDPOINT = '/api/narration/finalize';
@@ -738,8 +738,12 @@ Just listen. Transcription happens automatically.`;
                 // transcriptionModel, transcriptionLanguage, transcriptionPrompt,
                 // audioConstraints.
                 ...advOpts,
-                onTranscriptDelta: (delta) => {
-                    accumulatedTranscript += delta;
+                // Both callbacks carry the session's whole transcript as their
+                // second argument (kept per utterance, in order, a space
+                // between them: narration/transcriptItems.js). Mirror it
+                // rather than appending here, which ran utterances together.
+                onTranscriptDelta: (delta, transcript) => {
+                    accumulatedTranscript = transcript;
                     // Publish for the live transcript display UI to render.
                     if (narrationEventBus) {
                         narrationEventBus.publish('transcriptUpdated', {
@@ -748,13 +752,11 @@ Just listen. Transcription happens automatically.`;
                         });
                     }
                 },
-                onTranscriptComplete: (utterance) => {
-                    // Some servers emit only complete transcripts; merge if we
-                    // haven't already picked up this text via deltas (shared
-                    // rule with realtimeSession's own accumulator).
-                    const merged = mergeCompletedUtterance(accumulatedTranscript, utterance);
-                    if (merged !== accumulatedTranscript) {
-                        accumulatedTranscript = merged;
+                onTranscriptComplete: (utterance, transcript) => {
+                    // An utterance's final text can differ from what its
+                    // deltas built, and some servers send only this.
+                    if (transcript !== accumulatedTranscript) {
+                        accumulatedTranscript = transcript;
                         if (narrationEventBus) {
                             narrationEventBus.publish('transcriptUpdated', {
                                 delta: utterance,
