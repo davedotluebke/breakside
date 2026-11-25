@@ -11,6 +11,8 @@
  *   - Manage clips lists it; Export hands the share sheet one zip in the
  *     harness's scenario layout; Delete all empties the store
  *   - with it off, an identical session saves nothing
+ *   - a browser that never saved a clip never opens the clip database, at
+ *     startup or from the manage dialog; the first save creates it
  */
 import { test, expect, Page } from '@playwright/test';
 import { goToApp } from '../helpers/app';
@@ -39,7 +41,7 @@ const clipCount = (page: Page) =>
 async function simulateSession(page: Page, transcript: string) {
   await page.evaluate((t) => {
     const rec = (window as any).narrationClipRecorder;
-    rec._tap.onSessionStart({ mode: 'transcription', transcriptionModel: 'gpt-4o-mini-transcribe', sampleRate: 24000 });
+    rec._tap.onSessionStart({ mode: 'transcription', transcriptionModel: 'gpt-4o-transcribe', sampleRate: 24000 });
     for (let k = 0; k < 15; k++) rec._tap.onAudioChunk(new Int16Array(2400).fill(k * 100));
     rec._tap.onSessionStop({ transcript: t });
   }, transcript);
@@ -141,5 +143,32 @@ test.describe('narration clip recorder', () => {
     await page.waitForTimeout(500);
     expect(await clipCount(page)).toBe(0);
     expect(await page.evaluate(() => (window as any).narrationClipRecorder.isCapturing())).toBe(false);
+  });
+
+  test('a browser that never saved a clip has no clip database', async ({ page }) => {
+    const clipDatabases = () => page.evaluate(async () =>
+      (await indexedDB.databases()).map((d) => d.name).filter((n) => n === 'breakside-narration-clips'));
+
+    // Startup, a session with the setting off, and a look at the (empty)
+    // manage dialog, Export all and Delete all included, leave no trace.
+    await goToApp(page);
+    await simulateSession(page, TRANSCRIPT);
+    await openAdvanced(page);
+    await advancedModal(page).locator('.adv-action-btn', { hasText: 'Manage clips' }).click();
+    await expect(manageModal(page).locator('.clip-manager-empty')).toBeVisible();
+    await manageModal(page).getByRole('button', { name: 'Export all' }).click();
+    await manageModal(page).getByRole('button', { name: 'Delete all' }).click();
+    await expect(manageModal(page).locator('.clip-manager-empty')).toBeVisible();
+    expect(await clipCount(page)).toBe(0);
+    expect(await clipDatabases()).toEqual([]);
+
+    // The first save creates it, and the next startup trims it.
+    await page.evaluate(() => (window as any).advancedSettings.set('narration.recordClips', true));
+    await simulateSession(page, TRANSCRIPT);
+    await expect.poll(() => clipCount(page)).toBe(1);
+    expect(await clipDatabases()).toEqual(['breakside-narration-clips']);
+    await page.reload();
+    await page.waitForFunction(() => !!(window as any).narrationClipRecorder);
+    await expect.poll(() => clipCount(page)).toBe(1);
   });
 });
