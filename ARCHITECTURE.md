@@ -736,7 +736,11 @@ Layers, bottom-up (all under `playByPlay/`):
   name is accepted too — and **detail** — `replay.narrateLevel` = `pbp`
   (every play), `events` (lineups, scores, period notes and the game's own
   events: timeouts, injury subs, halftime, side switches) or `score` (score
-  lines only), applied by `wantsEntry()` before phrasing. Picking a voice
+  lines only), applied by `wantsEntry()` before phrasing. Outside
+  play-by-play the score line names the scorers from the point's scoring
+  event (`scorersOf()`: "Us scores on a throw from Alice to Bob!", a
+  Callahan's defender, or just the goal when no assist is known), and
+  score-only reads the running score as "Score: Us 9, Them 6." Picking a voice
   speaks a one-line sample. The renderer emits no game-over line, so the
   narrator adds one ("Game over. Us wins, 13 to 9.", from the last
   running-score entry) after the final score of a finished game's replay,

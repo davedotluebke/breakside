@@ -167,6 +167,11 @@ function phraseEvent(ev, ctx) {
  * @param {string} [ctx.opponentName]
  * @param {string[]} [ctx.rosterNames] - the point's players as display names
  *   (when absent the roster line's own text is spoken)
+ * @param {string} [ctx.level] - the detail level ('pbp' | 'events' | 'score');
+ *   score lines name the scorers outside play-by-play, and score-only reads
+ *   the running score as "Score: Us 9, Them 6."
+ * @param {{assist: string, goal: string, callahan: string}|null} [ctx.scorers] -
+ *   scorersOf(point) for a 'score' entry
  * @returns {string}
  */
 function phraseEntry(entry, ctx = {}) {
@@ -195,6 +200,16 @@ function phraseEntry(entry, ctx = {}) {
             if (!m) return sentence(text.replace(/\[|\]/g, ''));
             const who = m[1], pts = m[2], badge = m[3];
             let s = `${who} scores!`;
+            // Score-only and game-events narration never hear the scoring
+            // throw, so the score line carries the assist and the goal
+            // ("Us scores on a throw from Alice to Bob!"); play-by-play
+            // just said "Alice to Bob for the goal!" and keeps it short.
+            const sc = ctx.scorers;
+            if (sc && entry.side === 'us' && (ctx.level === 'score' || ctx.level === 'events')) {
+                if (sc.callahan) s = `${who} scores on a Callahan by ${sc.callahan}!`;
+                else if (sc.assist && sc.goal) s = `${who} scores on a throw from ${sc.assist} to ${sc.goal}!`;
+                else if (sc.goal) s = `${who} scores! ${sc.goal} with the goal.`;
+            }
             if (pts) s += ` That's worth ${pts} points.`;
             if (badge) s += ` ${/^[aeiou]/i.test(badge) ? 'An' : 'A'} ${badge}.`;
             return s;
@@ -204,6 +219,7 @@ function phraseEntry(entry, ctx = {}) {
             if (!m) return sentence(text.replace(/^Current score:\s*/, ''));
             const [, us, a, them, b] = m;
             const ua = +a, ub = +b;
+            if (ctx.level === 'score') return `Score: ${us} ${ua}, ${them} ${ub}.`;
             if (ua === ub) return `Tied at ${ua}.`;
             return ua > ub ? `${us} lead, ${ua} to ${ub}.` : `${them} lead, ${ub} to ${ua}.`;
         }
@@ -212,6 +228,25 @@ function phraseEntry(entry, ctx = {}) {
         default:
             return sentence(text);
     }
+}
+
+/**
+ * Who scored a point we won: the last scoring Throw's assist holder (the
+ * explicit `assist`, else the thrower — see store/models.js) and receiver,
+ * or the defender of a Callahan. Null when the point holds no scoring event
+ * (legacy data, a score recorded without a throw).
+ * @param {object} point
+ * @returns {{assist: string, goal: string, callahan: string}|null}
+ */
+function scorersOf(point) {
+    if (!point) return null;
+    let found = null;
+    (point.possessions || []).forEach(poss => (poss.events || []).forEach(ev => {
+        if (!ev) return;
+        if (ev.type === 'Throw' && ev.score_flag) found = { assist: nameOf(ev.assist || ev.thrower), goal: nameOf(ev.receiver), callahan: '' };
+        else if (ev.type === 'Defense' && ev.Callahan_flag) found = { assist: '', goal: '', callahan: nameOf(ev.defender) };
+    }));
+    return found;
 }
 
 /** Lines the queue keeps when it has to drop plays. */
@@ -414,12 +449,13 @@ function mountReplayNarrator(cfg) {
     function ctxFor(entry) {
         const o = (typeof cfg.getEntryOptions === 'function' && cfg.getEntryOptions()) || {};
         const game = engine && engine.game;
-        const ctx = { teamName: o.teamName || (game && game.team), opponentName: o.opponentName || (game && game.opponent) };
-        if (entry.kind === 'roster' && game && entry.pointIdx != null) {
-            const point = (game.points || [])[entry.pointIdx];
+        const ctx = { teamName: o.teamName || (game && game.team), opponentName: o.opponentName || (game && game.opponent), level: level() };
+        const point = game && entry.pointIdx != null ? (game.points || [])[entry.pointIdx] : null;
+        if (entry.kind === 'roster' && point) {
             const resolve = typeof o.resolvePlayerName === 'function' ? o.resolvePlayerName : (p => p);
-            if (point && Array.isArray(point.players)) ctx.rosterNames = point.players.map(p => { try { return String(resolve(p)); } catch (e) { return String(p); } });
+            if (Array.isArray(point.players)) ctx.rosterNames = point.players.map(p => { try { return String(resolve(p)); } catch (e) { return String(p); } });
         }
+        if (entry.kind === 'score' && point) ctx.scorers = scorersOf(point);
         return ctx;
     }
 
@@ -566,4 +602,4 @@ function mountReplayNarrator(cfg) {
     return { get enabled() { return enabled; }, setEnabled, cancel, destroy, button: btn, settingsButton: gear, menu };
 }
 
-export { phraseEntry, wantsEntry, resolveVoice, gameOverSentence, mountReplayNarrator, VOICE_PROFILES, LEVELS };
+export { phraseEntry, wantsEntry, resolveVoice, scorersOf, gameOverSentence, mountReplayNarrator, VOICE_PROFILES, LEVELS };

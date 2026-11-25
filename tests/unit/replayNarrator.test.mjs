@@ -10,7 +10,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { phraseEntry, wantsEntry, resolveVoice, gameOverSentence, mountReplayNarrator } from '../../playByPlay/replayNarrator.js';
+import { phraseEntry, wantsEntry, resolveVoice, scorersOf, gameOverSentence, mountReplayNarrator } from '../../playByPlay/replayNarrator.js';
 import { buildGameLogEntries } from '../../utils/gameLogRenderer.js';
 import { createReplayEngine } from '../../playByPlay/replayEngine.js';
 import { createReplayController } from '../../playByPlay/replayController.js';
@@ -270,8 +270,34 @@ test('mount: the stored level and voice drive what is spoken and how', () => {
     const { controller, synth } = mountOn(sampleGame(), { settings: store });
     controller.seek(1);
     for (let i = 0; i < 40; i++) { controller.stepForward(); synth.end(); }   // past the end is a no-op
-    assert.deepEqual(texts(synth), ['Us scores!', 'Us lead, 1 to 0.', 'Them scores!', 'Tied at 1.']);
+    assert.deepEqual(texts(synth), ['Us scores on a throw from Cara to Dev!', 'Score: Us 1, Them 0.', 'Them scores!', 'Score: Us 1, Them 1.']);
     assert.ok(synth.spoken.every(u => u.voice.name === 'Zarvox'));
+});
+
+test('score lines: scorers are named outside play-by-play; score-only reads "Score: Us 9, Them 6"', () => {
+    const game = sampleGame();
+    assert.deepEqual(scorersOf(game.points[0]), { assist: 'Cara', goal: 'Dev', callahan: '' });
+    assert.equal(scorersOf(game.points[1]), null);            // the other team scored: no event of ours
+    assert.equal(scorersOf({ possessions: [] }), null);
+    // An explicit assist holder wins over the thrower; a Callahan names the defender.
+    const explicit = { possessions: [{ events: [new Throw({ thrower: P.Alice, receiver: P.Bob, score: true, assist: P.Cara })] }] };
+    assert.deepEqual(scorersOf(explicit), { assist: 'Cara', goal: 'Bob', callahan: '' });
+    const cal = { possessions: [{ events: [new Defense({ defender: P.Dev, Callahan: true })] }] };
+    assert.deepEqual(scorersOf(cal), { assist: '', goal: '', callahan: 'Dev' });
+
+    const entry = { kind: 'score', text: 'Us scores!  [break] ', side: 'us' };
+    const sc = { assist: 'Alice', goal: 'Bob', callahan: '' };
+    assert.equal(phraseEntry(entry, { level: 'score', scorers: sc }), 'Us scores on a throw from Alice to Bob! A break.');
+    assert.equal(phraseEntry(entry, { level: 'events', scorers: sc }), 'Us scores on a throw from Alice to Bob! A break.');
+    assert.equal(phraseEntry(entry, { level: 'pbp', scorers: sc }), 'Us scores! A break.');   // the throw line just said it
+    assert.equal(phraseEntry(entry, { level: 'score', scorers: { assist: '', goal: 'Bob', callahan: '' } }), 'Us scores! Bob with the goal. A break.');
+    assert.equal(phraseEntry(entry, { level: 'score', scorers: { assist: '', goal: '', callahan: 'Dev' } }), 'Us scores on a Callahan by Dev! A break.');
+    assert.equal(phraseEntry(entry, { level: 'score', scorers: null }), 'Us scores! A break.');
+    assert.equal(phraseEntry({ kind: 'score', text: 'Them scores! ', side: 'opp' }, { level: 'score', scorers: sc }), 'Them scores!');
+    const running = { kind: 'currentscore', text: 'Current score: Us 9, Them 6' };
+    assert.equal(phraseEntry(running, { level: 'score' }), 'Score: Us 9, Them 6.');
+    assert.equal(phraseEntry(running, { level: 'events' }), 'Us lead, 9 to 6.');
+    assert.equal(phraseEntry(running, {}), 'Us lead, 9 to 6.');
 });
 
 test('mount: disabled → silent; enabled → each played entry is spoken with the picked voice', () => {
