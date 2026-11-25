@@ -654,7 +654,6 @@ const advancedSettings = (function() {
             <details class="adv-group" data-group="${escapeHtml(group.group)}"${open}>
                 <summary class="adv-group-title">
                     <span class="adv-group-name">${group.group}</span>
-                    <span class="adv-group-count">${group.fields.length}</span>
                     <i class="fas fa-chevron-right adv-group-chevron" aria-hidden="true"></i>
                 </summary>
                 ${note}

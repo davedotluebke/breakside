@@ -184,18 +184,6 @@
     min-width: 0;
 }
 
-/* How many settings are inside: only worth saying while they are hidden. */
-.adv-group-count {
-    flex: 0 0 auto;
-    font-size: 0.8rem;
-    font-weight: 400;
-    color: var(--text-faint);
-}
-
-.adv-group[open] .adv-group-count {
-    visibility: hidden;
-}
-
 .adv-group-chevron {
     flex: 0 0 auto;
     font-size: 0.8rem;
