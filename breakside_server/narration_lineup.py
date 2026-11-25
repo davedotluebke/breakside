@@ -17,16 +17,17 @@ POST /api/narration/lineup
 POST /api/narration/squads
     The same idea for a scrimmage's two squads (teams/scrimmageDialogs.js):
     the coach names players and which squad they go on — "Alice and Bob on
-    Orange, Dana on Black", "Eve sits out", "everyone else on Black" — and
-    the model returns only those placements, each with the squad as spoken
-    or blank when none was said. The endpoint maps squad words to the two
-    squad keys, puts every UNSTATED placement on the FIRST squad (the one
-    rule a coach who just rattles off names relies on), verifies the
-    evidence for sit-outs, a clear and an "everyone else", and derives the
-    resulting squads itself (_apply_squad_changes). Requires Coach or Stat
-    Keeper access to the ``teamId`` in the body (whoever may start the
-    scrimmage may narrate its squads) — there is no game yet when a
-    scrimmage is being set up.
+    Orange, Dana on Black", "Eve sits out", "everyone else on Black", "the
+    rest of the FMPs on Orange", "two more guys on Black" — and the model
+    only reports it. The endpoint maps squad words to the two squad keys,
+    puts every UNSTATED placement on the FIRST squad (the one rule a coach
+    who just rattles off names relies on), resolves names the recognizer
+    mangled against the closed roster, verifies the evidence for sit-outs,
+    a clear and the collective phrases and expands those itself
+    (_apply_squad_changes), and hands a verified count back for the picker
+    to choose. Requires Coach or Stat Keeper access to the ``teamId`` in
+    the body (whoever may start the scrimmage may narrate its squads) —
+    there is no game yet when a scrimmage is being set up.
 
 This is a SEPARATE layer from the in-point narration pipeline in
 narration.py (token minting + play-by-play finalize). It deliberately
