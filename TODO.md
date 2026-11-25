@@ -291,7 +291,8 @@ Deliberately left out of editing v1 / the share-viewer port:
   field auto-rotating as its panel shrinks (plan Decision 10).
 - **Commentator** (AI text-to-speech): `replayController` already emits
   `entry` with `saidSoFar`; a subscriber returning a promise makes Speedy
-  wait for the audio (plan § 9).
+  wait for the audio (plan § 9). The live-game version of this for
+  spectators is [#33](https://github.com/davedotluebke/breakside/issues/33).
 - **Share viewer**: the sticky stage + card highlighting were preview-tested
   only, not on a phone; the card headers are deliberately not seekable (a
   tap toggles the card). A "jump to now" nudge when a parent scrolls up
@@ -521,10 +522,17 @@ The multi-user push is mostly done. A few items linger:
       snapshot at game start is enough or conditions are sampled through
       the game (wind is the one that changes how a game plays). Location is
       personal data on a public link; store conditions, not coordinates.
+      Tracked as [#32](https://github.com/davedotluebke/breakside/issues/32).
 - [ ] Other requests from the same feedback, deliberately not built with the
       sticky score bar / log-follow tweaks (branch `viewer-tweaks`): a
       newest-first order for the Game Log, and a pin/unpin option for the
-      sticky bar. Wait for a second request.
+      sticky bar. Wait for a second request. Tracked as
+      [#31](https://github.com/davedotluebke/breakside/issues/31). The rest
+      of that feedback (spoken play-by-play, richer status and game details
+      in the score bar, notifications, a glossary, tournament-level ideas)
+      is filed as issues
+      [#33](https://github.com/davedotluebke/breakside/issues/33) to
+      [#43](https://github.com/davedotluebke/breakside/issues/43).
 
 ### Multi-user rollout — completed (historical)
 
