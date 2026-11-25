@@ -139,16 +139,72 @@
     -webkit-overflow-scrolling: touch;
 }
 
+/* Each group is a <details>; the title row is its <summary>. Collapsed by
+   default, so the modal opens as a short list of headings. */
 .adv-group {
-    margin: 8px 0 18px;
+    margin: 0;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.adv-group:last-child {
+    border-bottom: none;
+}
+
+.adv-group[open] {
+    padding-bottom: 8px;
 }
 
 .adv-group-title {
-    margin: 12px 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 0;
     font-size: 1.05rem;
+    font-weight: 600;
     color: var(--text-primary);
-    border-bottom: 1px solid var(--border-lighter);
-    padding-bottom: 6px;
+    cursor: pointer;
+    list-style: none;              /* hide the native disclosure marker */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.adv-group-title::-webkit-details-marker {
+    display: none;
+}
+
+.adv-group-title:focus-visible {
+    outline: 2px solid var(--brand-orange);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.adv-group-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* How many settings are inside: only worth saying while they are hidden. */
+.adv-group-count {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-faint);
+}
+
+.adv-group[open] .adv-group-count {
+    visibility: hidden;
+}
+
+.adv-group-chevron {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    color: var(--text-faint);
+    transition: transform 0.15s;
+}
+
+.adv-group[open] .adv-group-chevron {
+    transform: rotate(90deg);
 }
 
 .adv-group-note {

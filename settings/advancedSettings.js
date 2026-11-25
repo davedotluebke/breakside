@@ -623,15 +623,43 @@ const advancedSettings = (function() {
             </div>`;
     }
 
-    function renderGroup(group) {
+    // Which groups are expanded, by group name. Every group starts collapsed
+    // (the list of headings is the table of contents) and the modal reopens
+    // the way it was left. Kept apart from STORAGE_KEY: this is view state,
+    // not a setting, and get()/set() callers should never see it.
+    const OPEN_GROUPS_KEY = 'breakside_advanced_settings_open_groups';
+
+    function readOpenGroups() {
+        try {
+            const v = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY) || '[]');
+            return Array.isArray(v) ? v : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function writeOpenGroups(names) {
+        try {
+            localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(names));
+        } catch (e) { /* view state only; losing it is harmless */ }
+    }
+
+    // Native <details>: keyboard and screen-reader behaviour for free, and
+    // find-in-page still reaches (and auto-expands) a collapsed group.
+    function renderGroup(group, openGroups) {
         const fields = group.fields.map(renderField).join('');
         const note = group.note ? `<div class="adv-group-note">${group.note}</div>` : '';
+        const open = openGroups.includes(group.group) ? ' open' : '';
         return `
-            <div class="adv-group">
-                <h3 class="adv-group-title">${group.group}</h3>
+            <details class="adv-group" data-group="${escapeHtml(group.group)}"${open}>
+                <summary class="adv-group-title">
+                    <span class="adv-group-name">${group.group}</span>
+                    <span class="adv-group-count">${group.fields.length}</span>
+                    <i class="fas fa-chevron-right adv-group-chevron" aria-hidden="true"></i>
+                </summary>
                 ${note}
                 ${fields}
-            </div>`;
+            </details>`;
     }
 
     function showAdvancedSettings() {
@@ -642,6 +670,7 @@ const advancedSettings = (function() {
         modal.id = 'advancedSettingsModal';
         modal.className = 'modal';
         modal.style.display = 'flex';
+        const openGroups = readOpenGroups();
         modal.innerHTML = `
             <div class="modal-content adv-settings-content">
                 <div class="dialog-header prominent-dialog-header">
@@ -649,13 +678,22 @@ const advancedSettings = (function() {
                     <span class="close">&times;</span>
                 </div>
                 <div class="adv-settings-body">
-                    ${SCHEMA.map(renderGroup).join('')}
+                    ${SCHEMA.map(g => renderGroup(g, openGroups)).join('')}
                 </div>
                 <div class="adv-settings-footer">
                     <button class="adv-done-btn" type="button">Done</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
+
+        // Remember which groups are expanded. `toggle` does not bubble, so
+        // each <details> gets its own listener.
+        modal.querySelectorAll('details.adv-group').forEach(d => {
+            d.addEventListener('toggle', () => {
+                writeOpenGroups([...modal.querySelectorAll('details.adv-group[open]')]
+                    .map(el => el.getAttribute('data-group')));
+            });
+        });
 
         // Show/hide gated rows based on their `data-show-when` toggle's
         // current value. Called on init and whenever a toggle changes.
