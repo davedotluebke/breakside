@@ -416,6 +416,72 @@ const DEFAULT_AUTO_PRIORITY = ['position', 'rest', 'od', 'pt'];
 const FACTOR_GROUP = { position: positionGroup, od: lineGroup };
 
 /**
+ * The groupings a squad pick balances, in order: gender first, then the
+ * coach's Auto factors that apply before a game (position, O/D line).
+ * @param {string[]} [priorityOrder] - as Advanced Settings gives it
+ * @returns {Array<(player: object) => string>}
+ */
+function squadBalanceGroups(priorityOrder = DEFAULT_AUTO_PRIORITY) {
+    const factors = (Array.isArray(priorityOrder) ? priorityOrder : DEFAULT_AUTO_PRIORITY)
+        .filter(k => SQUAD_AUTO_FACTORS.includes(k));
+    SQUAD_AUTO_FACTORS.forEach(k => { if (!factors.includes(k)) factors.push(k); });
+    return [genderGroup, ...factors.map(k => FACTOR_GROUP[k])];
+}
+
+/**
+ * Pick `count` players for ONE squad — the picker's answer to a narrated
+ * "two more FMPs on Dark" (narration/squadResolve.js). The coach said how
+ * many and of which group; who is the picker's call, made the way Auto makes
+ * it: one at a time, each pick whoever the squad trails the other squad in
+ * most (gender, then position and O/D line in the coach's order), ties at
+ * random.
+ *
+ * Players sitting out are taken first. Only when none are left does a pick
+ * come off the other squad — which is what "two more on Dark" has to mean
+ * when the dialog opened with everyone already dealt. `eligible` is the
+ * caller's filter (the group, and not anyone the coach placed by hand).
+ *
+ * @param {Array<object>} players - everyone who is here, in roster order
+ * @param {Map<string, 'X'|'Y'>} assignment - who is on a squad now (not mutated)
+ * @param {{squad: 'X'|'Y', count: number, eligible?: (player: object) => boolean,
+ *          priorityOrder?: string[], random?: () => number}} opts
+ * @returns {{picked: string[], assignment: Map<string, 'X'|'Y'>}} picked: ids
+ *          in pick order, possibly fewer than `count`
+ */
+function pickForSquad(players, assignment, {
+    squad, count, eligible = () => true, priorityOrder = DEFAULT_AUTO_PRIORITY, random = Math.random,
+} = {}) {
+    const next = new Map(assignment || []);
+    const picked = [];
+    if (!SQUADS.includes(squad)) return { picked, assignment: next };
+    const valid = (players || []).filter(p => p && p.id);
+    const order = shuffled(valid, random);      // the tie-break order, fixed once
+    const groups = squadBalanceGroups(priorityOrder);
+    const other = otherSquad(squad);
+    const lead = (group, p) => {
+        const g = group(p);
+        const on = side => valid.filter(m => next.get(m.id) === side && group(m) === g).length;
+        return on(squad) - on(other);
+    };
+    for (let n = 0; n < count; n++) {
+        const candidates = order.filter(p => next.get(p.id) !== squad && eligible(p));
+        if (!candidates.length) break;
+        const sitting = candidates.filter(p => !next.get(p.id));
+        const pool = sitting.length ? sitting : candidates;
+        let best = pool[0];
+        for (const candidate of pool.slice(1)) {
+            for (const group of groups) {
+                const d = lead(group, candidate) - lead(group, best);
+                if (d) { if (d < 0) best = candidate; break; }
+            }
+        }
+        next.set(best.id, squad);
+        picked.push(best.id);
+    }
+    return { picked, assignment: next };
+}
+
+/**
  * Fill the two squads with every player not on one yet, one pick at a time.
  *
  * Each pick goes to the smaller squad (X first when they are level, then
@@ -450,10 +516,7 @@ function autoFillSquads(players, assignment, { priorityOrder = DEFAULT_AUTO_PRIO
     });
     const pool = shuffled(valid.filter(p => !assigned(p.id)), random);
 
-    const factors = (Array.isArray(priorityOrder) ? priorityOrder : DEFAULT_AUTO_PRIORITY)
-        .filter(k => SQUAD_AUTO_FACTORS.includes(k));
-    SQUAD_AUTO_FACTORS.forEach(k => { if (!factors.includes(k)) factors.push(k); });
-    const groups = [genderGroup, ...factors.map(k => FACTOR_GROUP[k])];
+    const groups = squadBalanceGroups(priorityOrder);
 
     // How far `side` is ahead of the other squad in the candidate's group:
     // negative means the side trails there, so the candidate is wanted.
@@ -594,7 +657,7 @@ export {
     SQUADS, DEFAULT_SQUAD_NAMES,
     isScrimmageGame, withoutScrimmages, otherSquad,
     normalizeSquadNames, teamSquadNames, squadNamesChanged, generateScrimmageId, formatShortDate,
-    squadGameFields, buildSquadSnapshot, squadRoster, autoFillSquads,
+    squadGameFields, buildSquadSnapshot, squadRoster, autoFillSquads, pickForSquad,
     gameStartMs, groupScrimmages, scrimmageSquadNames, scrimmageScores,
     scrimmageLabel, isScrimmageOver,
     SQUAD_DEFINITION_KEYS, squadStamp, squadDefinition, newerSquadDefinition,

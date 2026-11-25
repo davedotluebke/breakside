@@ -201,23 +201,29 @@ test.describe('intrasquad scrimmage', () => {
     // the squads layer; the backend is stood in for through the apply seam
     // (narration/squadNarration.js _applyResult), as the lineup layer's
     // tests do. The result is the server's FULL squads, so anyone on
-    // neither list (Jake) is sitting out, and Iris was voiced off. ──
+    // neither list (Jake) is off both; Iris was voiced off, which unticks
+    // her "here" box; and "one more MMP on Light" comes back as a fill the
+    // picker chooses itself — Jake, the only MMP not on a squad. ──
     const mic = page.locator('#narrationMicBtn');
     await expect(mic).toHaveClass(/visible/);
     expect(await page.evaluate(() => (window as any).narrationMicButton._currentTargetName())).toBe('squads');
     const applied = await page.evaluate(() => (window as any).squadNarration._applyResult({
       squads: { X: ['Alice', 'Bob', 'Charlie'], Y: ['Dana', 'Eve', 'Hank'] },
       out: ['Iris'], unmatched: [], note: '',
+      fills: [{ squad: 'Y', group: 'MMP', count: 1 }],
       voiced_assign: [{ name: 'Alice', squad: 'X' }, { name: 'Hank', squad: 'Y' }],
-      voiced_clear: false, voiced_rest: null,
+      voiced_clear: false, voiced_rest: null, voiced_groups: [],
     }));
     expect(applied).toBe(true);
     squads = await dialogSquads(page);
     expect(squads.X.sort()).toEqual(['Alice', 'Bob', 'Charlie']);
-    expect(squads.Y.sort()).toEqual(['Dana', 'Eve', 'Hank']);
-    await expect(modal.locator('#scrimmageSitting')).toHaveText('2 sitting out');
-    await expect(page.locator('.toast', { hasText: 'Dark 3 · Light 3' })).toBeVisible();
-    // Back to a full deal for the rest of the loop.
+    expect(squads.Y.sort()).toEqual(['Dana', 'Eve', 'Hank', 'Jake']);
+    const irisRow = modal.locator('#scrimmagePickerBody tr', { hasText: 'Iris' });
+    await expect(irisRow).toHaveClass(/scrimmage-absent/);
+    await expect(modal.locator('#scrimmageSitting')).toHaveText('1 absent');
+    await expect(page.locator('.toast', { hasText: 'Dark 3 · Light 4' })).toBeVisible();
+    // Iris is here after all; back to a full deal for the rest of the loop.
+    await irisRow.locator('.scrimmage-present').check();
     await modal.locator('#scrimmageClearBtn').click();
     await modal.locator('#scrimmageAutoBtn').click();
     await expect(modal.locator('#scrimmageSitting')).toHaveText('Everyone is on a squad');

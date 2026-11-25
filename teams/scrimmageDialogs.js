@@ -52,6 +52,11 @@ import { log } from '../utils/logger.js';
 //   assignment  playerId → 'X' | 'Y' (not in the map = sitting out)
 //   absent      ids whose "here" box is unticked: never on a squad, and Auto
 //               skips them (default: everyone is here)
+//   pinned      ids the COACH put on a squad (a tap, a narrated name or a
+//               narrated count) as opposed to ones Auto dealt there. Squad
+//               narration's "everyone else" and "the rest of the FMPs" leave
+//               pinned players where they are, and a narrated count never
+//               takes one. Not shown; Clear empties it.
 //   names       the squad names as typed
 //   namesTouched whether the coach has typed in a name box (new mode: until
 //               then the team's saved names land when the team loads)
@@ -126,6 +131,9 @@ function rebuildRoster() {
     state.ghosts = ghosts;
     [...state.assignment.keys()].forEach(id => {
         if (!roster.some(p => p.id === id)) state.assignment.delete(id);
+    });
+    [...state.pinned].forEach(id => {
+        if (!roster.some(p => p.id === id)) state.pinned.delete(id);
     });
     [...state.absent].forEach(id => {
         if (!roster.some(p => p.id === id)) state.absent.delete(id);
@@ -253,6 +261,7 @@ function openDialog(mode, team) {
         ghosts: new Set(),
         assignment: new Map(),
         absent: new Set(),
+        pinned: new Set(),
         names: { ...initialNames },
         namesTouched: false,
         pulling: 'X',
@@ -292,6 +301,7 @@ function openDialog(mode, team) {
     });
     modal.querySelector('#scrimmageClearBtn').addEventListener('click', () => {
         state.assignment = new Map();
+        state.pinned = new Set();
         renderTable();
     });
     modal.querySelector('#scrimmageAutoBtn').addEventListener('click', () => {
@@ -350,26 +360,33 @@ function getSquadDialogContext() {
         names: effectiveNames(),
         assignment: new Map(state.assignment),
         absent: new Set(state.absent),
+        pinned: new Set(state.pinned),
         mode: state.mode,
     };
 }
 
 /**
- * Replace the picker's assignment with a narrated one (playerId → squad).
- * A player the coach put on a squad is here today, whatever the box said;
- * a squad with no game (edit mode, deleted half) cannot take anyone.
+ * Replace the picker's state with a narrated one: the assignment (playerId →
+ * squad), who is not here (a narrated sit-out unticks the "here" box, so
+ * Auto and later collective phrases leave that player alone), and who the
+ * coach placed. narration/squadResolve.js works all three out; a player on
+ * a squad is always here and never absent, and a squad with no game (edit
+ * mode, deleted half) cannot take anyone.
+ * @param {Map<string, 'X'|'Y'>} assignment
+ * @param {{absent?: Set<string>, pinned?: Set<string>}} [also]
  * @returns {boolean} whether a dialog was open to apply it to
  */
-function applyNarratedSquads(assignment) {
+function applyNarratedSquads(assignment, { absent = state?.absent, pinned = state?.pinned } = {}) {
     if (!state) return false;
+    const onRoster = id => state.roster.some(p => p.id === id);
     const next = new Map();
     assignment.forEach((squad, id) => {
-        if (!SQUADS.includes(squad) || !squadHasGame(squad)) return;
-        if (!state.roster.some(p => p.id === id)) return;
+        if (!SQUADS.includes(squad) || !squadHasGame(squad) || !onRoster(id)) return;
         next.set(id, squad);
-        state.absent.delete(id);
     });
     state.assignment = next;
+    state.absent = new Set([...(absent || [])].filter(id => onRoster(id) && !next.has(id)));
+    state.pinned = new Set([...(pinned || [])].filter(id => next.has(id)));
     renderTable();
     return true;
 }
@@ -479,6 +496,9 @@ async function showEditSquadsDialog(team, scrimmageId, { summaries = {} } = {}) 
 
         rebuildRoster();
         state.assignment = squadAssignments(games);
+        // Saved squads are the coach's own: narration's "everyone else"
+        // must not reshuffle a scrimmage that is already being played.
+        state.pinned = new Set(state.assignment.keys());
         // A player on a squad but not in the pool (removed from the team AND
         // rebuilt by squadRoster) is in the pool as a ghost, so this only
         // drops ids squadRoster could not rebuild (a malformed snapshot entry).
@@ -741,6 +761,7 @@ function renderTable() {
             } else {
                 state.absent.add(player.id);
                 state.assignment.delete(player.id);
+                state.pinned.delete(player.id);
             }
             renderTable();
         });
@@ -794,8 +815,13 @@ function renderTable() {
             }
             btn.addEventListener('click', () => {
                 // Tap a squad to put the player there; tap it again to sit them out.
-                if (state.assignment.get(player.id) === squad) state.assignment.delete(player.id);
-                else state.assignment.set(player.id, squad);
+                if (state.assignment.get(player.id) === squad) {
+                    state.assignment.delete(player.id);
+                    state.pinned.delete(player.id);
+                } else {
+                    state.assignment.set(player.id, squad);
+                    state.pinned.add(player.id);
+                }
                 renderTable();
             });
             td.appendChild(btn);

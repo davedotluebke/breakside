@@ -17,7 +17,7 @@ import {
     isScrimmageGame, withoutScrimmages, otherSquad, normalizeSquadNames,
     teamSquadNames, squadNamesChanged,
     generateScrimmageId, formatShortDate, squadGameFields, buildSquadSnapshot,
-    squadRoster, autoFillSquads, groupScrimmages, scrimmageSquadNames,
+    squadRoster, autoFillSquads, pickForSquad, groupScrimmages, scrimmageSquadNames,
     scrimmageScores, scrimmageLabel, isScrimmageOver,
     squadStamp, squadDefinition, newerSquadDefinition, applySquadDefinition,
     squadAssignments, squadPatch, describeSquadChange, pruneLinesToSquad,
@@ -608,4 +608,68 @@ test('squadDefinition copies the four fields', () => {
     assert.deepEqual(Object.keys(def).sort(), ['opponent', 'rosterSnapshot', 'scrimmageName', 'team']);
     assert.equal(def.scrimmageName, null);
     assert.equal(squadDefinition({ team: 'Dark' }).rosterSnapshot, null);
+});
+
+// ── picking a count for one squad (narrated "two more FMPs on Dark") ─────
+
+const playerById = id => ROSTER.find(p => p.id === id);
+const idOf = name => ROSTER.find(p => p.name === name).id;
+
+test('pickForSquad: takes the count from players sitting out, within the filter', () => {
+    const assignment = new Map([[idOf('Alice'), 'X'], [idOf('Bob'), 'Y']]);
+    const { picked, assignment: next } = pickForSquad(ROSTER, assignment, {
+        squad: 'X', count: 2, eligible: p => p.gender === 'FMP',
+    });
+    assert.equal(picked.length, 2);
+    picked.forEach(id => {
+        assert.equal(playerById(id).gender, 'FMP');
+        assert.notEqual(id, idOf('Alice'));
+        assert.equal(next.get(id), 'X');
+    });
+    assert.equal(assignment.size, 2, 'the input assignment is not mutated');
+    assert.equal(next.get(idOf('Bob')), 'Y');
+});
+
+test('pickForSquad: balances like Auto — the squad takes what it trails the other in', () => {
+    // X has two handlers, Y two cutters: the next pick for X is a cutter.
+    const assignment = new Map([
+        [idOf('Alice'), 'X'], [idOf('Charlie'), 'X'], [idOf('Bob'), 'Y'], [idOf('Dana'), 'Y'],
+    ]);
+    for (let seed = 1; seed <= 20; seed++) {
+        const { picked } = pickForSquad(ROSTER, assignment, {
+            squad: 'X', count: 1, eligible: p => !!p.position, random: seededRandom(seed),
+        });
+        assert.equal(playerById(picked[0]).position, 'cutter', `seed ${seed}`);
+    }
+});
+
+test('pickForSquad: only when nobody is sitting out does a pick come off the other squad', () => {
+    const everyone = new Map(ROSTER.map((p, i) => [p.id, i % 2 ? 'Y' : 'X']));
+    const fmpOnX = () => ROSTER.filter(p => p.gender === 'FMP' && everyone.get(p.id) === 'X').length;
+    const { picked, assignment: next } = pickForSquad(ROSTER, everyone, {
+        squad: 'X', count: 1, eligible: p => p.gender === 'FMP',
+    });
+    assert.equal(picked.length, 1);
+    assert.equal(everyone.get(picked[0]), 'Y');
+    assert.equal(ROSTER.filter(p => p.gender === 'FMP' && next.get(p.id) === 'X').length, fmpOnX() + 1);
+
+    // With one FMP sitting out, she is the pick and nobody leaves Y.
+    const oneOut = new Map(everyone);
+    const sitter = ROSTER.find(p => p.gender === 'FMP' && everyone.get(p.id) === 'Y');
+    oneOut.delete(sitter.id);
+    assert.deepEqual(pickForSquad(ROSTER, oneOut, { squad: 'X', count: 1, eligible: p => p.gender === 'FMP' }).picked,
+        [sitter.id]);
+});
+
+test('pickForSquad: runs short rather than break the filter; ties are random', () => {
+    const fmps = ROSTER.filter(p => p.gender === 'FMP').length;
+    const { picked } = pickForSquad(ROSTER, new Map(), { squad: 'Y', count: 99, eligible: p => p.gender === 'FMP' });
+    assert.equal(picked.length, fmps);
+    assert.deepEqual(pickForSquad(ROSTER, new Map(), { squad: 'Q', count: 2 }).picked, []);
+
+    const firsts = new Set();
+    for (let seed = 1; seed <= 40; seed++) {
+        firsts.add(pickForSquad(ROSTER, new Map(), { squad: 'X', count: 1, random: seededRandom(seed) }).picked[0]);
+    }
+    assert.ok(firsts.size > 1, 'the same roster must not always yield the same pick');
 });

@@ -18,11 +18,16 @@
  *   tap the mic with the picker open → transcription session opens
  *   (vocabulary biased to the whole roster AND the two squad names) → coach
  *   speaks ("Alice and Bob on Orange, Dana on Black", "Eve sits out",
- *   "everyone else on Black") → tap again → transcript + roster + squad
- *   names + current squads POST to /api/narration/squads → the derived
- *   squads replace the picker's assignment, the way taps would, and a toast
- *   says who moved. Names spoken without a squad go on the FIRST squad;
- *   that rule is the server's (narration_lineup.py), not the model's.
+ *   "everyone else on Black", "the rest of the FMPs on Orange", "two more
+ *   guys on Black") → tap again → transcript + roster (with each player's
+ *   gender group, whether they are here, and whether the coach already
+ *   placed them) + squad names + current squads POST to
+ *   /api/narration/squads → the derived squads replace the picker's
+ *   assignment, the way taps would, any counts are picked here by Auto's
+ *   balance rules (narration/squadResolve.js), and a toast says who moved.
+ *   Names spoken without a squad go on the FIRST squad, and a name the
+ *   recognizer mangled is resolved against the closed roster; both rules
+ *   are the server's (narration_lineup.py), not the model's.
  */
 import { narrationRealtimeSession } from './realtimeSession.js';
 import { narrationEngine } from './narrationEngine.js';
@@ -117,7 +122,7 @@ const squadNarration = (function() {
         const labels = {
             connecting: 'Connecting…',
             recording: transcript.trim() ? ''
-                : `Listening — "Alice and Bob on ${names.X}, Dana on ${names.Y}"; names alone go on ${names.X}`,
+                : `Listening — "Alice and Bob on ${names.X}, the rest of the FMPs on ${names.Y}"; names alone go on ${names.X}`,
             processing: 'Working out the squads…'
         };
         const tail = transcript.length > TRANSCRIPT_TAIL_CHARS
@@ -149,6 +154,25 @@ const squadNarration = (function() {
             number: p.number != null ? String(p.number) : null
         }));
     }
+
+    /** The roster as the server needs it to expand collective phrases:
+     *  each player's gender group ("the FMPs"), whether they are here today
+     *  (never swept up when not), and whether the coach already placed them
+     *  ("everyone else" leaves those alone). */
+    function rosterForServer(ctx) {
+        return ctx.roster.map(p => ({
+            name: p.name,
+            nickname: p.nickname || null,
+            number: p.number != null ? String(p.number) : null,
+            gender: p.gender || null,
+            here: !ctx.absent.has(p.id),
+            pinned: ctx.pinned.has(p.id)
+        }));
+    }
+
+    // The gender-group words, for the recognizer: said as initialisms they
+    // are otherwise transcribed every which way.
+    const GROUP_VOCABULARY = ['FMP', 'FMPs', 'MMP', 'MMPs'];
 
     /** {X: [names], Y: [names]} from the picker's id → squad map. */
     function currentSquadNames(ctx) {
@@ -195,7 +219,9 @@ const squadNarration = (function() {
         // squad words are what tell this narration apart from a line call,
         // so the recognizer must get them right. The names ride along as
         // roster-shaped entries, which is all the vocabulary prompt reads.
-        const info = rosterInfo(ctx.roster).concat([{ name: ctx.names.X }, { name: ctx.names.Y }]);
+        const info = rosterInfo(ctx.roster)
+            .concat([{ name: ctx.names.X }, { name: ctx.names.Y }])
+            .concat(GROUP_VOCABULARY.map(name => ({ name })));
         const advOpts = (advancedSettings && advancedSettings.getNarrationSessionOptions)
             ? advancedSettings.getNarrationSessionOptions(info)
             : {};
@@ -291,7 +317,7 @@ const squadNarration = (function() {
         const payload = {
             teamId: ctx.teamId,
             transcript: transcript,
-            roster: rosterInfo(ctx.roster),
+            roster: rosterForServer(ctx),
             squad_names: { X: ctx.names.X, Y: ctx.names.Y },
             current_squads: currentSquadNames(ctx)
         };
@@ -323,8 +349,10 @@ const squadNarration = (function() {
     /**
      * Apply the backend's squads to the open picker. The server returns the
      * FULL resulting squads (its current squads ± the voiced changes), so
-     * applying is a plain replacement and the toast reports the delta. An
-     * error result, or one that heard nothing, never touches the picker.
+     * applying is a plain replacement — plus the counts it could only
+     * verify ("two more FMPs on Dark"), which are picked here — and the
+     * toast reports the delta. An error result, or one that heard nothing,
+     * never touches the picker.
      */
     function applyResult(data) {
         if (!data || data.error) {
@@ -339,14 +367,22 @@ const squadNarration = (function() {
         }
         const voicedAssign = Array.isArray(data.voiced_assign) ? data.voiced_assign : [];
         const voicedOut = Array.isArray(data.out) ? data.out : [];
+        const voicedGroups = Array.isArray(data.voiced_groups) ? data.voiced_groups : [];
+        const fills = Array.isArray(data.fills) ? data.fills : [];
         const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
-        const heard = voicedAssign.length || voicedOut.length || data.voiced_clear === true || !!data.voiced_rest;
+        const heard = voicedAssign.length || voicedOut.length || voicedGroups.length || fills.length
+            || data.voiced_clear === true || !!data.voiced_rest;
         if (!heard && !modelUnmatched.length) {
             toast('No squad changes heard', 'info');
             return false;
         }
 
-        const result = resolveSquadResult(data, ctx);
+        const result = resolveSquadResult(data, ctx, {
+            // A narrated count is picked by the Auto button's own rules.
+            priorityOrder: (advancedSettings && advancedSettings.getAutoLinePriorityOrder)
+                ? advancedSettings.getAutoLinePriorityOrder()
+                : undefined
+        });
         if (!heard) {
             // Only unmatched references: nothing to apply, say what was missed.
             const shown = result.unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
@@ -354,12 +390,13 @@ const squadNarration = (function() {
             return false;
         }
 
-        if (!applyNarratedSquads(result.assignment)) return false;
+        if (!applyNarratedSquads(result.assignment, { absent: result.absent, pinned: result.pinned })) return false;
 
         if (data.note) log('[squadNarration] note:', data.note);
         const { message, type } = buildSquadToast({
             names: ctx.names, counts: result.counts,
-            moved: result.moved, removed: result.removed, unmatched: result.unmatched
+            moved: result.moved, removed: result.removed, unmatched: result.unmatched,
+            shortfalls: result.shortfalls
         });
         showConfirmToast(message, type);
         return true;
@@ -397,8 +434,17 @@ const squadNarration = (function() {
         isDialogOpen,
         refresh,
         // Debug/e2e seams: drive the apply path without mic or backend
-        // (squadNarration._applyResult({squads: {X: ['Alice'], Y: []}})).
+        // (squadNarration._applyResult({squads: {X: ['Alice'], Y: []}})),
+        // or the whole path after the recognizer — the real request, server
+        // and model — from typed words
+        // (await squadNarration._narrate('Alice and Bob on Dark')).
         _applyResult: applyResult,
+        _narrate: async (text) => {
+            if (phase !== 'idle') return false;
+            transcript = String(text || '');
+            await processTranscript();
+            return true;
+        },
         _getTranscript: () => transcript
     };
 })();
