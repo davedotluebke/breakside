@@ -29,6 +29,13 @@ const manageModal = (page: Page) => page.locator('#narrationClipManagerModal');
 async function openAdvanced(page: Page) {
   await page.evaluate(() => (window as any).advancedSettings.showAdvancedSettings());
   await expect(advancedModal(page)).toBeVisible();
+  // Groups start collapsed and reopen the way they were left; the recorder's
+  // rows live under Audio Narration.
+  const group = advancedModal(page).locator('details.adv-group[data-group="Audio Narration"]');
+  if (!(await group.evaluate((d) => (d as HTMLDetailsElement).open))) {
+    await group.locator('summary').click();
+  }
+  await expect(toggleRow(page)).toBeVisible();
 }
 
 const settingValue = (page: Page) =>
