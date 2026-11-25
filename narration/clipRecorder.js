@@ -42,6 +42,22 @@ const narrationClipRecorder = (function() {
     // Shorter than this is a mis-tap, not a narration.
     const MIN_CLIP_MS = 500;
     const RESULT_KINDS = { finalize: 'events', lineup: 'lineup' };
+    // Set the first time this browser saves a clip. Until then nothing here
+    // opens IndexedDB, so a device that never opted in has no clip database.
+    const USED_KEY = 'breakside_narration_clips_used';
+
+    function markUsed() {
+        try { localStorage.setItem(USED_KEY, '1'); } catch (_) { /* storage blocked */ }
+    }
+
+    function everUsed() {
+        try { return localStorage.getItem(USED_KEY) === '1'; } catch (_) { return false; }
+    }
+
+    /** Saved clips, newest first; an empty list (database untouched) before the first save. */
+    function listSavedClips() {
+        return everUsed() ? clipStore.listClips() : Promise.resolve([]);
+    }
 
     // The session being captured, or null. Chunks are the Int16Arrays
     // realtimeSession built for the wire; it never reuses them, so we keep
@@ -165,6 +181,7 @@ const narrationClipRecorder = (function() {
             exportedAt: null,
             pcm: new Blob(a.chunks, { type: 'audio/pcm' })
         };
+        markUsed();
         lastSave = clipStore.putClip(clip)
             .then(async (id) => {
                 await clipStore.enforceRetention({ maxBytes: MAX_TOTAL_BYTES, maxAgeMs: MAX_AGE_MS });
@@ -289,7 +306,7 @@ const narrationClipRecorder = (function() {
 
     /** One archive, one folder per clip — the scenarios/ layout the harness reads. */
     async function exportAll() {
-        const clips = await clipStore.listClips();
+        const clips = await listSavedClips();
         if (!clips.length) return 'empty';
         const entries = [];
         for (const clip of clips) {
@@ -377,7 +394,7 @@ const narrationClipRecorder = (function() {
         const refresh = async () => {
             let clips = [];
             try {
-                clips = await clipStore.listClips();
+                clips = await listSavedClips();
             } catch (err) {
                 list.innerHTML = '<p class="clip-manager-empty">Browser storage is unavailable here (private browsing?), so no clips can be kept.</p>';
                 total.textContent = '';
@@ -411,7 +428,7 @@ const narrationClipRecorder = (function() {
                     if (outcome === 'empty') toast('No clips to export', 'info');
                     else if (outcome === 'downloaded') toast('Clips downloaded', 'success');
                 } else if (act === 'delete-all') {
-                    if (window.confirm('Delete all saved narration clips on this device?')) {
+                    if (everUsed() && window.confirm('Delete all saved narration clips on this device?')) {
                         await clipStore.clearClips();
                     }
                 }
@@ -440,9 +457,13 @@ const narrationClipRecorder = (function() {
         attachResult('lineup', { request: p.request || null, response: p.response || null });
     });
 
-    // Startup trim, so a device that stopped being used still bounds itself.
-    clipStore.enforceRetention({ maxBytes: MAX_TOTAL_BYTES, maxAgeMs: MAX_AGE_MS })
-        .catch(() => { /* storage unavailable: nothing to trim */ });
+    // Startup trim, so a device that stopped being used still bounds itself
+    // (the 30-day promise holds with the setting turned back off). Only on a
+    // device that has saved a clip: everyone else never touches IndexedDB.
+    if (everUsed()) {
+        clipStore.enforceRetention({ maxBytes: MAX_TOTAL_BYTES, maxAgeMs: MAX_AGE_MS })
+            .catch(() => { /* storage unavailable: nothing to trim */ });
+    }
 
     return {
         confirmOptIn,
@@ -450,7 +471,7 @@ const narrationClipRecorder = (function() {
         exportClip,
         exportAll,
         isCapturing: () => !!active,
-        listClips: () => clipStore.listClips(),
+        listClips: listSavedClips,
         // Debug seam (console / Playwright): drive a capture without a mic
         // or an OpenAI session, e.g. _tap.onSessionStart({mode:'transcription',
         // sampleRate:24000}); _tap.onAudioChunk(new Int16Array(24000));
