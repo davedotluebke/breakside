@@ -14,7 +14,8 @@ tests/narration/
 │   ├── generate_synthetic_audio.py   # OpenAI TTS → audio.flac
 │   ├── generate_noise_audio.py       # noise-probe audio for 023-025
 │   ├── generate_gapped_audio.py      # segments.json → audio with silence gaps (026)
-│   └── generate_lineup_audio.py      # the 18-case lineup matrix as audio (+ -noisy)
+│   ├── generate_lineup_audio.py      # the 18-case lineup matrix as audio (+ -noisy)
+│   └── stop_latency_probe.py         # what the browser's stop() keeps vs. the drained transcript (live API)
 ├── stt_eval.py              # transcription-model comparison (events + lineup legs)
 ├── test_metrics.py          # offline unit tests for the metrics (default suite)
 ├── lineup_scenarios/        # audio-driven lineup cases (see stt_eval.py)
