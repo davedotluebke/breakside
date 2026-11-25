@@ -113,7 +113,10 @@ function phraseTurnover(ev, ctx) {
     const isPullDrop = typeof ev.isPullDrop === 'function' ? ev.isPullDrop() : (!!ev.drop_flag && !ev.thrower);
     if (isPullDrop) return sentence(`${r || ctx.teamName} drops the pull. Turnover`);
     if (ev.throwaway_flag) return sentence(`${t || ctx.teamName} throws it away${ev.huck_flag ? ' on the huck' : ''}. Turnover`);
-    if (ev.drop_flag) return sentence(`${r || 'The receiver'} drops it${ev.huck_flag ? ' on the huck' : ''}. Turnover`);
+    if (ev.drop_flag) {
+        const what = ev.huck_flag ? 'the huck' : 'the throw';
+        return sentence(`${r || 'The receiver'} drops ${t ? `${what} from ${t}` : 'it'}. Turnover`);
+    }
     if (ev.stall_flag) return sentence(`${t || ctx.teamName} gets stalled out. Turnover`);
     if (ev.defense_flag) return 'Turnover, forced by the defense.';
     return sentence(t ? `Turnover by ${t}` : 'Turnover');
@@ -212,7 +215,32 @@ function phraseEntry(entry, ctx = {}) {
 }
 
 /** Lines the queue keeps when it has to drop plays. */
-const isKeeper = entry => entry.kind === 'score' || entry.kind === 'currentscore';
+const isKeeper = entry => entry.kind === 'score' || entry.kind === 'currentscore' || entry.kind === 'gameover';
+
+/**
+ * The closing line once the game is over, from the last running-score entry:
+ * "Game over. Us wins, 13 to 9." / "Game over. It ends tied at 10." The
+ * renderer emits no game-over line of its own, so the narrator adds this
+ * after the final score (synthetic entry kind 'gameover').
+ * @param {object[]} entries - engine.entries
+ * @returns {string} '' when there is no score line to read
+ */
+function gameOverSentence(entries) {
+    let last = null;
+    for (let i = entries.length - 1; i >= 0; i--) { if (entries[i].kind === 'currentscore') { last = entries[i]; break; } }
+    if (!last) return '';
+    const m = /^Current score: (.*) (\d+), (.*) (\d+)$/.exec(String(last.text || ''));
+    if (!m) return 'Game over.';
+    const [, us, a, them, b] = m;
+    const ua = +a, ub = +b;
+    if (ua === ub) return `Game over. It ends tied at ${ua}.`;
+    return ua > ub ? `Game over. ${us} wins, ${ua} to ${ub}.` : `Game over. ${them} wins, ${ub} to ${ua}.`;
+}
+/** Index of the last running-score entry, or -1. */
+function lastScoreIndex(entries) {
+    for (let i = entries.length - 1; i >= 0; i--) if (entries[i].kind === 'currentscore') return i;
+    return -1;
+}
 
 /**
  * Does the detail level want this entry spoken?
@@ -226,7 +254,7 @@ function wantsEntry(entry, level) {
     if (!entry) return false;
     const lvl = LEVELS[level] ? level : DEFAULT_LEVEL;
     if (lvl === 'pbp') return true;
-    if (entry.kind === 'score' || entry.kind === 'currentscore') return true;
+    if (entry.kind === 'score' || entry.kind === 'currentscore' || entry.kind === 'gameover') return true;
     if (lvl === 'score') return false;
     if (entry.kind === 'roster' || entry.kind === 'periodnote') return true;
     if ((entry.kind === 'event' || entry.kind === 'after') && entry.event && entry.event.type === 'Other') return true;
@@ -465,21 +493,47 @@ function mountReplayNarrator(cfg) {
         return hold;
     }
 
+    // ---- game over ----
+    // Spoken once after the final score: on a finished game's replay, right
+    // behind the last running-score line; on a live game, when the sync that
+    // ends the game arrives while following the tail (no entry fires for
+    // that, so the transport hook watches engine.isFinished() flip). Seeking
+    // back before the last score re-arms it for the next pass.
+    const finished = () => !!(engine && typeof engine.isFinished === 'function' && engine.isFinished());
+    let gameOverSaid = false;
+    function announceGameOver() {
+        if (gameOverSaid || !enabled) return;
+        const text = gameOverSentence(engine.entries || []);
+        if (!text) return;
+        gameOverSaid = true;
+        const entry = { kind: 'gameover', text };
+        if (!wantsEntry(entry, level())) return;
+        enqueue(entry, text);
+    }
+
     // ---- controller hooks ----
-    offs.push(controller.on('entry', ({ entry }) => {
+    offs.push(controller.on('entry', ({ index, entry }) => {
         if (!enabled || !entry || !wantsEntry(entry, level())) return undefined;
         const text = phraseEntry(entry, ctxFor(entry));
         if (!text) return undefined;
-        return enqueue(entry, text);
+        const hold = enqueue(entry, text);
+        if (entry.kind === 'currentscore' && finished() && index === lastScoreIndex(engine.entries || [])) announceGameOver();
+        return hold;
     }));
     // A seek (field without animation) or a pause stops the voice with the field.
-    offs.push(controller.on('field', ({ animate }) => { if (!animate && (current || queue.length)) cancel(); }));
+    offs.push(controller.on('field', ({ index, animate }) => {
+        if (!animate && (current || queue.length)) cancel();
+        if (index < lastScoreIndex(engine.entries || [])) gameOverSaid = false;
+    }));
     // Pause in place stops the voice. A step forward also flips playing off,
     // but it advances the index — that line was just enqueued, so keep it.
-    let lastPlaying = null, lastIndex = null;
+    let lastPlaying = null, lastIndex = null, wasFinished = finished();
     offs.push(controller.on('transport', s => {
         if (lastPlaying === true && !s.playing && s.index === lastIndex) cancel();
         lastPlaying = s.playing; lastIndex = s.index;
+        const nowFinished = finished();
+        if (nowFinished && !wasFinished && s.follow && s.atTail) announceGameOver();
+        wasFinished = nowFinished;
     }));
 
     function setEnabled(on) {
@@ -512,4 +566,4 @@ function mountReplayNarrator(cfg) {
     return { get enabled() { return enabled; }, setEnabled, cancel, destroy, button: btn, settingsButton: gear, menu };
 }
 
-export { phraseEntry, wantsEntry, resolveVoice, mountReplayNarrator, VOICE_PROFILES, LEVELS };
+export { phraseEntry, wantsEntry, resolveVoice, gameOverSentence, mountReplayNarrator, VOICE_PROFILES, LEVELS };

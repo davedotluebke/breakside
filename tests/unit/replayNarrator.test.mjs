@@ -10,7 +10,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { phraseEntry, wantsEntry, resolveVoice, mountReplayNarrator } from '../../playByPlay/replayNarrator.js';
+import { phraseEntry, wantsEntry, resolveVoice, gameOverSentence, mountReplayNarrator } from '../../playByPlay/replayNarrator.js';
 import { buildGameLogEntries } from '../../utils/gameLogRenderer.js';
 import { createReplayEngine } from '../../playByPlay/replayEngine.js';
 import { createReplayController } from '../../playByPlay/replayController.js';
@@ -22,8 +22,8 @@ const at = (e, t) => { e.at = t; return e; };
 const poss = (offensive, events, startedAt = null) => ({ offensive, events, startedAt });
 const point = over => Object.assign({ players: Object.keys(P), startingPosition: 'defense', winner: '', possessions: [] }, over);
 
-function sampleGame(t0 = 100000) {
-    return { team: 'Us', opponent: 'Them', startingPosition: 'defense', points: [
+function sampleGame(t0 = 100000, { finished = false } = {}) {
+    return { team: 'Us', opponent: 'Them', startingPosition: 'defense', gameEndTimestamp: finished ? new Date(t0 + 100000) : null, points: [
         point({ winner: 'team', endTimestamp: new Date(t0 + 40000), possessions: [
             poss(false, [
                 at(new Pull({ puller: P.Alice, quality: 'Good Pull', from: { x: 0, y: .5 }, to: { x: .8, y: .4 } }), t0),
@@ -59,7 +59,7 @@ test('phrasing: furniture is silent, plays come from the event flags, scores rea
         'Point 2. On the line: Alice Bob Cara Dev.',
         'Them pulls to Us.',
         'Dev catches the pull.',
-        'Alice drops it. Turnover.',
+        'Alice drops the throw from Dev. Turnover.',
         'Them scores!',
         'Tied at 1.',
     ]);
@@ -89,6 +89,8 @@ test('phrasing: every event type has a sentence, inferred prefixes are dropped',
     assert.equal(ev(inferred), 'Alice swings it to Bob.');
     assert.equal(ev(new Turnover({ thrower: P.Alice, throwaway: true, huck: true })), 'Alice throws it away on the huck. Turnover.');
     assert.equal(ev(new Turnover({ receiver: P.Bob, receiverError: true })), 'Bob drops the pull. Turnover.');
+    assert.equal(ev(new Turnover({ thrower: P.Alice, receiver: P.Bob, receiverError: true, huck: true })), 'Bob drops the huck from Alice. Turnover.');
+    assert.equal(ev(new Turnover({ thrower: P.Alice, receiver: P.Bob, receiverError: true })), 'Bob drops the throw from Alice. Turnover.');
     assert.equal(ev(new Turnover({ thrower: P.Alice, stall: true })), 'Alice gets stalled out. Turnover.');
     assert.equal(ev(new Defense({ defender: P.Cara, interception: true })), 'Cara with the interception!');
     assert.equal(ev(new Defense({ defender: P.Cara, layout: true })), 'Layout D by Cara!');
@@ -220,6 +222,47 @@ test('levels: play-by-play says everything, game events keeps lineups / scores /
     assert.equal(wantsEntry(timeout, 'score'), false);
     assert.equal(wantsEntry({ kind: 'periodnote', text: 'x' }, 'events'), true);
     assert.equal(wantsEntry(throwE, 'nonsense'), true);   // unknown level reads as the default (pbp)
+});
+
+test('game over: the closing line reads the last running score; spoken after the final score of a finished game, never for one in progress', () => {
+    const entries = buildGameLogEntries(sampleGame(), CTX);
+    assert.equal(gameOverSentence(entries), 'Game over. It ends tied at 1.');
+    const win = sampleGame(); win.points[1].winner = 'team';
+    assert.equal(gameOverSentence(buildGameLogEntries(win, CTX)), 'Game over. Us wins, 2 to 0.');
+    const loss = sampleGame(); loss.points[0].winner = 'opponent';
+    assert.equal(gameOverSentence(buildGameLogEntries(loss, CTX)), 'Game over. Them wins, 2 to 0.');
+    assert.equal(gameOverSentence([]), '');
+
+    const done = mountOn(sampleGame(100000, { finished: true }));
+    done.n.setEnabled(true);
+    done.controller.seek(1);
+    for (let i = 0; i < 40; i++) { done.controller.stepForward(); done.synth.end(); }
+    assert.deepEqual(texts(done.synth).slice(-2), ['Tied at 1.', 'Game over. It ends tied at 1.']);
+    // Stepping back before the final score and through again says it again, once.
+    done.controller.seek(entries.length - 4);
+    for (let i = 0; i < 6; i++) { done.controller.stepForward(); done.synth.end(); }
+    assert.equal(texts(done.synth).filter(t => t.startsWith('Game over')).length, 2);
+
+    const open = mountOn(sampleGame());
+    open.n.setEnabled(true);
+    open.controller.seek(1);
+    for (let i = 0; i < 40; i++) { open.controller.stepForward(); open.synth.end(); }
+    assert.ok(!texts(open.synth).some(t => t.startsWith('Game over')));
+    assert.equal(wantsEntry({ kind: 'gameover', text: 'x' }, 'score'), true);
+});
+
+test('game over: a live viewer hears it when the sync that ends the game arrives, once', () => {
+    const game = sampleGame();
+    const { controller, n, synth } = mountOn(game);
+    n.setEnabled(true);
+    controller.goLive();
+    synth.end();
+    const before = texts(synth).length;
+    game.gameEndTimestamp = new Date(999999);
+    controller.refresh(game);
+    assert.deepEqual(texts(synth).slice(before), ['Game over. It ends tied at 1.']);
+    controller.refresh(game);
+    assert.equal(texts(synth).length, before + 1);
 });
 
 test('mount: the stored level and voice drive what is spoken and how', () => {

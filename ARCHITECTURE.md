@@ -737,7 +737,12 @@ Layers, bottom-up (all under `playByPlay/`):
   (every play), `events` (lineups, scores, period notes and the game's own
   events: timeouts, injury subs, halftime, side switches) or `score` (score
   lines only), applied by `wantsEntry()` before phrasing. Picking a voice
-  speaks a one-line sample. Pure leaf — the mount site passes `advancedSettings` in —
+  speaks a one-line sample. The renderer emits no game-over line, so the
+  narrator adds one ("Game over. Us wins, 13 to 9.", from the last
+  running-score entry) after the final score of a finished game's replay,
+  and live when the sync that sets `gameEndTimestamp` arrives while
+  following the tail; seeking back before the last score re-arms it. Pure
+  leaf — the mount site passes `advancedSettings` in —
   so `tests/unit/replayNarrator.test.mjs` runs it under node with a fake
   `speechSynthesis`. A server voice (Polly / OpenAI TTS, compared in
   `mockups/commentator/`) would replace only `speak()`.
