@@ -1016,6 +1016,8 @@ _EVAL_SCENARIOS = [
          expect={"Jake", "Charlie", "Hank"}, auto=["FMP"]),
     dict(id="U4-wholesale-then-auto", roster=_EVAL_RG, prev=_EVAL_PREV, sel=_EVAL_PREV,
          t="Wholesale. Auto the line.", expect=set(), auto=["ANY"]),
+    dict(id="U8-clear-is-still-a-clear-before-auto", roster=_EVAL_RG, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Wholesale. Auto-select everybody.", expect=set(), auto=["ANY"]),
     dict(id="U5-sub-then-auto-the-guys", roster=_EVAL_RG, prev=_EVAL_PREV,
          sel=["Alice", "Nora", "Wes"], t="Priya in for Wes, and auto-pick the rest of the guys",
          expect={"Alice", "Nora", "Priya"}, auto=["MMP"]),
@@ -1067,7 +1069,7 @@ def _frontend_match(returned, roster):
 def test_live_lineup_eval_matrix(sc, model, monkeypatch):
     """The shipping gate for lineup prompt/contract changes. Run with:
     NARRATION_LIVE_TESTS=1 pytest test_narration_lineup.py -k live -v
-    (68 calls, ~3min, ~$0.20). One retry absorbs transient API timeouts."""
+    (70 calls, ~3min, ~$0.20). One retry absorbs transient API timeouts."""
     import asyncio
     from narration_lineup import _call_claude_lineup, _derive_players
 
