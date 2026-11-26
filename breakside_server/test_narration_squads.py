@@ -1,5 +1,5 @@
 """
-Tests for the squads narration endpoint (narration_lineup.py, POST
+Tests for the squads narration endpoint (narration_squads.py, POST
 /api/narration/squads) — the scrimmage dialog's voice input.
 
 Contract under test (tap-equivalent, as /lineup): the model only REPORTS
@@ -29,19 +29,21 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-import narration_lineup
-from narration_lineup import (
+import narration_squads
+from narration_common import (
+    _closest_roster_name,
+    _count_evidence_ok,
+    _group_evidence_ok,
+    _group_in_quote,
+    _rest_evidence_ok,
+)
+from narration_squads import (
     SquadsRequest,
     SquadsRosterPlayer,
     _apply_squad_changes,
     _build_squads_prompt,
-    _closest_roster_name,
-    _count_evidence_ok,
     _derive_squads,
-    _group_evidence_ok,
-    _group_in_quote,
     _parse_squads_json,
-    _rest_evidence_ok,
     _squad_key,
 )
 
@@ -557,7 +559,7 @@ class TestSquadsEndpoint:
 
     def test_derives_squads_from_placements(self, client, narration_data, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(narration_lineup, "_call_claude_squads", fake_model(model_reply(
+        monkeypatch.setattr(narration_squads, "_call_claude_squads", fake_model(model_reply(
             assign=placed(("Alice", "Orange"), ("Bob", ""), ("Dana", "Black")),
             unmatched=["Zebediah"], note="Zebediah is not on the roster")))
         resp = client.post("/api/narration/squads", json=request_body(narration_data["team_id"]))
@@ -572,7 +574,7 @@ class TestSquadsEndpoint:
 
     def test_groups_and_fills_in_the_response(self, client, narration_data, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(narration_lineup, "_call_claude_squads", fake_model(model_reply(groups=[
+        monkeypatch.setattr(narration_squads, "_call_claude_squads", fake_model(model_reply(groups=[
             {"group": "MMP", "squad": "Black", "count": None, "said": "the rest of the guys on Black"},
             {"group": "FMP", "squad": "Orange", "count": 2, "said": "two more FMPs on Orange"},
         ])))
@@ -588,7 +590,7 @@ class TestSquadsEndpoint:
     def test_a_client_that_sends_no_gender_or_flags_still_works(self, client, narration_data, monkeypatch):
         """The 2.26.0 client sends name / nickname / number only."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(narration_lineup, "_call_claude_squads", fake_model(model_reply(
+        monkeypatch.setattr(narration_squads, "_call_claude_squads", fake_model(model_reply(
             assign=placed(("Alice", "Orange")), rest="Black", rest_said="everyone else on Black")))
         body = request_body(narration_data["team_id"],
                             transcript="Alice on Orange, everyone else on Black",
@@ -601,7 +603,7 @@ class TestSquadsEndpoint:
 
         async def boom(api_key, prompt):
             raise RuntimeError("Anthropic API 500")
-        monkeypatch.setattr(narration_lineup, "_call_claude_squads", boom)
+        monkeypatch.setattr(narration_squads, "_call_claude_squads", boom)
         resp = client.post("/api/narration/squads", json=request_body(narration_data["team_id"]))
         assert resp.status_code == 200
         data = resp.json()
@@ -635,7 +637,7 @@ class TestSquadsAuthorization:
     @pytest.fixture(autouse=True)
     def _key_and_model(self, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(narration_lineup, "_call_claude_squads", fake_model(model_reply(
+        monkeypatch.setattr(narration_squads, "_call_claude_squads", fake_model(model_reply(
             assign=placed(("Alice", "Orange")))))
 
     def _as(self, user):
@@ -755,7 +757,7 @@ def test_live_squads_eval_matrix(sc, model, monkeypatch):
     (36 calls, about a minute, a few cents). One retry absorbs transient
     API timeouts."""
     import asyncio
-    from narration_lineup import _call_claude_squads
+    from narration_squads import _call_claude_squads
 
     _, req, grade = sc
     monkeypatch.setenv("NARRATION_LINEUP_MODEL", model)

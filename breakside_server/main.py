@@ -25,6 +25,7 @@ try:
     from storage.file_utils import assert_data_dir_writable
     from narration import router as narration_router
     from narration_lineup import router as narration_lineup_router
+    from narration_squads import router as narration_squads_router
     from account_deletion import set_team_eraser
     from storage.erasure import erase_team
     from mail.inbound import build_poller
@@ -35,6 +36,7 @@ except ImportError:
     from breakside_server.storage.file_utils import assert_data_dir_writable
     from breakside_server.narration import router as narration_router
     from breakside_server.narration_lineup import router as narration_lineup_router
+    from breakside_server.narration_squads import router as narration_squads_router
     from breakside_server.account_deletion import set_team_eraser
     from breakside_server.storage.erasure import erase_team
     from breakside_server.mail.inbound import build_poller
@@ -196,6 +198,9 @@ app.include_router(narration_router)
 # Mount lineup narration router (speech-to-lineup for the Lines tab —
 # separate layer from in-point narration; see narration_lineup.py)
 app.include_router(narration_lineup_router)
+# The squads of a scrimmage, the lineup layer's sibling (narration_squads.py;
+# the two share narration_common.py)
+app.include_router(narration_squads_router)
 
 # (Until 2026-09 a standalone public viewer lived under static/ and was
 # mounted here with the PWA leaf directories it imported. Share links are
