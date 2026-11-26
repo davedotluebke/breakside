@@ -179,7 +179,10 @@
 
 /* matrix: throwers down, receivers across; scrolls sideways on a phone */
 .gf-matrix-scroll { overflow: auto; max-width: 100%; border: 1px solid var(--border-light); border-radius: 6px; }
-.gf-matrix { border-collapse: separate; border-spacing: 0; font-size: 0.82em; width: max-content; min-width: 100%; }
+/* No table border: the scroll box draws the frame. The global `table` border
+   (css/base.css) sat outside the cells, so the pinned row-header column stood
+   1px inside it at rest and jumped 1px on the first sideways scroll. */
+.gf-matrix { border: none; border-collapse: separate; border-spacing: 0; font-size: 0.82em; width: max-content; min-width: 100%; }
 .gf-matrix th, .gf-matrix td {
     padding: 4px 6px;
     text-align: center;

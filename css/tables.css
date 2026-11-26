@@ -555,6 +555,30 @@ ul {
     background-color: var(--surface-card);  /* opaque so sticky cells don't bleed-through */
 }
 
+/* The pinned edges carry the frame themselves. The table's own top and left
+   border (css/base.css `table`) sits outside the cells, so the pinned header
+   row and first column stood 1px inside it at rest and jumped 1px on the
+   first scroll, the frame line scrolling away with the content. The edge
+   cells draw that line instead: 2px, the table's 1px plus their own, in the
+   same colour, so the table looks the same at rest. The team roster's pinned
+   cells have no borders of their own; theirs are set with their rules below.
+   tests/sweep/sticky-sweep.spec.ts checks every pinned region for this. */
+#rosterTable, #eventRosterTable, #gameSummaryTable, #scrimmageStatsTable {
+    border-top: none;
+    border-left: none;
+}
+#eventRosterTable tr:first-child > th,
+#gameSummaryTable tr:first-child > th,
+#scrimmageStatsTable tr:first-child > th,
+#rosterTable .roster-header:not(.roster-checkbox-header, .roster-name-header) {
+    border-top-width: 2px;
+}
+#eventRosterTable tr > :first-child,
+#gameSummaryTable tr > :first-child,
+#scrimmageStatsTable tr > :first-child {
+    border-left-width: 2px;
+}
+
 /* Roster stats scope toggle (All Time / Event / Most Recent Game) */
 .roster-scope-toggle {
     display: flex;
@@ -635,13 +659,24 @@ ul {
     z-index: 2;
     background-color: var(--surface-page);
 }
+/* The team roster's header row (Roster + Stats) pins the same way but keeps
+   its own card-coloured cells. A class selector, not tr:first-child th, so
+   the corner cells' own z-index (#rosterTable .roster-checkbox-header and
+   .roster-name-header, further down, same specificity) still wins and they
+   stay above both the pinned row and the pinned columns. */
+#rosterTable .roster-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
 
 /* Sticky left columns: checkbox + name on event roster, name only on game summary */
-/* The checkbox column is pinned to exactly 40px (border-box) because the
-   name column's `left` must equal it. Left to size itself, the column took
-   its width from the checkbox's UA margins: about 39px on desktop Chrome but
-   about 32px on iOS Safari, which left a gap after the checkbox column and
-   slid the name column over the first stats column. The checkbox margin is
+/* The checkbox column is pinned to exactly 41px (border-box) because the
+   name column's `left` must equal it: 40px plus the left-border pixel it took
+   over from the table's frame (see the pinned-edges rule above). Left to size
+   itself, the column took its width from the checkbox's UA margins: about
+   39px on desktop Chrome but about 32px on iOS Safari, which left a gap after
+   the checkbox column and slid the name column over the first stats column. The checkbox margin is
    zeroed in css/teams.css for the same reason. */
 #eventRosterTable tr td:nth-child(1),
 #eventRosterTable tr th:nth-child(1) {
@@ -649,14 +684,14 @@ ul {
     left: 0;
     z-index: 1;
     box-sizing: border-box;
-    width: 40px;
-    min-width: 40px;
-    max-width: 40px;
+    width: 41px;
+    min-width: 41px;
+    max-width: 41px;
 }
 #eventRosterTable tr td:nth-child(2),
 #eventRosterTable tr th:nth-child(2) {
     position: sticky;
-    left: 40px;  /* the pinned checkbox-column width above */
+    left: 41px;  /* the pinned checkbox-column width above */
     z-index: 1;
     box-shadow: 2px 0 0 -1px var(--border-default);  /* subtle divider */
 }
@@ -686,59 +721,21 @@ ul {
     background-color: var(--surface-raised);
 }
 
-/* Shared .active-* column styling. These classes are worn by three live
-   tables: the Line tab's #panelActivePlayersTable (game/selectLine.js), the
-   injury-sub dialog's #subPlayersTable, and the team roster
-   (teams/rosterManagement.js).
-
-   The sticky declarations below are believed vestigial — they were written
-   for a Before Point Screen table that no longer exists, and the Line tab
-   overrides every one of them from its own id-scoped rules in
-   ui/panelSystem.css (which also own the makePanelColumnsSticky() width-sync).
-   They are kept anyway because #subPlayersTable and the roster table also
-   match these selectors, and confirming that sticky/background/box-shadow are
-   inert *there* needs eyes on all three surfaces mid-game — a visual check no
-   test covers. Prune only with that verification in hand; the non-sticky
-   declarations (padding, text-align, font-style) are load-bearing regardless. */
+/* Shared .active-* column styling, worn by two tables: the Line tab's
+   #panelActivePlayersTable (game/selectLine.js) and the team roster's
+   checkbox column (teams/rosterManagement.js). Both pin their columns from
+   their own id-scoped rules (ui/panelSystem.css, #rosterTable below), so
+   nothing here is sticky; these are the declarations neither overrides. The
+   injury-sub dialog's #subPlayersTable shares only .panel-player-table, not
+   these classes. */
 .active-checkbox-column {
     text-align: center;
-    padding: 5px !important;  /* !important is load-bearing: #subPlayersTable cells share this class and .sub-players-table-container td (later, higher specificity) sets 10px 15px */
+    padding: 5px !important;  /* !important is load-bearing: the Line tab's .panel-player-table th/td padding (6px 8px, higher specificity) would otherwise win */
     box-sizing: border-box;  /* Include padding in width calculation */
-    position: sticky;
-    left: 0;
-    z-index: 4;
-    background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
-    border-left: none;
-    border-right: none;
-    border-top: none;
-    border-bottom: none;
 }
 
-.active-name-column {
-    position: sticky;
-    left: 30px; /* overwritten dynamically to the measured checkbox column width */
-    z-index: 3;
-    background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
-    border-left: none;
-    border-right: none;
-    border-top: none;
-    border-bottom: none;
-}
-
-/* Header cell for merged sticky columns */
 .active-header-teams {
-    background-color: var(--surface-sticky);
     box-sizing: border-box;
-    position: sticky;
-    left: 0;
-    z-index: 5;
-    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
-    border-left: none;
-    border-right: none;
-    border-top: none;
-    border-bottom: none;
 }
 
 /* Gender-based color coding for player names */
@@ -822,16 +819,7 @@ td.player-mmp,
 }
 
 .active-time-column {
-    position: sticky;
-    left: 140px; /* this will be overwritten dynamically to width of left 2 columns */
     font-style: italic;
-    z-index: 3;
-    background-color: var(--surface-sticky);
-    box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
-    border-left: none;
-    border-right: none;
-    border-top: none;
-    border-bottom: none;
 }
 
 /* fix width of point columns */
@@ -851,8 +839,8 @@ td.player-mmp,
     border-right: none;
 }
 
-/* Sticky checkbox + name columns (team roster table only — game summary and
-   event roster tables don't have sticky columns). Position/color/border/
+/* Sticky checkbox + name columns on the team roster table (the event roster,
+   game summary and scrimmage stats tables pin theirs above). Position/color/border/
    z-index are static CSS; only the name column's `left` offset is
    width-synced from JS in makeRosterColumnsSticky() (rosterManagement.js),
    since it depends on the measured checkbox column width.
@@ -867,7 +855,7 @@ td.player-mmp,
     z-index: 4;
     background-color: var(--surface-sticky);
     box-shadow: inset -2px 0 0 0 var(--table-sticky-edge), inset 1px 0 0 0 var(--table-sticky-edge-soft), inset 0 -1px 0 0 var(--table-sticky-edge-soft);
-    border-left: none;
+    border-left: 1px solid var(--border-heavy);  /* the table's left frame line (see the pinned-edges rule above) */
     border-right: none;
     border-top: none;
     border-bottom: none;
@@ -889,6 +877,10 @@ td.player-mmp,
 }
 #rosterTable .roster-name-header {
     z-index: 4;
+}
+#rosterTable .roster-checkbox-header,
+#rosterTable .roster-name-header {
+    border-top: 1px solid var(--border-heavy);  /* the table's top frame line (see the pinned-edges rule above) */
 }
 
 .roster-points-column,
