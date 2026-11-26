@@ -285,6 +285,49 @@ _REMOVAL_RE = re.compile(
 )
 
 
+# The coach handing the picking to the app's Auto button: "auto the rest",
+# "auto-pick the FMPs", "auto-select everybody else", "autofill". The word
+# itself is the evidence; no other phrasing ("fill in the rest", "that
+# completes the line") is taken for it. Matched against light-normalized
+# text, where "auto-pick" has become "auto pick".
+_AUTO_LEXICON_RE = re.compile(r"\bauto\w*\b")
+# A recognizer can write the word as the name "Otto". Honored only when
+# nobody on the roster answers to it.
+_AUTO_MISHEARD = "otto"
+# "the rest" is who is left, not somebody resting: taken out before a quote
+# is tested for removal words (_REMOVAL_RE has "rest" / "rests").
+_THE_REST_RE = re.compile(r"\bthe\s+rest\b")
+
+
+def _roster_has_first_name(roster, word: str) -> bool:
+    for p in roster or ():
+        for label in (getattr(p, "name", None), getattr(p, "nickname", None)):
+            tokens = _normalize_name(label or "").split()
+            if tokens and tokens[0] == word:
+                return True
+    return False
+
+
+def _auto_evidence_ok(said: str, roster=()) -> bool:
+    """Whether a quote hands the picking to Auto: it must contain the word."""
+    norm = _light_normalize(said)
+    if _AUTO_LEXICON_RE.search(norm):
+        return True
+    return (_AUTO_MISHEARD in norm.split()
+            and not _roster_has_first_name(roster, _AUTO_MISHEARD))
+
+
+def _is_auto_word(heard: str) -> bool:
+    """A model's "unmatched" reference that is only the word itself."""
+    norm = _light_normalize(heard)
+    return norm == _AUTO_MISHEARD or bool(_AUTO_LEXICON_RE.fullmatch(norm))
+
+
+def _has_removal_words(said: str) -> bool:
+    """Removal words in a group phrase's quote, "the rest" aside."""
+    return bool(_REMOVAL_RE.search(_THE_REST_RE.sub(" ", _light_normalize(said))))
+
+
 # =============================================================================
 # The closed roster: resolving a name as heard
 # =============================================================================

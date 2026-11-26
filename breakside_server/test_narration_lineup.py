@@ -131,7 +131,7 @@ class TestLineupPrompt:
         prompt = _build_lineup_prompt(make_request())
         assert '"clear": false, "clear_said": "", "in": ["Name", ...], "out": [{"name": "Name", "said":' in prompt
         # Group phrases are reported, never expanded into names
-        assert '"groups": [{"group": "FMP" | "MMP" | "ANY", "does": "in" | "out", "count": null' in prompt
+        assert '"groups": [{"group": "FMP" | "MMP" | "ANY", "does": "in" | "out" | "auto", "count": null' in prompt
         # The retired full-lineup output shape must be gone
         assert '"players":' not in prompt
 
@@ -406,8 +406,84 @@ class TestLineupGroups:
             {"group": "FMP", "does": "in", "count": 2, "said": "two more women"}]), g_request("Kris in"))
         assert d.fills == [] and d.dropped == ["<group>"]
 
+    # --- the voiced Auto: "auto the rest", "auto-pick the FMPs" ---
+
+    def test_auto_the_rest_hands_the_line_to_auto(self):
+        for said in ("auto the rest", "auto-pick the rest", "Auto-select everybody else",
+                     "autofill", "auto the line"):
+            req = g_request(f"Kris, and {said}")
+            d = _derive_players(reply(ins=["Kris"], groups=[
+                {"group": "ANY", "does": "auto", "count": None, "said": said}]), req)
+            assert d.autos == ["ANY"], said
+            assert d.fills == [] and d.group_outs == [] and d.dropped == [], said
+            # Auto is the client's pick: the server selects nobody for it.
+            assert d.players == ["Wes", "Alice", "Sam", "Kris"], said
+
+    def test_auto_for_one_gender_group_reads_the_group_from_the_quote(self):
+        req = g_request("Auto-pick the FMPs. Auto the rest of the guys.")
+        d = _derive_players(reply(groups=[
+            {"group": "ANY", "does": "auto", "count": None, "said": "Auto-pick the FMPs"},
+            {"group": "MMP", "does": "auto", "count": None, "said": "Auto the rest of the guys"},
+        ]), req)
+        assert d.autos == ["FMP", "MMP"] and d.dropped == []
+
+    def test_the_word_auto_must_be_in_the_quote(self):
+        # "does": "auto" on a wrap-up or a fill-in phrase is refused: only
+        # the word hands the picking over.
+        for said in ("that completes the line", "fill in the rest", "everybody else"):
+            d = _derive_players(reply(groups=[
+                {"group": "ANY", "does": "auto", "count": None, "said": said}]), g_request(f"Kris and {said}"))
+            assert d.autos == [] and d.dropped == ["<group:unsupported>"], said
+
+    def test_the_quote_decides_auto_whatever_the_model_called_it(self):
+        d = _derive_players(reply(groups=[
+            {"group": "FMP", "does": "in", "count": None, "said": "auto-pick the women"}]),
+            g_request("auto-pick the women"))
+        assert d.autos == ["FMP"]
+        # ...but a model that read it as a removal vetoes it, and a quote that
+        # both removes and hands off is not guessed at.
+        for g, t in (({"group": "ANY", "does": "out", "count": None, "said": "auto the rest"}, "auto the rest"),
+                     ({"group": "MMP", "does": "auto", "count": None, "said": "the guys come off and auto the rest"},
+                      "the guys come off and auto the rest")):
+            d = _derive_players(reply(groups=[g]), g_request(t))
+            assert d.autos == [] and d.group_outs == [] and d.dropped == ["<group:unsupported>"]
+
+    def test_auto_with_a_count_is_a_count(self):
+        d = _derive_players(reply(groups=[
+            {"group": "FMP", "does": "auto", "count": 2, "said": "auto-pick two more women"}]),
+            g_request("auto-pick two more women"))
+        assert d.fills == [("FMP", 2)] and d.autos == []
+
+    def test_the_rest_is_not_a_removal_word(self):
+        # _REMOVAL_RE has "rest" for "Wes rests"; "the rest" is who is left.
+        d = _derive_players(reply(groups=[
+            {"group": "MMP", "does": "in", "count": 2, "said": "two guys for the rest"}]),
+            g_request("two guys for the rest"))
+        assert d.fills == [("MMP", 2)]
+        d = _derive_players(reply(groups=[
+            {"group": "MMP", "does": "out", "count": None, "said": "the guys take a rest"}]),
+            g_request("the guys take a rest"))
+        assert d.group_outs == ["MMP"]
+
+    def test_auto_heard_as_otto_only_when_nobody_is_called_otto(self):
+        said = "Otto the rest"
+        d = _derive_players(reply(ins=["Kris"], unmatched=["Otto"], groups=[
+            {"group": "ANY", "does": "auto", "count": None, "said": said}]), g_request(f"Kris, {said}"))
+        assert d.autos == ["ANY"] and d.unmatched == []
+        with_otto = G_ROSTER + [LineupRosterPlayer(name="Otto Lake", gender="MMP")]
+        d = _derive_players(reply(groups=[
+            {"group": "ANY", "does": "auto", "count": None, "said": said}]),
+            make_request(transcript=said, roster=with_otto, current_selection=[], previous_lineup=[]))
+        assert d.autos == [] and d.dropped == ["<group:unsupported>"]
+
+    def test_auto_evidence_must_be_in_the_transcript(self):
+        d = _derive_players(reply(groups=[
+            {"group": "ANY", "does": "auto", "count": None, "said": "auto the rest"}]), g_request("Kris in"))
+        assert d.autos == [] and d.dropped == ["<group>"]
+
     def test_prompt_carries_the_shared_rules(self):
         prompt = _build_lineup_prompt(g_request("Kris in"))
+        assert '"does": "in" | "out" | "auto"' in prompt and "AUTO — the coach hands" in prompt
         assert "THE ROSTER IS CLOSED" in prompt
         assert "it is NOT a mishearing of MMP" in prompt
         assert "- Wes \"Big Wes\" #7 [MMP]" in prompt and "- Morgan Vale \"MV\"\n" in prompt
@@ -625,6 +701,21 @@ class TestLineupEndpoint:
         assert data["players"] == ["Alice"]
         assert data["voiced_group_out"] == ["MMP"]
         assert data["fills"] == [{"group": "FMP", "count": 2}]
+        assert data["error"] is None
+
+    def test_voiced_auto_in_the_response(self, client, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        async def call(api_key, prompt):
+            return reply(ins=["Kris"], groups=[
+                {"group": "ANY", "does": "auto", "count": None, "said": "auto the rest"}])
+        monkeypatch.setattr(narration_lineup, "_call_claude_lineup", call)
+        body = request_body(transcript="Kris, and auto the rest",
+                            roster=[p.model_dump() for p in G_ROSTER], current_selection=[])
+        data = client.post("/api/narration/lineup", json=body).json()
+        # The server names nobody for Auto: the Lines tab does the picking.
+        assert data["players"] == ["Kris"] and data["fills"] == []
+        assert data["voiced_auto"] == ["ANY"]
         assert data["error"] is None
 
     def test_a_client_that_sends_no_gender_still_works(self, client, monkeypatch):
@@ -913,6 +1004,26 @@ _EVAL_SCENARIOS = [
     dict(id="G6-fmps-initialism", roster=_EVAL_RG, prev=_EVAL_PREV,
          sel=["Kris", "Wes", "Sam", "Hank"], t="Three F.M.P.s and we're good",
          expect={"Kris", "Wes", "Sam", "Hank"}, fills=[("FMP", 3)]),
+    # The voiced Auto (U): the coach hands the picking to the app; the model
+    # reports the phrase and names nobody for it.
+    dict(id="U1-names-then-auto-the-rest", roster=_EVAL_RG, prev=_EVAL_PREV, sel=[],
+         t="Kris and Alice, and auto the rest", expect={"Kris", "Alice"}, auto=["ANY"]),
+    dict(id="U2-auto-select-everybody-else", roster=_EVAL_RG, prev=_EVAL_PREV,
+         sel=["Wes", "Sam", "Nora"], t="Auto-select everybody else.",
+         expect={"Wes", "Sam", "Nora"}, auto=["ANY"]),
+    dict(id="U3-auto-pick-the-fmps", roster=_EVAL_RG, prev=_EVAL_PREV, sel=[],
+         t="Auto-pick the FMPs. The guys are Jake, Charlie and Hank.",
+         expect={"Jake", "Charlie", "Hank"}, auto=["FMP"]),
+    dict(id="U4-wholesale-then-auto", roster=_EVAL_RG, prev=_EVAL_PREV, sel=_EVAL_PREV,
+         t="Wholesale. Auto the line.", expect=set(), auto=["ANY"]),
+    dict(id="U5-sub-then-auto-the-guys", roster=_EVAL_RG, prev=_EVAL_PREV,
+         sel=["Alice", "Nora", "Wes"], t="Priya in for Wes, and auto-pick the rest of the guys",
+         expect={"Alice", "Nora", "Priya"}, auto=["MMP"]),
+    dict(id="U6-auto-heard-as-otto", roster=_EVAL_RG, prev=_EVAL_PREV, sel=[],
+         t="Sam, Dana, and Otto the rest.", expect={"Sam", "Dana"}, auto=["ANY"]),
+    dict(id="U7-count-then-auto", roster=_EVAL_RG, prev=_EVAL_PREV, sel=["Kris"],
+         t="Two more women and then auto-pick the rest", expect={"Kris"},
+         fills=[("FMP", 2)], auto=["ANY"]),
 ]
 
 _EVAL_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-5-20250929"]
@@ -956,7 +1067,7 @@ def _frontend_match(returned, roster):
 def test_live_lineup_eval_matrix(sc, model, monkeypatch):
     """The shipping gate for lineup prompt/contract changes. Run with:
     NARRATION_LIVE_TESTS=1 pytest test_narration_lineup.py -k live -v
-    (54 calls, ~2min, ~$0.15). One retry absorbs transient API timeouts."""
+    (68 calls, ~3min, ~$0.20). One retry absorbs transient API timeouts."""
     import asyncio
     from narration_lineup import _call_claude_lineup, _derive_players
 
@@ -987,9 +1098,11 @@ def test_live_lineup_eval_matrix(sc, model, monkeypatch):
     # producing fills is caught.
     assert d.fills == sc.get("fills", []), f"fills={d.fills} dropped={d.dropped} note={res.get('note')!r}"
     assert d.group_outs == sc.get("group_out", []), f"group_outs={d.group_outs} dropped={d.dropped}"
+    assert d.autos == sc.get("auto", []), f"autos={d.autos} dropped={d.dropped} note={res.get('note')!r}"
+    assert not d.unmatched or "auto" not in sc, f"unmatched={d.unmatched}"
     if sc.get("grade") == "s1":
         assert _grade_s1(matched), f"matched={sorted(matched)} in={ins} out={outs}"
     else:
         assert matched == sc["expect"], (
             f"matched={sorted(matched)} expect={sorted(sc['expect'])} "
-            f"in={ins} out={outs} clear={cleared}")
+            f"in={ins} out={outs} clear={d.cleared}")

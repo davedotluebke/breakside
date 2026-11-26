@@ -66,8 +66,8 @@ try:
     from narration_common import (  # type: ignore
         ANY_GROUP, RosterPlayer,
         _REMOVAL_RE,
-        _anthropic_key, _clear_evidence_ok, _evidence_in_transcript, _exact_roster_name,
-        _gender_of, _light_normalize, _lineup_model, _normalize_name, _quote_names_player,
+        _anthropic_key, _auto_evidence_ok, _clear_evidence_ok, _evidence_in_transcript,
+        _exact_roster_name, _gender_of, _has_removal_words, _is_auto_word, _light_normalize, _lineup_model, _normalize_name, _quote_names_player,
         _resolve_roster_name, _shape_groups, _shape_out_entries, _shape_phrases,
         _verified_group, _worksheet_phrase,
         prompt_roster, prompt_transcript, prompt_worksheet, rule_closed_roster, rule_gender_words,
@@ -77,8 +77,8 @@ except ImportError:
     from breakside_server.narration_common import (  # type: ignore
         ANY_GROUP, RosterPlayer,
         _REMOVAL_RE,
-        _anthropic_key, _clear_evidence_ok, _evidence_in_transcript, _exact_roster_name,
-        _gender_of, _light_normalize, _lineup_model, _normalize_name, _quote_names_player,
+        _anthropic_key, _auto_evidence_ok, _clear_evidence_ok, _evidence_in_transcript,
+        _exact_roster_name, _gender_of, _has_removal_words, _is_auto_word, _light_normalize, _lineup_model, _normalize_name, _quote_names_player,
         _resolve_roster_name, _shape_groups, _shape_out_entries, _shape_phrases,
         _verified_group, _worksheet_phrase,
         prompt_roster, prompt_transcript, prompt_worksheet, rule_closed_roster, rule_gender_words,
@@ -142,6 +142,10 @@ class LineupResponse(BaseModel):
     # Counts for the Lines tab to fill, in spoken order, after ``players``
     # ("two more women"): the client picks who, by its Auto rules.
     fills: List["LineupFill"] = []
+    # The coach handed the rest of the picking to Auto ("auto the rest",
+    # "auto-pick the FMPs"): "ANY", or the gender group whose open slots
+    # Auto fills. Applied by the client after ``players`` and ``fills``.
+    voiced_auto: List[str] = []
 
 
 # =============================================================================
@@ -194,9 +198,9 @@ async def extract_lineup(
     # Counts only — no names, no transcript: enough to tell, from the log,
     # whether a "that didn't work" was the recognizer, the model or a guard.
     logger.info(
-        "Lineup: in=%d out=%d group_out=%d fills=%d clear=%s "
+        "Lineup: in=%d out=%d group_out=%d fills=%d auto=%d clear=%s "
         "unmatched=%d resolved_by_closest=%d dropped=%d",
-        len(d.ins), len(d.outs), len(d.group_outs), len(d.fills), d.cleared,
+        len(d.ins), len(d.outs), len(d.group_outs), len(d.fills), len(d.autos), d.cleared,
         len(d.unmatched), len(d.resolved), len(d.dropped),
     )
     note = str(result.get("note") or "")
@@ -205,6 +209,7 @@ async def extract_lineup(
         voiced_in=d.ins, voiced_out=d.outs, voiced_clear=d.cleared,
         voiced_group_out=d.group_outs,
         fills=[LineupFill(group=g, count=n) for g, n in d.fills],
+        voiced_auto=d.autos,
     )
 
 
@@ -223,6 +228,7 @@ class LineupDerivation:
         self.cleared: bool = False
         self.group_outs: List[str] = []    # gender groups voiced off whole
         self.fills: List[tuple] = []       # (group, count)
+        self.autos: List[str] = []         # groups handed to Auto ("ANY" = the line)
         self.unmatched: List[str] = []
         self.resolved: List[tuple] = []    # (heard, roster name) — closest-name resolutions
         self.dropped: List[str] = []       # what a guard refused, for the log
@@ -234,7 +240,8 @@ def _derive_players(result: Dict[str, Any], req: LineupRequest) -> LineupDerivat
     against the closed roster, the clear/out/group evidence guards (quotes
     must exist in the transcript; outs must also reference the removed
     player; a clear must contain a collective idiom; a group must name its
-    gender and a count its number), then tap-equivalent set arithmetic.
+    gender and a count its number; a hand-off to Auto must say "auto"), then
+    tap-equivalent set arithmetic.
     """
     d = LineupDerivation()
     roster = req.roster
@@ -296,7 +303,9 @@ def _derive_players(result: Dict[str, Any], req: LineupRequest) -> LineupDerivat
         d.resolved.append((heard, name))
 
     # Group phrases. What a phrase DOES is cross-checked against its quote:
-    # a count going in must have no removal words, a group coming off must.
+    # a count going in must have no removal words, a group coming off must,
+    # and a hand-off to Auto must contain the word "auto" (and no removal
+    # words). The quote decides; the model's "does" can only veto.
     for g in result.get("groups", []):
         if not isinstance(g, dict):
             continue
@@ -306,15 +315,23 @@ def _derive_players(result: Dict[str, Any], req: LineupRequest) -> LineupDerivat
             continue
         group, count = verified
         does = str(g.get("does") or "").strip().lower()
-        removal = bool(_REMOVAL_RE.search(_light_normalize(g.get("said", ""))))
+        removal = _has_removal_words(g.get("said", ""))
+        auto = _auto_evidence_ok(g.get("said", ""), roster)
         if count is not None and not removal and does != "out":
+            # "auto-pick two more women" is a count like any other: Auto
+            # picks a count's players anyway.
             d.fills.append((group, count))
-        elif count is None and removal and does != "in" and group != ANY_GROUP:
+        elif count is None and auto and not removal and does != "out":
+            if group not in d.autos:
+                d.autos.append(group)
+        elif (count is None and removal and not auto
+              and does not in ("in", "auto") and group != ANY_GROUP):
             if group not in d.group_outs:
                 d.group_outs.append(group)
         else:
-            # A number coming off, a whole group going in, an ungendered
-            # "everyone": nothing the Lines tab can do from a phrase.
+            # A number coming off, a whole group going in without "auto", an
+            # ungendered "everyone", a quote that both removes and hands off:
+            # nothing the Lines tab can do from a phrase.
             d.dropped.append("<group:unsupported>")
 
     base = [] if d.cleared else list(req.current_selection)
@@ -347,6 +364,10 @@ def _derive_players(result: Dict[str, Any], req: LineupRequest) -> LineupDerivat
         if resolved is not None and resolved in named:
             continue
         if u.casefold() in seen:
+            continue
+        # "Otto" / "auto" listed as a name nobody matched, when the phrase
+        # it came from was honored as a hand-off to Auto.
+        if d.autos and _is_auto_word(u):
             continue
         seen.add(u.casefold())
         d.unmatched.append(u)
@@ -424,10 +445,10 @@ def _build_lineup_prompt(req: LineupRequest) -> str:
     worksheet = prompt_worksheet(
         '"Kris in for Wes" / "and Priya" / "that was a long point"',
         'what THAT phrase does: "in" (puts players in), "out" (takes players off), "swap" (X in for Y), '
-        '"clear", or "aside" (chatter, or words the coach then took back)',
+        '"clear", "auto" (hands the picking to the app), or "aside" (chatter, or words the coach then took back)',
     )
 
-    return f"""You are the voice-input layer for an ultimate frisbee lineup screen. The coach speaks; you extract WHICH PLAYERS GO IN and WHICH COME OFF — the verbal equivalent of tapping their names on the roster list. You never pick, complete, trim, or output a lineup: the app applies your in/out changes to the on-screen selection, and line-filling is the coach's job (or the app's Auto button), never yours. When the coach asks for a NUMBER of players without naming them ("two more women"), you report the request and the app picks.
+    return f"""You are the voice-input layer for an ultimate frisbee lineup screen. The coach speaks; you extract WHICH PLAYERS GO IN and WHICH COME OFF — the verbal equivalent of tapping their names on the roster list. You never pick, complete, trim, or output a lineup: the app applies your in/out changes to the on-screen selection, and line-filling is the coach's job (or the app's Auto button), never yours. When the coach asks for a NUMBER of players without naming them ("two more women"), or hands the picking to the app by saying "auto" ("auto the rest"), you report the request and the app picks.
 
 {prompt_roster(req.roster)}
 
@@ -442,7 +463,7 @@ Expected lineup size: {req.expected_count} players. Context for your "note" only
 {prompt_transcript(req.transcript)}
 
 Reply with ONLY a JSON object of this exact shape (no prose, no markdown fences):
-{{"phrases": [{{"words": "a phrase of the transcript", "does": "in" | "out" | "swap" | "clear" | "aside"}}, ...], "clear": false, "clear_said": "", "in": ["Name", ...], "out": [{{"name": "Name", "said": "the coach's exact removal words"}}, ...], "groups": [{{"group": "FMP" | "MMP" | "ANY", "does": "in" | "out", "count": null, "said": "the coach's exact words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
+{{"phrases": [{{"words": "a phrase of the transcript", "does": "in" | "out" | "swap" | "clear" | "auto" | "aside"}}, ...], "clear": false, "clear_said": "", "in": ["Name", ...], "out": [{{"name": "Name", "said": "the coach's exact removal words"}}, ...], "groups": [{{"group": "FMP" | "MMP" | "ANY", "does": "in" | "out" | "auto", "count": null, "said": "the coach's exact words"}}, ...], "unmatched": ["spoken reference", ...], "note": ""}}
 
 {worksheet}
 
@@ -454,15 +475,16 @@ How to interpret the transcript:
 3. "same line", "run it back", "same as last point" — every player of the Previous lineup goes in "in". "Kris in for Wes, everyone else run it back" — "in": Kris plus the rest of the Previous lineup, "out": Wes.
    CLEAR-EVERYONE: "wholesale" / "let's get a wholesale" (Wholesale is this app's clear-the-selection button — coaches use it as a verb), "everybody comes off", "everyone off", "all players come off", "clear the line", "start fresh" — set "clear": true and quote the coach's exact words in "clear_said". A clear un-taps the whole current selection at once; players named AFTER the clear go in "in" ("Let's get a wholesale, then put in Kris and Charlie" → clear: true, in: Kris, Charlie). A clear also cancels any "in" spoken BEFORE it. Do not also list the cleared players in "out".
 4. Later statements override earlier ones. "...and is that Hank? No, I think it's Morgan" is an identity correction: Morgan in, Hank nowhere (not in "out" — the coach never removed him, they corrected themselves). A retracted change never happened: "Priya in for Alice — actually no, Priya's in for Wes, Alice stays" gives "in": Priya and "out": Wes only; Alice appears nowhere.
-5. Ignore asides: commentary about the last point, scores, fatigue, weather, sideline chatter. Wrap-up phrases ("Omar completes the lineup", "that's the seven", "that's the line") mean the named player goes in and the coach finished talking — they NEVER make you add anyone else.
+5. Ignore asides: commentary about the last point, scores, fatigue, weather, sideline chatter. Wrap-up phrases ("Omar completes the lineup", "that's the seven", "that's the line") mean the named player goes in and the coach finished talking — they NEVER make you add anyone else, and they are NOT an "auto" request (rule 7).
    A framing like "the line is X, Y, Z" only puts the named players in "in" — it puts NOBODY in "out". Already-selected players the coach didn't mention simply stay selected; when a coach wants a fresh line they clear the list first.
    A player never appears in both "in" and "out": resolve to the coach's LAST statement about that player ("Kris, Sam... and Kris is coming off" puts Kris ONLY in "out").
 {rule_closed_roster(6, '"in" / "out"')}
-7. GROUPS — the coach changes the line by gender group or by number instead of by name. Report each such phrase as one "groups" entry, quoting the coach's exact words in "said"; NEVER turn it into names in "in" or "out" — the app knows who is in each group and does the choosing.
+7. GROUPS — the coach changes the line by gender group or by number instead of by name, or hands the picking to the app. Report each such phrase as one "groups" entry, quoting the coach's exact words in "said"; NEVER turn it into names in "in" or "out" — the app knows who is in each group and does the choosing.
 {rule_gender_words()}
    - A number going IN: "two more women", "add a guy", "another FMP", "and a couple of guys", "three more" → {{"group": "FMP" | "MMP" | "ANY", "does": "in", "count": 2, "said": "…"}}, with the number word inside "said". The app picks which players, the way its Auto button would.
    - A whole group coming OFF: "the guys come off", "all the women off", "MMPs sit this one" → {{"group": "MMP", "does": "out", "count": null, "said": "…"}}. Every selected player of that group comes off; players the coach names stay governed by "in"/"out".
-   - Anything else by group — a number coming off ("two guys off"), a whole group going in — is not something the app can do from a phrase: report nothing for it and say so in "note".
+   - AUTO — the coach hands the remaining picks to the app's Auto button, and says the word "auto" to do it: "auto the rest", "and auto-pick the rest", "auto-select everybody else", "auto the line", "autofill" → {{"group": "ANY", "does": "auto", "count": null, "said": "…"}}. For ONE gender group only — "auto-pick the FMPs", "auto the guys", "auto the rest of the women" → the same entry with "group": "FMP" | "MMP". The word "auto" must be inside "said". The app fills the open slots (of that group, when one is named) the way its Auto button does; you never pick anyone. Players the coach names in the same breath still go in "in" / "out" as usual. The recognizer sometimes writes "auto" as "Otto": when nobody on the roster is called Otto, "Otto the rest" is this phrase — quote it as written, and Otto is not a name for "in" or "unmatched".
+   - Anything else by group — a number coming off ("two guys off"), a whole group going in without the word "auto" ("all the women go in") — is not something the app can do from a phrase: report nothing for it and say so in "note".
 8. THE CARDINAL RULE: "in" and "out" contain ONLY players the coach referred to — by name, nickname or number, or through an explicit whole-line phrase from rule 3. Never anyone else, no matter how short the resulting lineup would be: if the coach named 3 players, "in" has exactly 3 entries. And "out" contains ONLY players removed with explicit off/sits/coming-off/replaced-by language — NEVER a player who is merely absent from a list the coach recited. Reciting names ("the line is A, B, C") is tapping those names IN; it un-taps nobody. If something was notable (a retraction, an ambiguous reference, far fewer players than the expected size), say it in one short sentence in "note".
 """
 
