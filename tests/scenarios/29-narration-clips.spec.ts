@@ -15,9 +15,15 @@
  *     startup or from the manage dialog; the first save creates it
  *   - a squad-picker session is saved as its own kind, with the roster and
  *     answer of the squads pass and no game context, and names its build
+ *   - a spoken lineup session, run through the real session module and the
+ *     real capture layer (narration/rosterNarration.js) against a scripted
+ *     recognizer, is saved with what its pass was asked and answered; a pass
+ *     that failed leaves its clip without a result, and words typed through
+ *     the layer's _narrate seam attach to no clip
  */
 import { test, expect, Page } from '@playwright/test';
-import { goToApp } from '../helpers/app';
+import { goToApp, setupTeamWithPlayers, startGame } from '../helpers/app';
+import { installFakeRealtime, serverSays, committed, delta, completed, commitsSent, EMPTY_COMMIT } from '../helpers/fakeRealtime';
 
 const TRANSCRIPT = 'Alice throws to Bob for the score.';
 
@@ -56,7 +62,106 @@ async function simulateSession(page: Page, transcript: string) {
   }, transcript);
 }
 
+/**
+ * Answer /api/narration/lineup inside the page: no backend model, no key.
+ * window.__lineup holds the next answer ({status, body}) and every request.
+ */
+async function stubLineupEndpoint(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as any;
+    w.__lineup = { status: 200, body: {}, requests: [] as any[] };
+    const inner = window.fetch.bind(window);
+    window.fetch = (input: any, init?: any) => {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (!url.includes('/api/narration/lineup')) return inner(input, init);
+      w.__lineup.requests.push(JSON.parse((init && init.body) || '{}'));
+      return Promise.resolve(new Response(JSON.stringify(w.__lineup.body), {
+        status: w.__lineup.status, headers: { 'Content-Type': 'application/json' },
+      }));
+    };
+  });
+}
+
+/**
+ * Speak a line into the real lineup layer: start, the recognizer hears
+ * `said`, stop. Resolves once the layer is idle again (its pass has run).
+ */
+async function speakLineup(page: Page, said: string) {
+  await page.evaluate(() => (window as any).lineupNarration.start());
+  expect(await page.evaluate(() => (window as any).lineupNarration.getPhase())).toBe('recording');
+  // A second and a half of audio, through the recorder's own seam: what the
+  // headless browser's audio graph delivers is not this test's business.
+  await page.evaluate(() => {
+    const rec = (window as any).narrationClipRecorder;
+    for (let k = 0; k < 15; k++) rec._tap.onAudioChunk(new Int16Array(2400).fill(k * 100));
+  });
+  await serverSays(page, committed('u1'), delta('u1', said), completed('u1', said));
+
+  const commitsBefore = await commitsSent(page);
+  await page.evaluate(() => { (window as any).lineupNarration.stop(); });
+  await expect.poll(() => commitsSent(page)).toBe(commitsBefore + 1);
+  await serverSays(page, EMPTY_COMMIT);
+  await expect.poll(() => page.evaluate(() => (window as any).lineupNarration.getPhase())).toBe('idle');
+}
+
+/** Saved clips, oldest first, without their audio. */
+const savedClips = (page: Page) => page.evaluate(async () => {
+  const clips = await (window as any).narrationClipRecorder.listClips();
+  return clips
+    .map((c: any) => ({ kind: c.kind, transcript: c.transcript, gameId: c.gameId, result: c.result, createdAt: c.createdAt }))
+    .sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt));
+});
+
 test.describe('narration clip recorder', () => {
+  test('a spoken lineup session keeps what its pass was asked and answered; typed words attach nothing', async ({ page }) => {
+    await installFakeRealtime(page);
+    await stubLineupEndpoint(page);
+    await goToApp(page);
+    await setupTeamWithPlayers(page, 'Clip Keepers');
+    await startGame(page, 'offense');
+    await expect(page.locator('#panelActivePlayersTable')).toBeVisible({ timeout: 8_000 });
+    await page.evaluate(() => (window as any).advancedSettings.set('narration.recordClips', true));
+    const answer = (status: number, body: Record<string, unknown>) =>
+      page.evaluate(([s, b]) => { Object.assign((window as any).__lineup, { status: s, body: b }); }, [status, body] as const);
+    const requests = () => page.evaluate(() => (window as any).__lineup.requests);
+    const heard = (players: string[]) => ({
+      players, unmatched: [], note: '', voiced_in: players, voiced_out: [],
+      voiced_clear: false, voiced_group_out: [], fills: [],
+    });
+
+    // The pass fails: the session is still kept, with nothing claimed for it.
+    await answer(503, { detail: 'narration is not configured' });
+    await speakLineup(page, 'Alice and Bob go in.');
+    await expect.poll(() => clipCount(page)).toBe(1);
+    expect(await requests()).toHaveLength(1);
+    let clips = await savedClips(page);
+    expect(clips[0]).toMatchObject({ kind: 'lineup', transcript: 'Alice and Bob go in.', result: null });
+    expect(clips[0].gameId).toBeTruthy();
+
+    // Typed words run the same pass, and it answers; but no session heard
+    // them, so the answer belongs to no clip, least of all the last one.
+    await answer(200, heard(['Carol']));
+    expect(await page.evaluate(() => (window as any).lineupNarration._narrate('Carol goes in'))).toBe(true);
+    expect(await requests()).toHaveLength(2);
+    await page.waitForTimeout(400);
+    expect((await savedClips(page))[0].result).toBeNull();
+
+    // A spoken session whose pass answers: its own clip gets the request the
+    // pass was given and the answer, and the earlier clip stays as it was.
+    await answer(200, heard(['Alice', 'Eve']));
+    await speakLineup(page, 'Alice and Eve go in.');
+    await expect.poll(() => clipCount(page)).toBe(2);
+    await expect.poll(async () => (await savedClips(page))[1]?.result?.type ?? null).toBe('lineup');
+    clips = await savedClips(page);
+    expect(clips[0].result).toBeNull();
+    expect(clips[1]).toMatchObject({ kind: 'lineup', transcript: 'Alice and Eve go in.' });
+    expect(clips[1].result.request.transcript).toBe('Alice and Eve go in.');
+    expect(clips[1].result.request.roster.map((p: any) => p.name)).toEqual(expect.arrayContaining(['Alice', 'Eve']));
+    expect(clips[1].result.request.expected_count).toBe(7);
+    expect(clips[1].result.response.players).toEqual(['Alice', 'Eve']);
+    expect(await requests()).toHaveLength(3);
+  });
+
   test('off by default; the disclosure gates the toggle', async ({ page }) => {
     await goToApp(page);
     await openAdvanced(page);

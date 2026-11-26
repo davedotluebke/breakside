@@ -2,10 +2,10 @@
  * Narration stop path (narration/realtimeSession.js + transcriptItems.js)
  *
  * Runs the real session module in the browser against a scripted Realtime
- * server: the WebSocket, the microphone and the token endpoint are stubbed,
- * and each test plays the server's side of a conversation the live API was
- * recorded having (breakside_server/tests/narration/tools/stop_latency_probe.py,
- * 2026-11-25).
+ * server (tests/helpers/fakeRealtime.ts): the WebSocket, the microphone and
+ * the token endpoint are stubbed, and each test plays the server's side of a
+ * conversation the live API was recorded having
+ * (breakside_server/tests/narration/tools/stop_latency_probe.py, 2026-11-25).
  *
  *   - stop after a pause returns as soon as the empty commit is refused,
  *     instead of sitting out a timeout for a completion that never comes
@@ -19,88 +19,9 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import { goToApp } from '../helpers/app';
+import { installFakeRealtime, serverSays, committed, delta, completed, EMPTY_COMMIT } from '../helpers/fakeRealtime';
 
 const FIRST = 'All players come off, Mia and Dana in.';
-const EMPTY_COMMIT = {
-  type: 'error',
-  error: {
-    type: 'invalid_request_error',
-    code: 'input_audio_buffer_commit_empty',
-    message: 'Error committing input audio buffer: buffer too small. Expected at least 100ms of audio, but buffer only has 0.00ms of audio.',
-  },
-};
-
-/** Install the scripted server before any app code runs. */
-async function installFakeRealtime(page: Page) {
-  await page.addInitScript(() => {
-    const rt: any = { sockets: [], sent: [] };
-    (window as any).__rt = rt;
-
-    // The token endpoint: answered here, so no backend key and no CORS.
-    const realFetch = window.fetch.bind(window);
-    window.fetch = (input: any, init?: any) => {
-      const url = typeof input === 'string' ? input : (input && input.url) || '';
-      if (url.includes('/api/narration/token')) {
-        return Promise.resolve(new Response(JSON.stringify({ token: 'e2e-token' }), {
-          status: 200, headers: { 'Content-Type': 'application/json' },
-        }));
-      }
-      return realFetch(input, init);
-    };
-
-    class FakeRealtimeSocket {
-      static CONNECTING = 0; static OPEN = 1; static CLOSING = 2; static CLOSED = 3;
-      url: string; readyState = 0; sent: any[] = [];
-      private listeners: Record<string, { fn: any; once: boolean }[]> = {};
-      constructor(url: string) {
-        this.url = url;
-        rt.sockets.push(this);
-        setTimeout(() => { this.readyState = 1; this.dispatch('open', {}); }, 0);
-      }
-      addEventListener(type: string, fn: any, opts?: any) {
-        (this.listeners[type] ||= []).push({ fn, once: !!(opts && opts.once) });
-      }
-      removeEventListener(type: string, fn: any) {
-        this.listeners[type] = (this.listeners[type] || []).filter((l) => l.fn !== fn);
-      }
-      dispatch(type: string, ev: any) {
-        const list = (this.listeners[type] || []).slice();
-        this.listeners[type] = (this.listeners[type] || []).filter((l) => !l.once);
-        list.forEach((l) => l.fn(ev));
-      }
-      send(data: string) {
-        const msg = JSON.parse(data);
-        if (msg.type === 'input_audio_buffer.append') return;   // audio chunks: not the point here
-        this.sent.push(msg);
-        rt.sent.push(msg);
-      }
-      close() {
-        if (this.readyState === 3) return;
-        this.readyState = 3;
-        setTimeout(() => this.dispatch('close', { code: 1000, reason: '' }), 0);
-      }
-      /** The server says something. */
-      emit(msg: any) { this.dispatch('message', { data: JSON.stringify(msg) }); }
-      /** The connection drops. */
-      drop(code = 1006) { this.readyState = 3; this.dispatch('close', { code, reason: 'dropped' }); }
-    }
-    (window as any).WebSocket = FakeRealtimeSocket;
-
-    // A microphone that needs no device and no permission.
-    const fakeMic = async () => {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const dest = ctx.createMediaStreamDestination();
-      osc.connect(dest);
-      osc.start();
-      return dest.stream;
-    };
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia: fakeMic },
-    });
-  });
-}
 
 /** Start a session; everything it reports lands on window.__seen. */
 async function startSession(page: Page) {
@@ -117,21 +38,6 @@ async function startSession(page: Page) {
     });
   });
 }
-
-/** The current socket hears these from the server, in order. */
-async function serverSays(page: Page, ...msgs: any[]) {
-  await page.evaluate((list) => {
-    const rt = (window as any).__rt;
-    const socket = rt.sockets[rt.sockets.length - 1];
-    list.forEach((m: any) => socket.emit(m));
-  }, msgs);
-}
-
-const committed = (item_id: string) => ({ type: 'input_audio_buffer.committed', item_id });
-const delta = (item_id: string, text: string) =>
-  ({ type: 'conversation.item.input_audio_transcription.delta', item_id, delta: text });
-const completed = (item_id: string, transcript: string) =>
-  ({ type: 'conversation.item.input_audio_transcription.completed', item_id, transcript });
 
 /** Tap stop: returns once the manual commit is on the wire. The result lands on window.__stop. */
 async function tapStop(page: Page) {
