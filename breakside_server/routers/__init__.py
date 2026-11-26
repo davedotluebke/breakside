@@ -12,6 +12,7 @@ from . import (
     auth_api,
     controller,
     events,
+    feedback,
     games,
     invites,
     mail,

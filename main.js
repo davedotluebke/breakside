@@ -48,6 +48,7 @@
  *   │   ├── gameFlowChart.js     # Game Flow chart + Connections block on the Review screen
  *   │   ├── summarySections.js   # Collapsible Review-screen sections, remembered per device
  *   │   ├── exportDialog.js      # The Export dialog behind every Export button
+ *   │   ├── feedbackDialog.js    # Give Feedback dialog (app menu); emails the support inbox via the API
  *   │   └── buttonLayout.js      # UI consistency functions (button width matching)
  *   │
  *   ├── main.js                  # Application bootstrap (~200 lines)
@@ -129,6 +130,7 @@ import './ui/longPress.js';
 import './ui/gameFlowChart.js';
 import './ui/summarySections.js';
 import './ui/exportDialog.js';
+import { showFeedbackDialog } from './ui/feedbackDialog.js';
 import './ui/funStatsView.js';
 import { matchButtonWidths } from './ui/buttonLayout.js';
 import { isGameScreenVisible } from './ui/panelSystem.js';
@@ -753,24 +755,6 @@ window.addEventListener('breakside:teams-synced', () => {
 
 let appVersionTimeout = null;
 
-function openAppFeedback() {
-    const versionInfo = appVersion ? `${appVersion.version} (Build ${appVersion.build})` : 'Unknown';
-    const userAgent = navigator.userAgent;
-
-    const body = `Please describe your experience or issue below:
-
----
-
-**Device/Browser:** ${userAgent}
-**App Version:** ${versionInfo}
-**Steps to reproduce:**`;
-
-    const encodedBody = encodeURIComponent(body);
-    const feedbackUrl = `https://github.com/davedotluebke/breakside/issues/new?labels=beta_feedback&title=${encodeURIComponent('Beta Feedback:')}&body=${encodedBody}`;
-
-    window.open(feedbackUrl, '_blank');
-}
-
 function showAppVersionOverlay() {
     const versionOverlay = document.getElementById('versionOverlay');
     if (!versionOverlay) return;
@@ -878,7 +862,7 @@ function initializeAppMenu() {
 
     document.getElementById('menuAppFeedback')?.addEventListener('click', () => {
         closeAppMenu();
-        openAppFeedback();
+        showFeedbackDialog();
     });
 
     document.getElementById('menuAppAbout')?.addEventListener('click', () => {

@@ -2,8 +2,8 @@
 Main FastAPI application for the Breakside server.
 
 App wiring only: the endpoints live in the routers/ package (games, teams,
-players, invites, shares, controller, events, auth_api, misc, static_files)
-and share storage/auth imports via routers/_shared.py.
+players, invites, shares, controller, events, feedback, auth_api, misc,
+static_files) and share storage/auth imports via routers/_shared.py.
 """
 import asyncio
 import logging
@@ -217,6 +217,7 @@ app.include_router(routers.controller.router)
 app.include_router(routers.shares.router)
 app.include_router(routers.invites.router)
 app.include_router(routers.mail.router)
+app.include_router(routers.feedback.router)
 app.include_router(routers.teams.router)
 app.include_router(routers.players.router)
 

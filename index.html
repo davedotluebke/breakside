@@ -1013,6 +1013,48 @@
         </div>
     </div>
 
+    <!-- Give Feedback Dialog (ui/feedbackDialog.js), from the app menu. Sends
+         to POST /api/feedback, which emails the support inbox. -->
+    <div id="feedbackDialog" class="modal" style="display: none;">
+        <div class="modal-content feedback-modal">
+            <div class="dialog-header prominent-dialog-header">
+                <h2>Give Feedback</h2>
+                <span id="feedbackCloseX" class="close">&times;</span>
+            </div>
+            <form id="feedbackForm" class="feedback-form" novalidate>
+                <label class="feedback-label" for="feedbackMessage">
+                    A bug, a question, an idea: tell us what happened or what you'd like.
+                </label>
+                <textarea id="feedbackMessage" class="feedback-textarea" rows="6"
+                          placeholder="What were you doing, and what did you expect?"></textarea>
+                <div class="feedback-meta">
+                    <span id="feedbackReplyNote"></span>
+                    <span id="feedbackCount" class="feedback-count"></span>
+                </div>
+                <details id="feedbackDetails" class="feedback-details">
+                    <summary>Included with your message</summary>
+                    <p class="feedback-details-note">Your name and account email, plus:</p>
+                    <dl id="feedbackDetailsList" class="feedback-details-list"></dl>
+                </details>
+                <div id="feedbackError" class="feedback-error" role="alert" style="display: none;"></div>
+                <div class="modal-buttons">
+                    <button type="button" id="feedbackCancelBtn" class="secondary-btn">Cancel</button>
+                    <button type="submit" id="feedbackSendBtn" class="primary-btn" disabled>Send</button>
+                </div>
+            </form>
+            <div id="feedbackDone" class="feedback-done-block" style="display: none;">
+                <p class="feedback-done">Thanks! Your message is on its way.</p>
+                <div class="modal-buttons">
+                    <button type="button" id="feedbackDoneBtn" class="primary-btn">Done</button>
+                </div>
+            </div>
+            <p class="feedback-mail">
+                Prefer email? Write to
+                <a id="feedbackMailLink" href="mailto:help@breakside.pro"><span id="feedbackAddress">help@breakside.pro</span></a>
+            </p>
+        </div>
+    </div>
+
     <!-- Erase Dialog — permanent erasure of a player or a team (teams/erasure.js).
          One dialog for both: same preview → confirm → receipt shape, and the
          server returns the same counts object for each. -->

@@ -139,7 +139,9 @@ MAIL_ADDRESS_STYLE = os.getenv("BREAKSIDE_MAIL_ADDRESS_STYLE", "list").strip().l
 # System forwards at the base domain, ``local=address`` pairs separated by
 # commas: ``help=you@example.org,postmaster=you@example.org``. Open to any
 # sender (that is the point of a help address), relayed to the one address
-# with the author in Reply-To; the real values live in the box's env.
+# with the author in Reply-To; the real values live in the box's env. The
+# ``help`` target also receives the app's in-app feedback (mail/feedback.py);
+# without one, POST /api/feedback answers 503 and the app offers email.
 MAIL_FORWARDS = os.getenv("BREAKSIDE_MAIL_FORWARDS", "")
 # ``ses`` in production, ``file`` for local development and tests (writes each
 # outbound message as .eml into MAIL_OUTBOX_DIR), ``none`` to log and discard.
