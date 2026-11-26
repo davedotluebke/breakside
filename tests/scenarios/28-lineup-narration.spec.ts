@@ -8,8 +8,10 @@
  * narration. What is under test is everything after the answer: the returned
  * line reaches the checkboxes through the Auto button's own path, a narrated
  * count ("two more women") is filled here by Auto's rules from the right
- * gender group, a count that runs short says so, and an answer in which
- * nothing was heard leaves the coach's selection alone.
+ * gender group, a count that runs short says so, a voiced Auto ("auto the
+ * rest", "auto-pick the FMPs") is the Auto button run over what was named,
+ * and an answer in which nothing was heard leaves the coach's selection
+ * alone.
  */
 import { test, expect, Page } from '@playwright/test';
 import { goToApp, setupTeamWithPlayers, startGame, DEFAULT_PLAYERS } from '../helpers/app';
@@ -106,5 +108,47 @@ test.describe('lineup narration', () => {
       fills: [{ group: 'ANY', count: 3 }],
     })).toBe(true);
     expect(await selected(page)).toHaveLength(3);
+  });
+
+  test('a voiced Auto fills the line, one gender group, or nothing when the line is full', async ({ page }) => {
+    await goToApp(page);
+    await setupTeamWithPlayers(page, 'Auto Callers');
+    await startGame(page, 'offense');
+    await expect(page.locator('#panelActivePlayersTable')).toBeVisible({ timeout: 8_000 });
+    const auto = (players: string[], groups: string[], extra: Record<string, unknown> = {}) => apply(page, {
+      players, unmatched: [], note: '',
+      voiced_in: players, voiced_out: [], voiced_clear: false, voiced_group_out: [], fills: [],
+      voiced_auto: groups, ...extra,
+    });
+
+    // "Bob, and auto-pick the FMPs": Bob, plus only the women Auto chose for
+    // the open slots. Six slots among six benched players, so Auto would
+    // take everyone: all four women come in and no other man does.
+    expect(await auto(['Bob'], ['FMP'])).toBe(true);
+    let line = await selected(page);
+    expect(line).toEqual(['Bob', ...FMP].sort());
+    await expect(toast(page, '5/7 selected')).toBeVisible();
+
+    // "Auto the rest" over that: the two open slots go to the benched men.
+    expect(await auto(line, ['ANY'])).toBe(true);
+    line = await selected(page);
+    expect(line).toEqual(DEFAULT_PLAYERS.map(p => p.name).sort());
+    await expect(toast(page, '7/7 selected')).toBeVisible();
+
+    // Auto on a full line adds nobody and says so; the line is untouched.
+    expect(await auto(line, ['ANY'])).toBe(true);
+    expect(await selected(page)).toEqual(line);
+    await expect(toast(page, 'Auto found no open slot')).toBeVisible();
+
+    // "Wholesale. Auto the line": a clear and an Auto in one breath is a
+    // line call — not "nothing heard" — and fills from empty.
+    expect(await auto([], ['ANY'], { voiced_clear: true })).toBe(true);
+    expect(await selected(page)).toHaveLength(7);
+
+    // An Auto alone on an empty selection is a line call too.
+    expect(await auto([], [], { voiced_clear: true })).toBe(true);
+    expect(await selected(page)).toEqual([]);
+    expect(await auto([], ['MMP'])).toBe(true);
+    expect(await selected(page)).toEqual([...MMP].sort());
   });
 });

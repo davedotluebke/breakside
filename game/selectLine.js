@@ -2264,7 +2264,7 @@ export {
     // Shared apply/permission surface for voice line-setting
     // (narration/lineupNarration.js) — same path as Wholesale/Auto.
     applyLineSelection, canEditSelectLinePanel,
-    computeAutoLine, buildAutoLineStats,
+    computeAutoLine, buildAutoLineStats, autoLinePositionShortfall,
     handlePanelStartPoint, checkPanelGenderRatio,
     getSelectedPlayersFromPanel, getEffectiveLineForNextPoint,
     selectAppropriateLineAtPointEnd, autoSelectActiveTypeForNextPoint,

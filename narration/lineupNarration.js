@@ -20,21 +20,25 @@
  *   tap the mic → transcription session opens (vocabulary biased to the
  *   FULL active roster — calling a line names bench players) → coach speaks
  *   ("Kris goes in for Wes", "same line but…", "two more women", "the guys
- *   come off", corrections) → tap again → transcript + roster (with each
+ *   come off", "auto the rest", corrections) → tap again → transcript + roster (with each
  *   player's gender group) + expected count + previous lineup + current
  *   selection POST to /api/narration/lineup → the returned players are
  *   applied through selectLine's applyLineSelection (the same path as the
  *   Auto button), and any counts the server could only verify ("two more
- *   women") are filled here by Auto's own rules (computeAutoLine).
+ *   women") are filled here by Auto's own rules (computeAutoLine). A voiced
+ *   Auto ("auto the rest", "auto-pick the FMPs") is the Auto button itself,
+ *   run here over what the coach named.
  *   A name the recognizer mangled is resolved against the closed roster by
  *   the server (narration_common.py), as for squads.
  */
 import { createRosterNarration, rosterInfo, rosterForServer } from './rosterNarration.js';
-import { resolveLineupPlayers, buildLineupToast, displayFirstName } from './lineupResolve.js';
+import { resolveLineupPlayers, buildLineupToast, displayFirstName, autoEmptyText } from './lineupResolve.js';
 import { log } from '../utils/logger.js';
 import { getActiveRoster } from '../store/storage.js';
 import { currentGame, buildPointPlayerLookup } from '../utils/helpers.js';
-import { applyLineSelection, canEditSelectLinePanel, computeAutoLine } from '../game/selectLine.js';
+import {
+    applyLineSelection, canEditSelectLinePanel, computeAutoLine, autoLinePositionShortfall,
+} from '../game/selectLine.js';
 import { getActiveTab } from '../ui/panelSystem.js';
 
 // showControllerToast's own default, which the confirmation toast scales
@@ -98,7 +102,8 @@ function readContext(stage) {
  * resulting selection — the coach's words applied to the current one by set
  * arithmetic — so applying is a plain replace, plus the counts it could
  * only verify ("two more women"), which are filled here by the Auto
- * button's own rules. The toast reports the DELTA ("Added: …", "Off: …").
+ * button's own rules, and then a voiced Auto ("auto the rest"), which is
+ * that button. The toast reports the DELTA ("Added: …", "Off: …").
  * Never applies a result in which nothing was heard: a wrong no-op beats
  * wiping the coach's selection.
  */
@@ -106,6 +111,12 @@ function applyLineup(data, { game, roster }, { toast, showConfirmToast }) {
     const returned = Array.isArray(data.players) ? data.players : [];
     const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
     const fills = Array.isArray(data.fills) ? data.fills.filter(f => f && f.count > 0) : [];
+    const autos = Array.isArray(data.voiced_auto)
+        ? data.voiced_auto.filter(g => g === 'ANY' || g === 'FMP' || g === 'MMP')
+        : [];
+    // Something for the Lines tab to pick: a result with only this in it is
+    // still a line call, never "nothing heard".
+    const picks = fills.length > 0 || autos.length > 0;
     // A voiced clear ("wholesale", "everybody comes off"), explicit removals
     // or a group coming off legitimately empty the selection — distinguish
     // that from "nothing lineup-related was heard", which must never wipe.
@@ -113,7 +124,7 @@ function applyLineup(data, { game, roster }, { toast, showConfirmToast }) {
     const voicedOut = Array.isArray(data.voiced_out) ? data.voiced_out : [];
     const groupOut = Array.isArray(data.voiced_group_out) ? data.voiced_group_out : [];
     const legitimatelyEmpty = voicedClear || voicedOut.length > 0 || groupOut.length > 0;
-    if (!returned.length && !modelUnmatched.length && !legitimatelyEmpty && !fills.length) {
+    if (!returned.length && !modelUnmatched.length && !legitimatelyEmpty && !picks) {
         toast('No lineup heard', 'info');
         return false;
     }
@@ -121,7 +132,7 @@ function applyLineup(data, { game, roster }, { toast, showConfirmToast }) {
     const { players, unmatched: localUnmatched } = resolveLineupPlayers(returned, roster);
     const unmatched = modelUnmatched.concat(localUnmatched);
 
-    if (!players.length && !legitimatelyEmpty && !fills.length) {
+    if (!players.length && !legitimatelyEmpty && !picks) {
         const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
         toast(`No roster match: ${shown}${unmatched.length > 3 ? ', …' : ''} — selection unchanged`, 'warning');
         return false;
@@ -143,6 +154,29 @@ function applyLineup(data, { game, roster }, { toast, showConfirmToast }) {
         if (got < fill.count) shortfalls.push({ group: fill.group, wanted: fill.count, got });
     });
 
+    // A voiced Auto, after the names and the counts: the Auto button's own
+    // computation over the line so far (field count, gender ratio, then the
+    // coach's priority order). "Auto the rest" keeps all of it; "auto-pick
+    // the FMPs" keeps the players of that group Auto chose and leaves the
+    // other slots open for the coach.
+    const notes = [];
+    const genderOf = new Map(roster.map(p => [p.name, p.gender]));
+    let autoFilledLine = false;
+    autos.forEach(group => {
+        const have = new Set(newNames);
+        const picked = computeAutoLine(newNames)
+            .filter(n => !have.has(n) && (group === 'ANY' || genderOf.get(n) === group));
+        if (!picked.length) { notes.push(autoEmptyText(group)); return; }
+        newNames = newNames.concat(picked);
+        if (group === 'ANY') autoFilledLine = true;
+    });
+    // The Auto button's own warning, when it completed the line.
+    if (autoFilledLine) {
+        const short = autoLinePositionShortfall(newNames);
+        const missing = [short.handlers && 'handlers', short.cutters && 'cutters'].filter(Boolean);
+        if (missing.length) notes.push(`Auto line may have too few ${missing.join(' and ')}`);
+    }
+
     // Delta vs the selection being replaced — what this voice action did.
     const prevNames = getCurrentSelectionNames(game);
     const prevSet = new Set(prevNames);
@@ -157,7 +191,7 @@ function applyLineup(data, { game, roster }, { toast, showConfirmToast }) {
     const { message, type } = buildLineupToast({
         selectedCount: newNames.length,
         expectedCount: getExpectedCount(),
-        added, removed, unmatched, shortfalls
+        added, removed, unmatched, shortfalls, notes
     });
     showConfirmToast(message, type);
     return true;
@@ -171,14 +205,16 @@ const layer = createRosterNarration({
     endpoint: '/api/narration/lineup',
     statusId: 'lineupNarrationStatus',
     statusAnchor: () => document.querySelector('.panel-selectLine .select-line-toolbar'),
-    listeningHint: () => 'Listening — name the line, or call subs like "Kris in for Wes" or "two more women"',
+    listeningHint: () => 'Listening — name the line, or say "Kris in for Wes", "two more women", "auto the rest"',
     processingLabel: 'Working out the lineup…',
     busyMessage: 'Still working out the previous lineup…',
     otherRunningMessage: 'Game narration is running — stop it before narrating the lineup',
     context: readContext,
     // The FULL roster — a line call names bench players, so on-field-only
     // biasing (the in-point default) would miss exactly the names that matter.
-    vocabulary: ({ roster }) => rosterInfo(roster),
+    // "Auto" rides along as a roster-shaped entry so the recognizer writes
+    // the word a voiced Auto turns on (and not the name "Otto").
+    vocabulary: ({ roster }) => rosterInfo(roster).concat([{ name: 'Auto' }]),
     buildPayload: ({ game, roster }, transcript) => ({
         game_id: game.id || null,
         transcript,

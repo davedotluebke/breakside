@@ -12,6 +12,7 @@ import {
     displayFirstName,
     buildLineupToast,
     shortfallText,
+    autoEmptyText,
 } from '../../narration/lineupResolve.js';
 
 const roster = [
@@ -166,6 +167,18 @@ test('buildLineupToast: a narrated count that ran short is said, and is a warnin
     });
     assert.equal(message, '7/7 selected. Added: Dana. Only 1 of 2 FMPs available');
     assert.equal(type, 'warning');
+});
+
+test('buildLineupToast: a note (a voiced Auto with nothing to add) is said, and is a warning', () => {
+    const { message, type } = buildLineupToast({
+        selectedCount: 7, expectedCount: 7, notes: [autoEmptyText('ANY')],
+    });
+    assert.equal(message, '7/7 selected. Auto found no open slot');
+    assert.equal(type, 'warning');
+    assert.equal(autoEmptyText('FMP'), 'Auto found no open slot for FMPs');
+    assert.equal(autoEmptyText('MMP'), 'Auto found no open slot for MMPs');
+    // No notes: a full line with nothing wrong is still a success.
+    assert.equal(buildLineupToast({ selectedCount: 7, expectedCount: 7, added: ['Kris'] }).type, 'success');
 });
 
 test('shortfallText: shared by the lineup and squad toasts', () => {

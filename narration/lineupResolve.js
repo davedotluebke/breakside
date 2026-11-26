@@ -108,14 +108,16 @@ function displayFirstName(name) {
  * Success only when the count matches expectations and nothing failed to
  * match; anything else is a warning so the coach glances at the list.
  * A narrated count that could not be filled ("two more women" with one on
- * the bench) is said too, and is a warning.
+ * the bench) is said too, and is a warning; so is anything in `notes` (a
+ * voiced Auto that found no open slot, or left the line short of handlers).
  * @param {{ selectedCount: number, expectedCount: number,
  *           added?: string[], removed?: string[], unmatched?: string[],
- *           shortfalls?: Array<{group: string, wanted: number, got: number}> }} args
+ *           shortfalls?: Array<{group: string, wanted: number, got: number}>,
+ *           notes?: string[] }} args
  *   added/removed/unmatched are display-ready name strings.
  * @returns {{ message: string, type: 'success'|'warning' }}
  */
-function buildLineupToast({ selectedCount, expectedCount, added = [], removed = [], unmatched = [], shortfalls = [] }) {
+function buildLineupToast({ selectedCount, expectedCount, added = [], removed = [], unmatched = [], shortfalls = [], notes = [] }) {
     // Long delta lists (a voiced wholesale takes seven players off at once)
     // collapse to a count — the checkbox list is the source of truth.
     const fmtList = (names) => names.length > 4
@@ -125,11 +127,13 @@ function buildLineupToast({ selectedCount, expectedCount, added = [], removed = 
     if (added.length) parts.push(`Added: ${fmtList(added)}`);
     if (removed.length) parts.push(`Off: ${fmtList(removed)}`);
     shortfalls.forEach(s => parts.push(shortfallText(s, 'available')));
+    notes.forEach(n => parts.push(n));
     if (unmatched.length) {
         const shown = unmatched.slice(0, 3).map(u => `"${u}"`).join(', ');
         parts.push(`No match: ${shown}${unmatched.length > 3 ? ', …' : ''}`);
     }
-    const clean = selectedCount === expectedCount && unmatched.length === 0 && shortfalls.length === 0;
+    const clean = selectedCount === expectedCount && unmatched.length === 0
+        && shortfalls.length === 0 && notes.length === 0;
     return { message: parts.join('. '), type: clean ? 'success' : 'warning' };
 }
 
@@ -147,7 +151,18 @@ function shortfallText({ group, wanted, got }, tail) {
     return got ? `Only ${got} of ${wanted} ${label} ${tail}` : `No ${label} ${tail}`;
 }
 
+/**
+ * A voiced Auto ("auto the rest", "auto-pick the FMPs") that added nobody:
+ * the line was already full, that group's slots were, or the bench is empty.
+ * @param {string} group - 'ANY' | 'FMP' | 'MMP'
+ */
+function autoEmptyText(group) {
+    return group === 'FMP' || group === 'MMP'
+        ? `Auto found no open slot for ${GROUP_LABEL[group]}`
+        : 'Auto found no open slot';
+}
+
 export {
     normalizeName, matchRosterPlayer, resolveLineupPlayers,
-    displayFirstName, buildLineupToast, shortfallText,
+    displayFirstName, buildLineupToast, shortfallText, autoEmptyText,
 };
