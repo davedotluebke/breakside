@@ -18,7 +18,7 @@ Breakside is a comprehensive ultimate frisbee statistics tracker designed to hel
 > 
 > Breakside is currently in beta. This software may contain bugs, and backwards/forwards compatibility is not guaranteed between versions. Please export your team data regularly as a backup.
 > 
-> [💬 Give Feedback](https://github.com/davedotluebke/breakside/issues/new?labels=beta_feedback&title=Beta+Feedback%3A+&body=Please+describe+your+experience+or+issue+below%3A%0A%0A---%0A%0A**Device/Browser:**%0A**App+Version:**%0A**Steps+to+reproduce:**) - Help improve Breakside by reporting bugs or sharing feedback.
+> 💬 **Give Feedback** from the app's menu, or email [help@breakside.pro](mailto:help@breakside.pro), to report a bug or share an idea. Developers are welcome to [open an issue](https://github.com/davedotluebke/breakside/issues/new?labels=beta_feedback) too; issues are public, so leave player names out.
 
 <details open>
 <summary><h2>Quickstart</h2></summary>

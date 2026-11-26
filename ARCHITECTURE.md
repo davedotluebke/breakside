@@ -979,6 +979,19 @@ is a *list* address, so a coach writing to a list from the support
 identity is not a loop. A forward has no team: its only record is the
 journal line, and a bounce of its recipient never suppresses the next one.
 
+**In-app feedback** (`POST /api/feedback`, `mail/feedback.py`, the app
+menu's Give Feedback dialog in `ui/feedbackDialog.js`) delivers to the same
+`help=` target, shaped like a forward: From `"Name via Breakside Feedback"
+<help@<base>>` (the list domain when no base domain is set), To the support
+address, Reply-To the signed-in user, and our loop marker. The body is the
+user's text, then their name, email and user ID, then the diagnostics the
+client attached (version, device, team and game IDs, sync state; the dialog
+shows the user the exact list). Nothing is stored. Limits are in memory:
+5 per account per hour and 60 server-wide, a failed send gives its slot
+back. Refusals map to 400 / 429 / 503 (no `help=` forward) / 502 (provider),
+and on any of them the dialog keeps the draft and offers a `mailto:` link
+carrying the same text.
+
 **Event lists** (`cudo-states@`) are for the logistics of one tournament or
 trip: a subset of the roster plus pickup players who are not on the team,
 each of whom may have several parent addresses, none of whom should get
@@ -1329,6 +1342,9 @@ below).
 - `GET /api/games/{game_id}/versions` - List all versions
 - `GET /api/games/{game_id}/versions/{timestamp}` - Get specific version
 - `POST /api/games/{game_id}/restore/{timestamp}` - Restore to version
+
+#### Feedback
+- `POST /api/feedback` - Email the support inbox a signed-in user's message (`{message, diagnostics}`); see § Team mailing lists, In-app feedback
 
 #### Authentication
 - `GET /api/auth/me` - Get current user profile (requires auth)
