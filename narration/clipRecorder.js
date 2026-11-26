@@ -17,7 +17,8 @@
  * setAudioTap(). Session context (roster, and for the in-game surfaces the
  * on-field line and game context) is read at session start; the transcript
  * arrives at session stop; the model's result is attached afterwards from
- * the event bus (narrationFinalized / lineupResolved / squadsResolved).
+ * the event bus (narrationFinalized / lineupResolved / squadsResolved), to
+ * the clip of the session it names.
  * Each clip exports as a scenario bundle (clipBundle.js) needing only a
  * hand-checked expected.json.
  */
@@ -63,13 +64,30 @@ const narrationClipRecorder = (function() {
         return everUsed() ? clipStore.listClips() : Promise.resolve([]);
     }
 
+    // Sessions whose results are still looked for: more than enough, since a
+    // result can only be outstanding while its pass is running.
+    const MAX_REMEMBERED_SESSIONS = 16;
+
     // The session being captured, or null. Chunks are the Int16Arrays
     // realtimeSession built for the wire; it never reuses them, so we keep
     // them as-is and let the Blob constructor copy once at the end.
     let active = null;
-    // Promise for the most recent save, so a result that arrives while the
-    // IndexedDB write is still in flight attaches to the right clip.
-    let lastSave = null;
+    // Each kept session's save, by the session's id (realtimeSession's): a
+    // model result names its session, so it finds its own clip however late
+    // it arrives. In-point narration lets the next recording start, and
+    // finish, while the previous slow pass is still out, so "the clip saved
+    // last" is not it. The value is the save's promise, so a result that
+    // beats the IndexedDB write still lands. An entry leaves when its result
+    // is attached; a session that was not kept never has one.
+    const savesBySession = new Map();
+
+    function rememberSave(sessionId, save) {
+        if (sessionId == null) return;
+        savesBySession.set(sessionId, save);
+        while (savesBySession.size > MAX_REMEMBERED_SESSIONS) {
+            savesBySession.delete(savesBySession.keys().next().value);
+        }
+    }
 
     function toast(message, type = 'info', duration) {
         if (typeof showControllerToast === 'function') {
@@ -156,6 +174,7 @@ const narrationClipRecorder = (function() {
         if (!isEnabled()) return;
         const kind = inferKind();
         active = {
+            sessionId: info.sessionId != null ? info.sessionId : null,
             kind,
             mode: info.mode,
             transcriptionModel: info.transcriptionModel || null,
@@ -206,7 +225,7 @@ const narrationClipRecorder = (function() {
             pcm: new Blob(a.chunks, { type: 'audio/pcm' })
         };
         markUsed();
-        lastSave = clipStore.putClip(clip)
+        const save = clipStore.putClip(clip)
             .then(async (id) => {
                 await clipStore.enforceRetention({ maxBytes: MAX_TOTAL_BYTES, maxAgeMs: MAX_AGE_MS });
                 const waiting = (await clipStore.listClips()).filter(c => !c.exportedAt).length;
@@ -218,13 +237,18 @@ const narrationClipRecorder = (function() {
                 toast('Narration clip not saved — browser storage unavailable', 'warning');
                 return null;
             });
+        rememberSave(a.sessionId, save);
     }
 
-    // The model's answer lands after the session is over; attach it to the
-    // clip that was just saved so the export carries a draft expected.json.
-    function attachResult(type, result) {
-        const save = lastSave;
+    // The model's answer lands after the session is over; attach it to that
+    // session's clip so the export carries a draft expected.json. Nothing to
+    // do without a session id (words typed through a layer's _narrate seam:
+    // no session heard them) or without a save for it (the session was not
+    // kept: setting off, a mis-tap).
+    function attachResult(type, sessionId, result) {
+        const save = sessionId != null ? savesBySession.get(sessionId) : null;
         if (!save) return;
+        savesBySession.delete(sessionId);
         save.then(async (id) => {
             if (!id) return;
             const clip = await clipStore.getClip(id);
@@ -485,13 +509,13 @@ const narrationClipRecorder = (function() {
     narrationRealtimeSession.setAudioTap({ onSessionStart, onAudioChunk, onSessionStop });
 
     narrationEventBus.subscribe('narrationFinalized', (p) => {
-        attachResult('finalize', { operations: p.operations || [], error: p.error || null });
+        attachResult('finalize', p.sessionId, { operations: p.operations || [], error: p.error || null });
     });
     narrationEventBus.subscribe('lineupResolved', (p) => {
-        attachResult('lineup', { request: p.request || null, response: p.response || null });
+        attachResult('lineup', p.sessionId, { request: p.request || null, response: p.response || null });
     });
     narrationEventBus.subscribe('squadsResolved', (p) => {
-        attachResult('squads', { request: p.request || null, response: p.response || null });
+        attachResult('squads', p.sessionId, { request: p.request || null, response: p.response || null });
     });
 
     // Startup trim, so a device that stopped being used still bounds itself
@@ -510,9 +534,11 @@ const narrationClipRecorder = (function() {
         isCapturing: () => !!active,
         listClips: listSavedClips,
         // Debug seam (console / Playwright): drive a capture without a mic
-        // or an OpenAI session, e.g. _tap.onSessionStart({mode:'transcription',
-        // sampleRate:24000}); _tap.onAudioChunk(new Int16Array(24000));
-        // _tap.onSessionStop({transcript:'Alice to Bob'}).
+        // or an OpenAI session, e.g. _tap.onSessionStart({sessionId:'x',
+        // mode:'transcription', sampleRate:24000});
+        // _tap.onAudioChunk(new Int16Array(24000));
+        // _tap.onSessionStop({transcript:'Alice to Bob'}). A result published
+        // on the bus attaches to that clip when it carries the same sessionId.
         _tap: { onSessionStart, onAudioChunk, onSessionStop }
     };
 })();

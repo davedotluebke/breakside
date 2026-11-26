@@ -456,7 +456,11 @@ Just listen. Transcription happens automatically.`;
     // Slow pass
     // -----------------------------------------------------------------
 
-    async function runSlowPass() {
+    /** `sessionId` is the realtime session whose transcript this is (what
+     *  its stop() returned): it travels with the result, so the clip
+     *  recorder can tell whose answer it is even when the coach has already
+     *  started, or finished, the next recording. */
+    async function runSlowPass(sessionId = null) {
         if (!accumulatedTranscript.trim()) {
             // Nothing was transcribed — clear provisionals and move on.
             // Say so: an empty transcript is also the signature of a dead
@@ -510,7 +514,7 @@ Just listen. Transcription happens automatically.`;
             if (!resp.ok) {
                 console.warn('[narrationEngine] Finalize failed:', resp.status);
                 narrationEventBus.publish('narrationFinalized', {
-                    transcript: accumulatedTranscript, roster: payload.roster,
+                    sessionId, transcript: payload.transcript, roster: payload.roster,
                     gameContext: payload.game_context, operations: [], error: `HTTP ${resp.status}`
                 });
                 toast(`Narration processing failed (${resp.status}) — no events added`, 'error');
@@ -518,8 +522,11 @@ Just listen. Transcription happens automatically.`;
                 provisionalEvents.forEach(p => markProvisionalStatus(p.id, 'confirmed'));
             } else {
                 const data = await resp.json();
+                // payload.transcript, not accumulatedTranscript: the next
+                // recording may have started while this request was out, and
+                // starting one clears that.
                 narrationEventBus.publish('narrationFinalized', {
-                    transcript: accumulatedTranscript, roster: payload.roster,
+                    sessionId, transcript: payload.transcript, roster: payload.roster,
                     gameContext: payload.game_context,
                     operations: data.operations || [], error: data.error || null
                 });
@@ -830,6 +837,7 @@ Just listen. Transcription happens automatically.`;
         if (!recording) return;
         recording = false;
 
+        let sessionId = null;
         try {
             if (narrationRealtimeSession && narrationRealtimeSession.isActive()) {
                 const result = await narrationRealtimeSession.stop();
@@ -838,6 +846,7 @@ Just listen. Transcription happens automatically.`;
                     // for the slow pass — it's what the server actually heard.
                     accumulatedTranscript = result.transcript;
                 }
+                if (result && result.sessionId != null) sessionId = result.sessionId;
             }
         } catch (err) {
             console.error('[narrationEngine] stop error:', err);
@@ -845,7 +854,7 @@ Just listen. Transcription happens automatically.`;
 
         setPhase('finalizing');
         try {
-            await runSlowPass();
+            await runSlowPass(sessionId);
         } finally {
             setPhase('idle');
         }

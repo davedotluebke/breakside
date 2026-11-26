@@ -71,8 +71,8 @@ function rosterForServer(roster, extra = () => ({})) {
  * @param {string} spec.unchanged       what stays as it was on failure ('selection', 'squads')
  * @param {string} spec.endpoint        '/api/narration/lineup'
  * @param {string} [spec.resultChannel] event-bus channel on which a spoken
- *        session's request and answer are announced ('lineupResolved'), for
- *        the clip recorder (narration/clipRecorder.js)
+ *        session's request and answer are announced ('lineupResolved'), with
+ *        the session's id, for the clip recorder (narration/clipRecorder.js)
  * @param {string} spec.statusId        DOM id of the status strip
  * @param {() => Element|null} spec.statusAnchor  element the strip is inserted after
  * @param {(ctx: object|null) => string} spec.listeningHint  strip text before any words arrive
@@ -294,27 +294,30 @@ function createRosterNarration(spec) {
         if (phase !== 'recording') return;
 
         setPhase('processing');
+        let sessionId = null;
         try {
             if (narrationRealtimeSession.isActive()) {
                 const result = await narrationRealtimeSession.stop();
                 if (result && result.transcript) {
                     transcript = result.transcript;
                 }
+                if (result && result.sessionId != null) sessionId = result.sessionId;
             }
         } catch (err) {
             console.error(`[${spec.name}] session stop error:`, err);
         }
 
         try {
-            await processTranscript();
+            await processTranscript(sessionId);
         } finally {
             setPhase('idle');
         }
     }
 
-    /** `typed` marks the _narrate seam: no session was recorded, so there
-     *  is no result to announce for one. */
-    async function processTranscript({ typed = false } = {}) {
+    /** `sessionId` is the realtime session that heard the transcript (what
+     *  its stop() returned), or null for words typed through the _narrate
+     *  seam: no session heard those, so there is no result to announce. */
+    async function processTranscript(sessionId = null) {
         if (!transcript.trim()) {
             // Same signature as a dead audio path (G5) — always say something.
             toast('No speech captured', 'warning');
@@ -342,9 +345,12 @@ function createRosterNarration(spec) {
                 return;
             }
             data = await resp.json();
-            // For the clip recorder: what the pass was asked, and its answer.
-            if (spec.resultChannel && !typed) {
-                narrationEventBus.publish(spec.resultChannel, { transcript, request: payload, response: data });
+            // For the clip recorder: what the pass was asked, its answer, and
+            // which session they belong to.
+            if (spec.resultChannel && sessionId != null) {
+                narrationEventBus.publish(spec.resultChannel, {
+                    sessionId, transcript, request: payload, response: data
+                });
             }
         } catch (err) {
             console.error(`[${spec.name}] request failed:`, err);
@@ -398,7 +404,7 @@ function createRosterNarration(spec) {
         _narrate: async (text) => {
             if (phase !== 'idle') return false;
             transcript = String(text || '');
-            await processTranscript({ typed: true });
+            await processTranscript();
             return true;
         },
         _getTranscript: () => transcript

@@ -40,9 +40,10 @@ const narrationEventBus = (function() {
         'scoreChanged',
         'pointChanged',
         // Model results after a session, for the clip recorder
-        // (narration/clipRecorder.js): {transcript, roster, gameContext,
-        // operations, error}, and {transcript, request, response} for the
-        // lineup and squads passes.
+        // (narration/clipRecorder.js): {sessionId, transcript, roster,
+        // gameContext, operations, error}, and {sessionId, transcript,
+        // request, response} for the lineup and squads passes. sessionId is
+        // the realtime session's (what its stop() returned).
         'narrationFinalized',
         'lineupResolved',
         'squadsResolved'

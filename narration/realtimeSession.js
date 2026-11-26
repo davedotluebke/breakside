@@ -85,6 +85,12 @@ const narrationRealtimeSession = (function() {
     // Optional observer of the mic stream (narration/clipRecorder.js);
     // registered through setAudioTap(). Never affects the session itself.
     let audioTap = null;
+    // Which session this is, counted within the page load. stop() returns it
+    // and the tap is told it, so that what is made of a session afterwards
+    // (the model's answer to its transcript) can be tied back to that
+    // session, even once the next one has started.
+    let sessionCount = 0;
+    let currentSessionId = null;
 
     // Module-level mode flag, set by start() and read by stop() to decide
     // whether we need to commit + create a response (conversation) or just
@@ -322,15 +328,21 @@ const narrationRealtimeSession = (function() {
         // out, and a quick retry can find stale state.
         // Tell the tap a session is about to go live, before the first
         // chunk can flow; every path out of here below then closes it.
+        currentSessionId = ++sessionCount;
         if (audioTap && audioTap.onSessionStart) {
-            audioTap.onSessionStart({ mode: currentMode, model, transcriptionModel, sampleRate: TARGET_SAMPLE_RATE });
+            audioTap.onSessionStart({
+                sessionId: currentSessionId, mode: currentMode, model, transcriptionModel,
+                sampleRate: TARGET_SAMPLE_RATE
+            });
         }
         try {
             await startAudioCapture();
         } catch (err) {
             try { if (ws) ws.close(); } catch (_) {}
             ws = null;
-            if (audioTap && audioTap.onSessionStop) audioTap.onSessionStop({ transcript: '', aborted: true });
+            if (audioTap && audioTap.onSessionStop) {
+                audioTap.onSessionStop({ sessionId: currentSessionId, transcript: '', aborted: true });
+            }
             throw err;
         }
         logPhase('audio capture started');
@@ -346,7 +358,9 @@ const narrationRealtimeSession = (function() {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
             stopAudioCapture();
             ws = null;
-            if (audioTap && audioTap.onSessionStop) audioTap.onSessionStop({ transcript: '', aborted: true });
+            if (audioTap && audioTap.onSessionStop) {
+                audioTap.onSessionStop({ sessionId: currentSessionId, transcript: '', aborted: true });
+            }
             throw new Error('Connection closed during microphone setup');
         }
 
@@ -355,13 +369,16 @@ const narrationRealtimeSession = (function() {
 
     /**
      * Stop the realtime session, closing mic and WebSocket.
-     * @returns {Promise<{transcript: string}>} The session's transcript for the slow pass.
+     * @returns {Promise<{transcript: string, sessionId: number|null}>} The
+     *          session's transcript for the slow pass, and which session it
+     *          was (null when none was running).
      */
     async function stop() {
         if (!sessionActive) {
-            return { transcript: transcriptItems.text() };
+            return { transcript: transcriptItems.text(), sessionId: null };
         }
         sessionActive = false;
+        const sessionId = currentSessionId;
 
         // Stop audio capture first so no more frames go out
         stopAudioCapture();
@@ -407,9 +424,9 @@ const narrationRealtimeSession = (function() {
         ws = null;
         const transcript = transcriptItems.text();
         if (audioTap && audioTap.onSessionStop) {
-            audioTap.onSessionStop({ transcript, aborted: false });
+            audioTap.onSessionStop({ sessionId, transcript, aborted: false });
         }
-        return { transcript };
+        return { transcript, sessionId };
     }
 
     // What stop() is waiting on, or null: { finish(how), progress() }.
@@ -660,7 +677,7 @@ const narrationRealtimeSession = (function() {
             sessionActive = false;
             stopAudioCapture();
             if (audioTap && audioTap.onSessionStop) {
-                audioTap.onSessionStop({ transcript: transcriptItems.text(), aborted: true });
+                audioTap.onSessionStop({ sessionId: currentSessionId, transcript: transcriptItems.text(), aborted: true });
             }
             // Notify the engine so it can reset its phase out of "recording".
             onErrorCb(new Error(`Realtime WebSocket closed: ${ev.code} ${ev.reason}`));
@@ -757,10 +774,11 @@ const narrationRealtimeSession = (function() {
 
     /**
      * Register an observer of the microphone stream (the clip recorder).
-     * onSessionStart({mode, model, transcriptionModel, sampleRate}) fires
-     * before the first chunk; onAudioChunk(Int16Array) once per chunk that
-     * was actually sent; onSessionStop({transcript, aborted}) exactly once
-     * per started session, however it ends. Pass null to detach.
+     * onSessionStart({sessionId, mode, model, transcriptionModel, sampleRate})
+     * fires before the first chunk; onAudioChunk(Int16Array) once per chunk
+     * that was actually sent; onSessionStop({sessionId, transcript, aborted})
+     * exactly once per started session, however it ends. sessionId is the
+     * one stop() returns for that session. Pass null to detach.
      */
     function setAudioTap(tap) {
         audioTap = tap || null;
