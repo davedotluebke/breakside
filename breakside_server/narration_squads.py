@@ -33,6 +33,11 @@ Four things are the server's, not the model's:
   - COUNTS — "two more FMPs on Dark" — which nobody on the server picks:
     the verified instruction goes back as a ``fill`` and the picker chooses,
     with the same balance rules as its Auto button.
+
+And a VOICED AUTO — "auto the rest", "auto-select everybody else", "auto-pick
+the FMPs" — is the Auto button by voice: verified here (the quote must hold
+the word "auto" and name no squad) and returned as ``voiced_auto`` for the
+picker to deal.
 """
 from __future__ import annotations
 
@@ -63,8 +68,8 @@ try:
     from narration_common import (  # type: ignore
         ANY_GROUP, GENDER_GROUPS, RosterPlayer,
         _REMOVAL_RE, _REST_LEXICON_RE,
-        _anthropic_key, _clear_evidence_ok, _evidence_in_transcript, _gender_of,
-        _light_normalize, _normalize_name, _quote_names_player, _resolve_roster_name,
+        _anthropic_key, _auto_evidence_ok, _clear_evidence_ok, _evidence_in_transcript, _gender_of,
+        _group_in_quote, _has_removal_words, _is_auto_word, _light_normalize, _normalize_name, _quote_names_player, _resolve_roster_name,
         _rest_evidence_ok, _shape_groups, _shape_out_entries, _shape_phrases,
         _verified_group, _worksheet_phrase,
         prompt_roster, prompt_transcript, prompt_worksheet, rule_closed_roster, rule_gender_words,
@@ -74,8 +79,8 @@ except ImportError:
     from breakside_server.narration_common import (  # type: ignore
         ANY_GROUP, GENDER_GROUPS, RosterPlayer,
         _REMOVAL_RE, _REST_LEXICON_RE,
-        _anthropic_key, _clear_evidence_ok, _evidence_in_transcript, _gender_of,
-        _light_normalize, _normalize_name, _quote_names_player, _resolve_roster_name,
+        _anthropic_key, _auto_evidence_ok, _clear_evidence_ok, _evidence_in_transcript, _gender_of,
+        _group_in_quote, _has_removal_words, _is_auto_word, _light_normalize, _normalize_name, _quote_names_player, _resolve_roster_name,
         _rest_evidence_ok, _shape_groups, _shape_out_entries, _shape_phrases,
         _verified_group, _worksheet_phrase,
         prompt_roster, prompt_transcript, prompt_worksheet, rule_closed_roster, rule_gender_words,
@@ -148,6 +153,11 @@ class SquadsResponse(BaseModel):
     # The squad an honored "everyone else on …" sent the unnamed players to.
     voiced_rest: Optional[str] = None
     voiced_groups: List[SquadGroupMove] = []
+    # The coach handed the placing to Auto ("auto the rest", "auto-pick the
+    # FMPs"): "ANY", or the gender group to deal. The picker deals whoever
+    # is here and on neither squad, after everything above — the Auto
+    # button's own deal.
+    voiced_auto: List[str] = []
 
 
 async def _squads_request(
@@ -194,9 +204,9 @@ async def extract_squads(
     # Counts only — no names, no transcript: enough to tell, from the log,
     # whether a "that didn't work" was the recognizer, the model or a guard.
     logger.info(
-        "Squads: placed=%d out=%d groups=%d fills=%d rest=%s clear=%s "
+        "Squads: placed=%d out=%d groups=%d fills=%d auto=%d rest=%s clear=%s "
         "unmatched=%d resolved_by_closest=%d dropped=%d",
-        len(d.assign), len(d.outs), len(d.groups), len(d.fills), d.rest, d.cleared,
+        len(d.assign), len(d.outs), len(d.groups), len(d.fills), len(d.autos), d.rest, d.cleared,
         len(d.unmatched), len(d.resolved), len(d.dropped),
     )
     note = str(result.get("note") or "")
@@ -206,6 +216,7 @@ async def extract_squads(
         voiced_assign=[SquadPlacement(name=n, squad=s) for n, s in d.assign],
         voiced_clear=d.cleared, voiced_rest=d.rest,
         voiced_groups=[SquadGroupMove(group=g, squad=k, scope=s) for g, k, s in d.groups],
+        voiced_auto=d.autos,
     )
 
 
@@ -237,6 +248,30 @@ def _squad_key(spoken: str, squad_names: Dict[str, str]) -> Optional[str]:
     return None
 
 
+def _squad_in_quote(said: str, squad_names: Dict[str, str]) -> Optional[str]:
+    """The squad a quote names — by its whole name or a word of it, the same
+    latitude _squad_key gives the model — when it names exactly ONE. None
+    for neither and for both ("auto the rest between Orange and Black")."""
+    tokens = _light_normalize(said).split()
+    padded = f" {' '.join(tokens)} "
+    hits = []
+    for key in SQUAD_KEYS:
+        name = _normalize_name(squad_names.get(key, ""))
+        if name and (f" {name} " in padded or any(len(t) >= 3 and t in tokens for t in name.split())):
+            hits.append(key)
+    return hits[0] if len(hits) == 1 else None
+
+
+def _hands_to_auto(said: str, req: "SquadsRequest") -> bool:
+    """Whether a quote (already known to be in the transcript) hands the
+    placing to the picker's Auto: it holds the word "auto", takes nobody
+    off, and does not name one squad. Auto deals across BOTH squads, so
+    "auto the rest onto Black" is not a deal — it is "the rest onto Black"."""
+    return (_auto_evidence_ok(said, req.roster)
+            and not _has_removal_words(said)
+            and _squad_in_quote(said, req.squad_names) is None)
+
+
 def _worksheet_squad(heard: str, phrases, req) -> Optional[str]:
     """The squad of the worksheet phrase a heard name was spoken in, or None
     when no phrase of the transcript contains it, or the phrase is not about
@@ -265,6 +300,7 @@ class SquadDerivation:
         self.rest: Optional[str] = None    # squad key
         self.groups: List[tuple] = []      # (group, squad key, "all" | "rest")
         self.fills: List[tuple] = []       # (group, squad key, count)
+        self.autos: List[str] = []         # groups handed to Auto ("ANY" = everyone left)
         self.unmatched: List[str] = []
         self.resolved: List[tuple] = []    # (heard, roster name) — closest-name resolutions
         self.dropped: List[str] = []       # what a guard refused, for the log
@@ -339,9 +375,17 @@ def _derive_squads(result: Dict[str, Any], req: SquadsRequest) -> SquadDerivatio
             d.dropped.append(name or heard)
 
     rest_raw = str(result.get("rest") or "").strip()
-    if rest_raw:
+    rest_said = str(result.get("rest_said") or "").strip()
+    if rest_said and _evidence_in_transcript(rest_said, req.transcript) and _hands_to_auto(rest_said, req):
+        # "Dana on Black, auto the rest" filed under ``rest`` with the squad
+        # carried over from Dana: the coach named no squad for the rest, so
+        # it is a deal, never "everyone else on Black".
+        auto_group = _group_in_quote(rest_said) or ANY_GROUP
+        if auto_group not in d.autos:
+            d.autos.append(auto_group)
+    elif rest_raw:
         rest_key = _squad_key(rest_raw, req.squad_names)
-        if rest_key is None or not _rest_evidence_ok(str(result.get("rest_said") or ""), req.transcript):
+        if rest_key is None or not _rest_evidence_ok(rest_said, req.transcript):
             d.dropped.append("<rest>")
         else:
             d.rest = rest_key
@@ -352,16 +396,34 @@ def _derive_squads(result: Dict[str, Any], req: SquadsRequest) -> SquadDerivatio
         key = _squad_key(g.get("squad"), req.squad_names)
         said = str(g.get("said") or "").strip()
         verified, why = _verified_group(g, req.transcript)
-        if verified is None or key is None:
+        if verified is None:
             d.dropped.append(why or "<group>")
             continue
         group, count = verified
+        if count is None and _hands_to_auto(said, req):
+            # The Auto button by voice. Whatever squad the model wrote
+            # beside it was carried from another phrase: the quote names none.
+            if group not in d.autos:
+                d.autos.append(group)
+            continue
+        if _auto_evidence_ok(said, roster):
+            # "auto the rest onto Black": the squad is in the quote, and the
+            # model, told that Auto takes no squad, may have left it blank.
+            key = _squad_in_quote(said, req.squad_names) or key
+        if key is None:
+            d.dropped.append("<group>")
+            continue
         if count is not None:
+            # "auto-pick two more guys for Black" is a count like any other.
             d.fills.append((group, key, count))
         elif group == ANY_GROUP:
-            # "Everyone on Dark" with no gender and no number is not a
-            # group move; an ungendered "everyone else" is ``rest``.
-            d.dropped.append("<group:any>")
+            if d.rest is None and _auto_evidence_ok(said, roster) and _rest_evidence_ok(said, req.transcript):
+                # "auto the rest onto Black", filed here instead of ``rest``.
+                d.rest = key
+            else:
+                # "Everyone on Dark" with no gender and no number is not a
+                # group move; an ungendered "everyone else" is ``rest``.
+                d.dropped.append("<group:any>")
         else:
             scope = "rest" if _REST_LEXICON_RE.search(_light_normalize(said)) else "all"
             d.groups.append((group, key, scope))
@@ -382,6 +444,10 @@ def _derive_squads(result: Dict[str, Any], req: SquadsRequest) -> SquadDerivatio
         u = str(u)
         resolved, _ = _resolve_roster_name(u, roster)
         if resolved is not None and resolved in named:
+            continue
+        # "Otto" / "auto" listed as a name nobody matched, when the phrase
+        # it came from was honored as the hand-off to Auto.
+        if d.autos and _is_auto_word(u):
             continue
         if u.casefold() in seen:
             continue
@@ -513,7 +579,7 @@ def _build_squads_prompt(req: SquadsRequest) -> str:
         names = req.current_squads.get(key) or []
         return "\n".join(f"- {n}" for n in names) if names else "(empty)"
 
-    return f"""You are the voice-input layer for a scrimmage set-up screen in an ultimate frisbee app. The team is split into two squads, "{first}" and "{second}". The coach speaks; you report WHICH PLAYERS GO ON WHICH SQUAD and WHO SITS OUT — the verbal equivalent of tapping a player's "{first}" or "{second}" button on the list. You never fill, balance, complete or output a squad yourself: you report what the coach said and the app applies it, including choosing the players when the coach asks for a number of them.
+    return f"""You are the voice-input layer for a scrimmage set-up screen in an ultimate frisbee app. The team is split into two squads, "{first}" and "{second}". The coach speaks; you report WHICH PLAYERS GO ON WHICH SQUAD and WHO SITS OUT — the verbal equivalent of tapping a player's "{first}" or "{second}" button on the list. You never fill, balance, complete or output a squad yourself: you report what the coach said and the app applies it, including choosing the players when the coach asks for a number of them or hands the placing to the app by saying "auto" ("auto the rest").
 
 {prompt_roster(req.roster)}
 
@@ -541,7 +607,8 @@ How to interpret the transcript:
    - The rest of a group, "count": null: "the rest of the FMPs on {second}", "the other guys on {first}", "the remaining women go {second}" → the same shape. Keep the word "rest" / "other" / "remaining" inside "said": the app reads from your quote that the coach meant only the ones not yet placed.
    - A number of them: "two more FMPs on {first}", "another guy on {second}", "add a couple of women to {first}", "three more on {second}" → "count" is the number (2, 1, 2, 3) and "said" contains the number word; "group" is "ANY" when no gender word was said. The app chooses which players.
    - A group phrase with no squad gets "squad": "", like a name (rule 2), and a squad named earlier carries to it.
-6. "everyone else on {second}", "the rest on {first}", "the others are {second}" — with NO gender word — set "rest" to that squad name and quote the words in "rest_said". The app then sends every player you did not name, and no group covered, to that squad. Do not list those players yourself.
+   - AUTO — the coach hands the placing to the app's Auto button, and says the word "auto" to do it: "auto the rest", "and auto-pick the rest", "auto-select everybody else", "auto the squads", "autofill" → {{"group": "ANY", "squad": "", "count": null, "said": "…"}}. For ONE gender group only — "auto-pick the FMPs", "auto the guys", "auto the rest of the women" → the same entry with "group": "FMP" | "MMP". The word "auto" must be inside "said". "squad" is ALWAYS "" here, even right after a squad was named: Auto deals players across BOTH squads, so no squad carries to it, and it is NOT rule 6 — leave "rest" empty. The app deals everyone who is here and on neither squad (of that group, when one is named), balanced, the way its Auto button does; you never place anyone for it. Auto only PLACES PLAYERS WHO ARE ON NEITHER SQUAD — it takes nobody off, so it never stands in for a clear: "Start over. Auto everybody." is BOTH a clear (rule 7: "clear": true, "clear_said": "Start over") AND this entry. Players the coach names in the same breath still go in "assign" / "out" as usual. The recognizer sometimes writes "auto" as "Otto": when nobody on the roster is called Otto, "Otto the rest" is this phrase — quote it as written, and Otto is not a name for "assign" or "unmatched".
+6. "everyone else on {second}", "the rest on {first}", "the others are {second}" — with NO gender word, and a squad to go to — set "rest" to that squad name and quote the words in "rest_said". The app then sends every player you did not name, and no group covered, to that squad. Do not list those players yourself.
 7. CLEAR-EVERYONE: "clear the squads", "start fresh", "start over", "everybody off", "wholesale" — set "clear": true and quote the words in "clear_said". A clear empties both squads before anything else you report applies.
 8. Later statements override earlier ones ("Dana on {first} — no, {second}" → Dana with "{second}"; "is that Hank? no, Morgan" → Morgan, Hank nowhere). Ignore asides: chatter, the weather, who is late, the score of the last point. Wrap-ups ("that's everyone", "that's the split") add nobody.
 9. THE CARDINAL RULE: "assign" and "out" contain ONLY players the coach referred to by name, nickname or number. Never anyone else, however uneven the squads would be: if the coach named 3 players, "assign" has exactly 3 entries. Reciting names taps those players onto a squad; it moves nobody else. Say anything notable (a retraction, an ambiguous reference) in one short sentence in "note".

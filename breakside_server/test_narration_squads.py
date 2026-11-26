@@ -452,6 +452,109 @@ class TestGroups:
         assert d.fills == [("FMP", "X", 2)]
 
 
+class TestVoicedAuto:
+    """"auto the rest" is the Auto button by voice: reported as a groups
+    entry, honored only on the word itself, dealt by the picker."""
+
+    def auto(self, transcript, said=None, group="ANY", squad="", **kw):
+        req = make_request(transcript, **kw)
+        return _derive_squads(model_reply(groups=[
+            {"group": group, "squad": squad, "count": None, "said": said or transcript}]), req)
+
+    @pytest.mark.parametrize("said", [
+        "auto the rest", "and auto-pick the rest", "Auto-select everybody else",
+        "auto the squads", "autofill", "just auto it", "auto pick everyone else",
+    ])
+    def test_auto_phrases_hand_everyone_left_to_auto(self, said):
+        d = self.auto(f"Alice on Orange. {said}.", said=said)
+        assert d.autos == ["ANY"] and d.groups == [] and d.fills == [] and d.rest is None
+        assert d.squads == {"X": ["Charlie"], "Y": ["Eve"]}      # the server moves nobody for it
+
+    @pytest.mark.parametrize("said,group", [
+        ("auto-pick the FMPs", "FMP"), ("auto the guys", "MMP"), ("auto the rest of the women", "FMP"),
+    ])
+    def test_a_gender_group_is_read_from_the_quote(self, said, group):
+        d = self.auto(said, group="ANY")
+        assert d.autos == [group] and d.groups == []
+
+    def test_a_squad_the_model_carried_over_is_ignored(self):
+        """"Dana on Black, auto the rest": the quote names no squad."""
+        d = self.auto("Dana on Black, auto the rest", said="auto the rest", squad="Black")
+        assert d.autos == ["ANY"] and d.rest is None and d.groups == []
+
+    def test_the_word_must_be_in_the_quote(self):
+        d = self.auto("fill in the rest", group="ANY")
+        assert d.autos == [] and d.dropped == ["<group:any>"]
+        d = self.auto("the rest of the FMPs", group="FMP")
+        assert d.autos == [] and d.groups == [("FMP", "X", "rest")]
+
+    def test_the_quote_must_be_in_the_transcript(self):
+        d = self.auto("Alice on Orange", said="auto the rest")
+        assert d.autos == [] and d.dropped == ["<group>"]
+
+    def test_auto_with_a_count_is_a_count(self):
+        req = make_request("Auto-pick two more guys for Black.")
+        d = _derive_squads(model_reply(groups=[
+            {"group": "MMP", "squad": "Black", "count": 2, "said": "Auto-pick two more guys for Black"}]), req)
+        assert d.fills == [("MMP", "Y", 2)] and d.autos == []
+
+    def test_auto_onto_a_named_squad_is_not_a_deal(self):
+        """Auto deals across both squads; with a squad in the quote the
+        phrase is the plain collective one."""
+        d = self.auto("Auto the rest onto Black.", squad="Black", current_squads={"X": ["Alice"]},
+                      roster=roster(pinned=("Alice",)))
+        assert d.autos == [] and d.rest == "Y"
+        assert d.squads["X"] == ["Alice"] and len(d.squads["Y"]) == 15
+        d = self.auto("Auto-pick the rest of the women for Orange.", group="FMP", squad="Orange", current_squads={})
+        assert d.autos == [] and d.groups == [("FMP", "X", "rest")]
+
+    def test_the_squad_comes_from_the_quote_when_the_model_left_it_blank(self):
+        """Both models, told Auto takes no squad, report "auto the rest onto
+        Black" with a blank squad — which would mean the FIRST squad."""
+        d = self.auto("Auto the rest onto Black.", squad="", current_squads={})
+        assert d.autos == [] and d.rest == "Y" and d.squads["X"] == []
+        d = self.auto("Auto the rest of the guys onto Black.", squad="", current_squads={})
+        assert d.groups == [("MMP", "Y", "rest")]
+
+    def test_naming_both_squads_is_still_a_deal(self):
+        d = self.auto("Auto the rest between Orange and Black.")
+        assert d.autos == ["ANY"] and d.rest is None
+
+    def test_auto_filed_under_rest_is_a_deal_not_a_squad(self):
+        """The dangerous reading: "Dana on Black, auto the rest" reported as
+        rest → Black would send the whole team to Black."""
+        req = make_request("Dana on Black, auto the rest", current_squads={})
+        d = _derive_squads(model_reply(assign=placed(("Dana", "Black")),
+                                       rest="Black", rest_said="auto the rest"), req)
+        assert d.autos == ["ANY"] and d.rest is None
+        assert d.squads == {"X": [], "Y": ["Dana"]}
+        # … but with the squad in the quote it is "the rest onto Black".
+        req = make_request("Dana on Orange, auto the rest onto Black", current_squads={})
+        d = _derive_squads(model_reply(assign=placed(("Dana", "Orange")),
+                                       rest="Black", rest_said="auto the rest onto Black"), req)
+        assert d.autos == [] and d.rest == "Y" and len(d.squads["Y"]) == 15
+
+    def test_removal_words_veto_but_the_rest_is_not_one(self):
+        assert self.auto("auto everybody off").autos == []
+        assert self.auto("auto the rest").autos == ["ANY"]
+
+    def test_otto_only_when_nobody_is_called_otto(self):
+        req = make_request("Jake on Black. Otto the rest.")
+        reply = model_reply(assign=placed(("Jake", "Black")), unmatched=["Otto"], groups=[
+            {"group": "ANY", "squad": "", "count": None, "said": "Otto the rest"}])
+        d = _derive_squads(reply, req)
+        assert d.autos == ["ANY"] and d.unmatched == []
+        with_otto = roster(extra=[SquadsRosterPlayer(name="Otto", gender="MMP")])
+        d = _derive_squads(reply, make_request("Jake on Black. Otto the rest.", roster=with_otto))
+        assert d.autos == []
+
+    def test_each_group_once(self):
+        req = make_request("auto the rest. auto the rest.")
+        d = _derive_squads(model_reply(rest_said="auto the rest", groups=[
+            {"group": "ANY", "squad": "", "count": None, "said": "auto the rest"}]), req)
+        assert d.autos == ["ANY"]
+
+
 # =============================================================================
 # Prompt and parsing
 # =============================================================================
@@ -485,6 +588,12 @@ class TestSquadsPrompt:
         assert "You never fill, balance, complete or output a squad yourself" in prompt
         assert '"rest_said"' in prompt and '"clear_said"' in prompt and '"phrases"' in prompt
         assert "it is NOT a mishearing of MMP" in prompt
+
+    def test_prompt_states_the_auto_rule(self):
+        prompt = _build_squads_prompt(make_request())
+        assert 'The word "auto" must be inside "said"' in prompt
+        assert "Auto deals players across BOTH squads" in prompt
+        assert "it never stands in for a clear" in prompt
 
 
 class TestParseSquadsJson:
@@ -586,6 +695,17 @@ class TestSquadsEndpoint:
         assert data["fills"] == [{"squad": "X", "group": "FMP", "count": 2}]
         assert sorted(data["squads"]["Y"]) == sorted(MMPS + ["Eve"])
         assert data["squads"]["X"] == []
+
+    def test_voiced_auto_in_the_response(self, client, narration_data, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        monkeypatch.setattr(narration_squads, "_call_claude_squads", fake_model(model_reply(
+            assign=placed(("Alice", "Orange")),
+            groups=[{"group": "ANY", "squad": "Orange", "count": None, "said": "auto the rest"}])))
+        resp = client.post("/api/narration/squads", json=request_body(
+            narration_data["team_id"], transcript="Alice on Orange, auto the rest"))
+        data = resp.json()
+        assert data["voiced_auto"] == ["ANY"] and data["voiced_rest"] is None
+        assert "Alice" in data["squads"]["X"]
 
     def test_a_client_that_sends_no_gender_or_flags_still_works(self, client, narration_data, monkeypatch):
         """The 2.26.0 client sends name / nickname / number only."""
@@ -739,6 +859,34 @@ _LIVE_SCENARIOS = [
     ("list_then_rest_by_gender",
      _live_req("Orange: Alice, Bob, Mia. The other women on Black, the other guys on Orange."),
      lambda d: sorted(d.groups) == [("FMP", "Y", "rest"), ("MMP", "X", "rest")] and len(d.assign) == 3),
+    # The voiced Auto. Every other scenario is also held to d.autos == [].
+    ("auto_rest", _live_req("Alice and Bob on Orange, Dana on Black. Auto the rest."),
+     lambda d: d.autos == ["ANY"] and d.rest is None and not d.groups and not d.fills
+     and sorted_squads(d) == {"X": ["Alice", "Bob"], "Y": ["Dana"]}),
+    ("auto_everybody_else", _live_req("Orange is Alice, Charlie and Mia. Auto-select everybody else."),
+     lambda d: d.autos == ["ANY"] and d.rest is None
+     and sorted_squads(d) == {"X": ["Alice", "Charlie", "Mia"], "Y": []}),
+    ("auto_after_a_carried_squad", _live_req("Black is Eve, Hank and Iris, and auto-pick the rest."),
+     lambda d: d.autos == ["ANY"] and d.rest is None
+     and sorted_squads(d) == {"X": [], "Y": ["Eve", "Hank", "Iris"]}),
+    ("auto_fmps", _live_req("Auto-pick the FMPs."),
+     lambda d: d.autos == ["FMP"] and not d.groups and not d.assign and d.squads == {"X": [], "Y": []}),
+    ("auto_guys_after_names", _live_req("Alice and Dana on Orange, Eve and Iris on Black. Auto the guys."),
+     lambda d: d.autos == ["MMP"] and not d.groups and len(d.assign) == 4
+     and sorted_squads(d) == {"X": ["Alice", "Dana"], "Y": ["Eve", "Iris"]}),
+    ("auto_only", _live_req("Okay, just auto the squads."),
+     lambda d: d.autos == ["ANY"] and not d.assign and d.rest is None and not d.unmatched),
+    ("auto_clear_first", _live_req("Start over. Auto everybody.",
+                                   current={"X": ["Zoe", "Wes", "Tara"], "Y": ["Sam", "Nora"]}),
+     lambda d: d.cleared and d.autos == ["ANY"] and d.squads == {"X": [], "Y": []}),
+    ("auto_otto", _live_req("Jake and Kris on Black. Otto the rest."),
+     lambda d: d.autos == ["ANY"] and not d.unmatched and d.rest is None
+     and sorted_squads(d) == {"X": [], "Y": ["Jake", "Kris"]}),
+    ("auto_with_a_count", _live_req("Auto-pick two more guys for Black."),
+     lambda d: d.fills == [("MMP", "Y", 2)] and d.autos == [] and not d.assign),
+    ("auto_onto_a_named_squad", _live_req("Alice on Orange. Auto the rest onto Black.",
+                                          current={"X": ["Alice"], "Y": []}),
+     lambda d: d.autos == [] and d.rest == "Y" and d.squads["X"] == ["Alice"] and len(d.squads["Y"]) == 15),
 ]
 
 _LIVE_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-5-20250929"]
@@ -754,7 +902,7 @@ _LIVE_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-5-20250929"]
 def test_live_squads_eval_matrix(sc, model, monkeypatch):
     """The shipping gate for squads prompt/contract changes. Run with:
     NARRATION_LIVE_TESTS=1 pytest test_narration_squads.py -k live -v
-    (36 calls, about a minute, a few cents). One retry absorbs transient
+    (56 calls, about two minutes, a few cents). One retry absorbs transient
     API timeouts."""
     import asyncio
     from narration_squads import _call_claude_squads
@@ -773,6 +921,8 @@ def test_live_squads_eval_matrix(sc, model, monkeypatch):
         pytest.fail(f"model call failed twice: {last_err}")
 
     d = _derive_squads(res, req)
+    if not sc[0].startswith("auto_"):
+        assert d.autos == [], f"auto heard where none was said: {d.autos}"
     assert grade(d), (
-        f"squads={d.squads} assign={d.assign} out={d.outs} groups={d.groups} fills={d.fills} "
+        f"squads={d.squads} assign={d.assign} out={d.outs} groups={d.groups} fills={d.fills} autos={d.autos} clear={d.cleared} "
         f"rest={d.rest} unmatched={d.unmatched} dropped={d.dropped} note={res.get('note')!r}")
