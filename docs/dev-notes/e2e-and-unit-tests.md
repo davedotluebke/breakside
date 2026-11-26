@@ -43,6 +43,18 @@ cd <worktree>/tests && npm ci && npx playwright install chromium   # each worktr
 CI=1 npx playwright test                                            # CI=1 forces fresh servers from THIS worktree
 ```
 
+### Optional sweeps (not run by default)
+
+`tests/sweep/` holds long scripted walks that the normal suite skips: `playwright.config.ts` runs `scenarios/` only, and the sweeps have their own `sweep/sweep.config.ts`. Run one by name from `tests/`:
+
+```bash
+npx playwright test --config sweep/sweep.config.ts sticky-sweep     # pinned table cells: bleed-through and jumps
+npx playwright test --config sweep/sweep.config.ts viewport-sweep   # layout on small phones
+BREAKSIDE_THEME=dark npx playwright test --config sweep/sweep.config.ts theme-sweep dialogs-sweep   # contrast, once per theme
+```
+
+With no name, the config runs every sweep in the directory, so name the ones you want. Output goes to `tests/sweep/shots/` (gitignored). `sticky-sweep` is the only one that asserts. It fails on any change in a pinned region at a whole-number DPR, or on a table it was meant to test that didn't scroll. Run it after touching table, border or sticky CSS; background in ARCHITECTURE.md § CSS Styling Gotchas. The others are for review by eye: see ARCHITECTURE.md § Verifying a change and [small-phone-layout.md](small-phone-layout.md).
+
 ### Boots that never reach the first screen (connection resets)
 
 Seen 2026-10-11 on a new MacBook (macOS 27): 8 of 10 smoke-test boots timed out with the splash still up, and the page's request log showed a dozen stylesheets and modules failing with `ERR_CONNECTION_RESET`, all from the local frontend server. `python3 -m http.server`, which the suite used until then, speaks HTTP/1.0 (no keep-alive, so Chromium opens a connection per file for the ~135 the app loads at boot) behind a listen backlog of 5; this machine resets the overflow where the previous one queued it. Both Playwright configs and `scripts/dev-server.sh` now use `scripts/serve-static.py` (HTTP/1.1 keep-alive, backlog 128, dual-stack). If boots ever flake this way again, check `page.on('requestfailed')` output before suspecting the app: the symptom in the DOM snapshot is the Start Game screen, which is only `index.html`'s initial state under the splash.
