@@ -222,6 +222,30 @@ test.describe('intrasquad scrimmage', () => {
     await expect(irisRow).toHaveClass(/scrimmage-absent/);
     await expect(modal.locator('#scrimmageSitting')).toHaveText('1 absent');
     await expect(page.locator('.toast', { hasText: 'Dark 3 · Light 4' })).toBeVisible();
+    // A voiced Auto — "Start over. Alice on Dark, auto the rest" — comes
+    // back as the server's squads (Alice alone) plus voiced_auto, and the
+    // picker deals the six others who are here by its Auto button's own
+    // code: Light picks first to catch up, so Dark ends with the extra.
+    // Iris, still not here, is left out.
+    expect(await page.evaluate(() => (window as any).squadNarration._applyResult({
+      squads: { X: ['Alice'], Y: [] }, out: [], unmatched: [], note: '', fills: [],
+      voiced_assign: [{ name: 'Alice', squad: 'X' }],
+      voiced_clear: true, voiced_rest: null, voiced_groups: [], voiced_auto: ['ANY'],
+    }))).toBe(true);
+    squads = await dialogSquads(page);
+    expect(squads.X).toContain('Alice');
+    expect(squads.X.length).toBe(4);
+    expect(squads.Y.length).toBe(3);
+    expect([...squads.X, ...squads.Y]).not.toContain('Iris');
+    await expect(modal.locator('#scrimmageSitting')).toHaveText('1 absent');
+    await expect(page.locator('.toast', { hasText: 'Dark 4 · Light 3' })).toBeVisible();
+    // Said again with everyone placed, it has nobody to deal and says so.
+    expect(await page.evaluate((now) => (window as any).squadNarration._applyResult({
+      squads: { X: now.X, Y: now.Y }, out: [], unmatched: [], note: '', fills: [],
+      voiced_assign: [], voiced_clear: false, voiced_rest: null, voiced_groups: [], voiced_auto: ['ANY'],
+    }), squads)).toBe(true);
+    await expect(page.locator('.toast', { hasText: 'Auto found nobody left to place' })).toBeVisible();
+    expect(await dialogSquads(page)).toEqual(squads);
     // Iris is here after all; back to a full deal for the rest of the loop.
     await irisRow.locator('.scrimmage-present').check();
     await modal.locator('#scrimmageClearBtn').click();

@@ -2,11 +2,12 @@
  * Unit tests for narration/squadResolve.js — the pure half of squad
  * narration: turning the backend's answer into the scrimmage picker's next
  * state (assignment, who is not here, who the coach placed), picking the
- * players for a narrated count, and the applied-squads toast.
+ * players for a narrated count, dealing for a voiced Auto, and the
+ * applied-squads toast.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSquadResult, buildSquadToast } from '../../narration/squadResolve.js';
+import { resolveSquadResult, buildSquadToast, autoEmptySquadText } from '../../narration/squadResolve.js';
 
 const F = 'FMP', M = 'MMP';
 const roster = [
@@ -172,6 +173,78 @@ test('malformed fills are ignored', () => {
 
 // ── the toast ───────────────────────────────────────────────────────────
 
+// ── a voiced Auto ───────────────────────────────────────────────────────
+
+const on = (r, squad) => roster.filter(p => r.assignment.get(p.id) === squad);
+const genders = (players) => players.map(p => p.gender).sort().join('');
+
+test('a voiced Auto deals everyone left around the coach\'s picks, and pins nobody', () => {
+    const r = resolveSquadResult(
+        { squads: { X: ['Alice'], Y: ['Bob'] }, voiced_auto: ['ANY'],
+          voiced_assign: [{ name: 'Alice', squad: 'X' }, { name: 'Bob', squad: 'Y' }] },
+        ctx(), fixed);
+    assert.equal(r.assignment.size, roster.length);
+    assert.equal(r.assignment.get('Alice-1'), 'X');
+    assert.equal(r.assignment.get('Bob-2'), 'Y');
+    // The Auto button's balance: four each, two FMPs and two MMPs a side.
+    assert.equal(genders(on(r, 'X')), 'FMPFMPMMPMMP');
+    assert.equal(genders(on(r, 'Y')), 'FMPFMPMMPMMP');
+    assert.deepEqual([...r.pinned].sort(), ['Alice-1', 'Bob-2']);
+    assert.deepEqual(r.autoEmpty, []);
+    assert.equal(r.moved.X.length + r.moved.Y.length, roster.length);
+});
+
+test('a voiced Auto leaves absent players out and placed players where they are', () => {
+    const r = resolveSquadResult(
+        { squads: { X: ['Alice', 'Dana', 'Eve'], Y: [] }, voiced_auto: ['ANY'] },
+        ctx([['Alice-1', 'X'], ['Dana-4', 'X'], ['Eve-5', 'X']], { absent: new Set(['Iris-7']) }), fixed);
+    assert.equal(r.assignment.has('Iris-7'), false);
+    assert.ok(r.absent.has('Iris-7'));
+    ['Alice-1', 'Dana-4', 'Eve-5'].forEach(id => assert.equal(r.assignment.get(id), 'X'));
+    assert.equal(r.assignment.size, roster.length - 1);
+});
+
+test('a gendered Auto deals only that group, evenly between the squads', () => {
+    // Three MMPs already on Orange: the FMPs still split two and two.
+    const r = resolveSquadResult(
+        { squads: { X: ['Bob', 'Charlie', 'Hank'], Y: [] }, voiced_auto: ['FMP'] },
+        ctx([['Bob-2', 'X'], ['Charlie-3', 'X'], ['Hank-6', 'X']]), fixed);
+    assert.equal(on(r, 'X').filter(p => p.gender === F).length, 2);
+    assert.equal(on(r, 'Y').filter(p => p.gender === F).length, 2);
+    assert.equal(r.assignment.has('Jamal-8'), false);              // an MMP: not asked for
+    assert.equal(on(r, 'X').filter(p => p.gender === M).length, 3);
+});
+
+test('a voiced Auto runs after the counts, and once per group', () => {
+    const r = resolveSquadResult(
+        { squads: { X: [], Y: [] }, fills: [{ squad: 'X', group: 'MMP', count: 3 }],
+          voiced_auto: ['ANY', 'ANY'] },
+        ctx(), fixed);
+    assert.equal(r.assignment.size, roster.length);
+    assert.equal(on(r, 'X').filter(p => p.gender === M).length >= 3, true);
+    assert.equal(r.pinned.size, 3);                                // the count's picks only
+    assert.deepEqual(r.autoEmpty, []);
+});
+
+test('a voiced Auto with nobody left says so and moves nobody', () => {
+    const full = roster.map((p, i) => [p.id, i % 2 ? 'Y' : 'X']);
+    const data = {
+        squads: { X: roster.filter((_, i) => !(i % 2)).map(p => p.name), Y: roster.filter((_, i) => i % 2).map(p => p.name) },
+        voiced_auto: ['ANY', 'FMP'],
+    };
+    const r = resolveSquadResult(data, ctx(full), fixed);
+    assert.equal(r.assignment.size, full.length);
+    full.forEach(([id, squad]) => assert.equal(r.assignment.get(id), squad));
+    assert.deepEqual(r.autoEmpty, ['ANY', 'FMP']);
+    assert.deepEqual(r.moved, { X: [], Y: [] });
+});
+
+test('an unknown Auto group is ignored', () => {
+    const r = resolveSquadResult({ squads: { X: [], Y: [] }, voiced_auto: ['XYZ', null, 7] }, ctx(), fixed);
+    assert.equal(r.assignment.size, 0);
+    assert.deepEqual(r.autoEmpty, []);
+});
+
 test('buildSquadToast: counts, moves, outs, no-match', () => {
     assert.deepEqual(
         buildSquadToast({ names, counts: { X: 5, Y: 4 }, moved: { X: ['Alice', 'Bob'], Y: ['Dana'] } }),
@@ -199,4 +272,12 @@ test('buildSquadToast: a count that could not be filled is a warning', () => {
         buildSquadToast({ names, counts: { X: 5, Y: 3 },
             shortfalls: [{ squad: 'Y', group: 'ANY', wanted: 2, got: 0 }] }).message,
         'Orange 5 · Black 3. No players free for Black');
+});
+
+test('buildSquadToast: a voiced Auto with nobody to deal is a warning', () => {
+    assert.equal(autoEmptySquadText('ANY'), 'Auto found nobody left to place');
+    assert.equal(autoEmptySquadText('MMP'), 'Auto found no MMPs left to place');
+    assert.deepEqual(
+        buildSquadToast({ names, counts: { X: 4, Y: 4 }, autoEmpty: ['ANY'] }),
+        { message: 'Orange 4 · Black 4. Auto found nobody left to place', type: 'warning' });
 });

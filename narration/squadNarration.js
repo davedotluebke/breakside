@@ -21,12 +21,14 @@
  *   (vocabulary biased to the whole roster AND the two squad names) → coach
  *   speaks ("Alice and Bob on Orange, Dana on Black", "Eve sits out",
  *   "everyone else on Black", "the rest of the FMPs on Orange", "two more
- *   guys on Black") → tap again → transcript + roster (with each player's
+ *   guys on Black", "auto the rest") → tap again → transcript + roster (with each player's
  *   gender group, whether they are here, and whether the coach already
  *   placed them) + squad names + current squads POST to
  *   /api/narration/squads → the derived squads replace the picker's
  *   assignment, the way taps would, any counts are picked here by Auto's
- *   balance rules (narration/squadResolve.js), and a toast says who moved.
+ *   balance rules (narration/squadResolve.js), a voiced Auto ("auto the
+ *   rest", "auto-pick the FMPs") deals whoever is left the way the Auto
+ *   button does, and a toast says who moved.
  *   Names spoken without a squad go on the FIRST squad, and a name the
  *   recognizer mangled is resolved against the closed roster; both rules
  *   are the server's (narration_squads.py over narration_common.py), not
@@ -82,8 +84,9 @@ function applySquads(data, ctx, { toast, showConfirmToast }) {
     const voicedOut = Array.isArray(data.out) ? data.out : [];
     const voicedGroups = Array.isArray(data.voiced_groups) ? data.voiced_groups : [];
     const fills = Array.isArray(data.fills) ? data.fills : [];
+    const autos = Array.isArray(data.voiced_auto) ? data.voiced_auto : [];
     const modelUnmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
-    const heard = voicedAssign.length || voicedOut.length || voicedGroups.length || fills.length
+    const heard = voicedAssign.length || voicedOut.length || voicedGroups.length || fills.length || autos.length
         || data.voiced_clear === true || !!data.voiced_rest;
     if (!heard && !modelUnmatched.length) {
         toast('No squad changes heard', 'info');
@@ -91,7 +94,8 @@ function applySquads(data, ctx, { toast, showConfirmToast }) {
     }
 
     const result = resolveSquadResult(data, ctx, {
-        // A narrated count is picked by the Auto button's own rules.
+        // A narrated count is picked, and a voiced Auto dealt, by the Auto
+        // button's own rules.
         priorityOrder: (advancedSettings && advancedSettings.getAutoLinePriorityOrder)
             ? advancedSettings.getAutoLinePriorityOrder()
             : undefined
@@ -109,7 +113,7 @@ function applySquads(data, ctx, { toast, showConfirmToast }) {
     const { message, type } = buildSquadToast({
         names: ctx.names, counts: result.counts,
         moved: result.moved, removed: result.removed, unmatched: result.unmatched,
-        shortfalls: result.shortfalls
+        shortfalls: result.shortfalls, autoEmpty: result.autoEmpty
     });
     showConfirmToast(message, type);
     return true;
@@ -126,7 +130,7 @@ const layer = createRosterNarration({
     statusAnchor: () => document.querySelector('.scrimmage-dialog .scrimmage-tools'),
     listeningHint: (ctx) => {
         const names = ctx ? ctx.names : { X: 'Dark', Y: 'Light' };
-        return `Listening — "Alice and Bob on ${names.X}, the rest of the FMPs on ${names.Y}"; names alone go on ${names.X}`;
+        return `Listening — "Alice and Bob on ${names.X}, the rest of the FMPs on ${names.Y}", "auto the rest"; names alone go on ${names.X}`;
     },
     processingLabel: 'Working out the squads…',
     busyMessage: 'Still working out the previous squads…',
@@ -135,8 +139,10 @@ const layer = createRosterNarration({
     // The whole roster and the squad names: the squad words are what tell
     // this narration apart from a line call, so the recognizer must get them
     // right. They ride along as roster-shaped entries, which is all the
-    // vocabulary prompt reads.
-    vocabulary: (ctx) => rosterInfo(ctx.roster).concat([{ name: ctx.names.X }, { name: ctx.names.Y }]),
+    // vocabulary prompt reads — and so does "Auto", which a recognizer
+    // otherwise hears as the name Otto.
+    vocabulary: (ctx) => rosterInfo(ctx.roster).concat(
+        [{ name: ctx.names.X }, { name: ctx.names.Y }, { name: 'Auto' }]),
     // Per player the server also needs: whether they are here today (never
     // swept up by a collective phrase when not) and whether the coach
     // already placed them ("everyone else" leaves those alone).
